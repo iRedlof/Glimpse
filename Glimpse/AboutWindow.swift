@@ -100,8 +100,8 @@ private struct AboutView: View {
             }
 
             VStack(spacing: 4) {
-                Link("github.com/rlchandani/Glimpse",
-                     destination: URL(string: "https://github.com/rlchandani/Glimpse")!)
+                Link("github.com/iRedlof/Glimpse",
+                     destination: URL(string: "https://github.com/iRedlof/Glimpse")!)
                     .font(.caption)
                     .focusable(false)
                 Text("MIT License")

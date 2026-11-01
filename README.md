@@ -1,10 +1,10 @@
 # Glimpse
 
-[![Version](https://img.shields.io/badge/version-1.4.3-green)](https://github.com/rlchandani/Glimpse/releases/latest)
-[![Download](https://img.shields.io/badge/download-DMG-brightgreen)](https://github.com/rlchandani/Glimpse/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.4.3-green)](https://github.com/iRedlof/Glimpse/releases/latest)
+[![Download](https://img.shields.io/badge/download-DMG-brightgreen)](https://github.com/iRedlof/Glimpse/releases/latest)
 
-[![Release](https://github.com/rlchandani/Glimpse/actions/workflows/release.yml/badge.svg)](https://github.com/rlchandani/Glimpse/actions/workflows/release.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/rlchandani/Glimpse/blob/main/LICENSE)
+[![Release](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml/badge.svg)](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/iRedlof/Glimpse/blob/main/LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)]()
 [![Swift](https://img.shields.io/badge/Swift-6.0-orange)]()
 
@@ -28,7 +28,7 @@ A lightweight macOS menu bar calendar app. Click the date icon to see the curren
 
 ## Setup
 
-1. Download the latest release from [GitHub Releases](https://github.com/rlchandani/Glimpse/releases/latest)
+1. Download the latest release from [GitHub Releases](https://github.com/iRedlof/Glimpse/releases/latest)
 2. Move `Glimpse.app` to `/Applications`
 3. Launch — the date icon appears in the menu bar
 4. Click it to see the calendar, click the gear icon for preferences
