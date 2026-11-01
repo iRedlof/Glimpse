@@ -57,7 +57,7 @@ jobs:
       contents: write
     env:
       VERSION: ${{ needs.check-version.outputs.version }}
-      DOWNLOAD_URL_PREFIX: https://github.com/rlchandani/Glimpse/releases/download
+      DOWNLOAD_URL_PREFIX: https://github.com/iRedlof/Glimpse/releases/download
     steps:
       - uses: actions/checkout@v5
 

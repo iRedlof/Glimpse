@@ -110,7 +110,7 @@ Uses shared Auris proxy at `proxy.auris.workers.dev/refine`. App secret is XOR-o
 
 ### Sparkle Auto-Updates via GitHub Releases
 
-- **Feed URL** (in Info.plist): `https://github.com/rlchandani/Glimpse/releases/latest/download/appcast.xml`
+- **Feed URL** (in Info.plist): `https://github.com/iRedlof/Glimpse/releases/latest/download/appcast.xml`
 - **Sparkle EdDSA public key** (in Info.plist): `r3bpqxl5pEGWf6atYS0ZWP3FZyTVVcFAfDj22fuCioE=`
 - **Distribution**: DMG + appcast.xml attached to each GitHub Release
 

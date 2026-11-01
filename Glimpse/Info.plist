@@ -27,7 +27,7 @@
 	<key>SUPublicEDKey</key>
 	<string>r3bpqxl5pEGWf6atYS0ZWP3FZyTVVcFAfDj22fuCioE=</string>
 	<key>SUFeedURL</key>
-	<string>https://github.com/rlchandani/Glimpse/releases/latest/download/appcast.xml</string>
+	<string>https://github.com/iRedlof/Glimpse/releases/latest/download/appcast.xml</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 </dict>

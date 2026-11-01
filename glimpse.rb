@@ -2,10 +2,10 @@ cask "glimpse" do
   version "1.1.2"
   sha256 :no_check
 
-  url "https://github.com/rlchandani/Glimpse/releases/download/v#{version}/Glimpse-#{version}.zip"
+  url "https://github.com/iRedlof/Glimpse/releases/download/v#{version}/Glimpse-#{version}.zip"
   name "Glimpse"
   desc "A lightweight macOS menu bar calendar app"
-  homepage "https://github.com/rlchandani/Glimpse"
+  homepage "https://github.com/iRedlof/Glimpse"
 
   livecheck do
     url :url
