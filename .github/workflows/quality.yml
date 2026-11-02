@@ -4,6 +4,7 @@ on:
   push:
     branches-ignore: [main]
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   workflow_call:
 
 permissions:
@@ -20,9 +21,9 @@ defaults:
 jobs:
   prior-release:
     name: Previous release verified
-    # Release.inspect verifies the predecessor on main; PR admission checks
-    # current main using only the trusted default-branch gate implementation.
-    if: github.ref != 'refs/heads/main'
+    # Canonical-main PR admission uses the trusted default-branch controller.
+    # Release.inspect independently verifies the predecessor for main delivery.
+    if: github.event_name == 'pull_request' && github.repository == 'iRedlof/Glimpse' && github.event.pull_request.base.repo.full_name == github.repository && github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -45,8 +46,8 @@ jobs:
           if [[ -f trusted-controller/tools/scripts/release-control.py ]]; then
             CONTROLLER_SHA="$MAIN_SHA"
           else
-            [[ "$BOOTSTRAP_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
-            [[ "$BOOTSTRAP_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$BOOTSTRAP_BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+            [[ "$BOOTSTRAP_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
             test "$MAIN_SHA" = "$BOOTSTRAP_BASE_SHA"
             CONTROLLER_SHA="$BOOTSTRAP_SHA"
           fi

@@ -25,7 +25,7 @@ rollback_on_failure() {
   trap - EXIT
   if [[ "$result" != 0 && -n "$RELEASE_ID" ]]; then
     if ! python3 "$SCRIPT_DIR/release-control.py" withdraw --release-id "$RELEASE_ID" --previous-tag "$PREVIOUS_TAG"; then
-      echo "::error::Release withdrawal could not be verified. Commits/pushes remain blocked; operator recovery is required." >&2
+      echo "::error::Release withdrawal could not be verified. Integration/promotion remain blocked; operator recovery is required." >&2
     fi
   fi
   exit "$result"

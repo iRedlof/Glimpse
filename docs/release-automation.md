@@ -1,13 +1,16 @@
-# Release and commit gates
+# Local quality and protected release admission
 
-Current public distribution is **v1.4.5 / build 12**, source
-`6ffae9e5396f3e5274d000bcae8e7a2947abb3f0`, Release `41379941334` attempt 1.
-The whole workflow succeeded. Root and independent QA separately downloaded
-the public artifacts and verified both DMG and app signatures, policy team,
-notarization tickets, direct Gatekeeper acceptance, Sparkle signature,
-source/version/build, asset hashes and exact latest feed. QA also confirmed all
-four signed entitlements match source. Native UI, restart and endurance
-acceptance remain open. The earlier failure descriptions below are history.
+Current verified public distribution is **v1.4.9 / build 16**, source
+`7b1f18155f42007087733bed149ab0fc9cae6c58`, Release `41415776521` attempt 2.
+The whole workflow succeeded with 395 named tests. Independent public downloads
+passed DMG/app signatures, policy team, notarization, Gatekeeper, Sparkle,
+source/version/build, asset hashes and exact latest-feed verification.
+Installed signature and launch checks passed; screen-fit/scroll interaction,
+restart and endurance acceptance remain open. Actual installed diagnostics
+interaction was last accepted on v1.4.8. The first v1.4.9 attempt failed before
+publication at release-note generation; exact Recovery succeeded and one
+unchanged-source retry completed successfully. The original HTTP cause remains
+unproven. Earlier release and first-install descriptions below are history.
 
 Local artifact preparation uses an explicitly configured absolute existing
 `GLIMPSE_SIGNING_KEYCHAIN`. The strict selector binds the policy team and
@@ -116,44 +119,61 @@ The repository has since moved to `iRedlof/Glimpse`. New artifact/feed URLs and
 the embedded updater feed use that name. Only the exact pinned v1.4.3 release
 may retain its original `rlchandani/Glimpse` enclosure URL.
 
-## Install local blocking
+## Install local quality hooks
 
-Run `tools/scripts/install-release-hooks.sh` in each checkout. The installer
-first verifies the previous release and configures a worktree-specific hook
-path. Both pre-commit and pre-push fail closed if GitHub is unreachable, the
-latest remote main revision is unreleased, or its release workflow is pending,
-failed, cancelled, or missing exact artifact verification. Hooks make no cached
-success decision. Pre-commit requires all source changes staged, archives the
-exact index tree, runs the complete quality gate against that snapshot, and
-rejects index/working-tree changes made during testing. Ignored files are
-excluded from the tested snapshot; dependency lockfiles must be tracked.
-Existing custom hook paths require explicit integration so
-they are not overwritten.
+Run `tools/scripts/install-release-hooks.sh` in each checkout. Installation
+configures a worktree-specific hook path without consulting GitHub distribution
+health. It refuses an existing different custom hook path, preserves sibling
+checkout configuration and retains executable pre-commit/pre-push files.
+Repeated installation is safe. Checkouts already pointing at these tracked
+scripts acquire their new behavior when source is updated; older/archived
+worktrees and custom hook integrations require separate migration.
 
-`python3 tools/scripts/release-control.py gate` is the same read-only check.
-Each normal commit/push is blocked from the moment main advances until the
-release workflow has completed successfully in GitHub, or a failed release has
-a completed, verified recovery bound to that exact failed revision.
+Pre-commit requires all source changes staged, archives the exact index tree,
+clears inherited Git repository variables for archived fixture tests, runs the
+complete quality gate and rejects index/working-tree changes made during testing.
+Ignored files are excluded from the snapshot; dependency lockfiles must be
+tracked. Quality failures still block commits. Actual build/dependency
+prerequisites remain necessary even though release-health queries are removed.
 
-This enforces the policy in configured checkouts. `--no-verify`, a changed Git
-configuration, direct API writes, and other clones can bypass client hooks.
-For hosted enforcement, require pull requests with strict up-to-date branch
-checks, the GitHub Actions checks `Previous release verified`, `Release tooling
-checks`, and `App and core tests`, and no direct-push/admin bypass. The admission
-job runs the controller from trusted main and fails while main's latest release
-or recovery is pending. Merging one PR advances main and makes other PRs stale;
-updating them invalidates earlier head checks and reruns admission. This
-serializes protected main merges around verified release completion for the
-normal automated main-push path.
-Workflow/controller changes require trusted review to preserve the check's
-meaning. Client hooks still only control configured checkouts.
+Pre-push is a documented successful no-op. Neither hook nor installation queries
+release health or caches admission. Local development and branch work can
+continue during pending/failed releases or unavailable distribution evidence;
+Git transport still requires a reachable destination. Client hooks are
+checkout-local quality safeguards, not server security authority.
+
+## Protected integration and promotion
+
+`python3 tools/scripts/release-control.py gate` remains the read-only distribution
+admission check. Unavailable, pending, failed/unrecovered or wrong-source evidence
+closes main integration and promotion.
+
+Require pull requests with strict up-to-date branch checks, the GitHub Actions
+checks `Previous release verified`, `Release tooling checks`, and `App and core
+tests`, and no direct-push/admin bypass. Hosted admission applies only to
+`pull_request` events targeting canonical `iRedlof/Glimpse` main, including fork
+heads. It runs trusted main's existing controller and `gate` with read-only
+permissions. App/tooling checks remain independent; fork app/core tests remain
+on a disposable macOS runner. A skipped outside-boundary admission job is not
+proof of canonical-main admission.
+
+Immediately before an ordinary expected-head protected merge, the owner verifies
+the exact PR head/base and all required check results, runs a fresh trusted gate,
+and explicitly rechecks current main and the latest Release run/attempt/status.
+When Recovery supplies admission, recheck its exact accepted identity too.
+Changed, active or unavailable evidence stops integration and requires refreshed
+validation. Merging advances main and makes other PRs stale; updating them
+reruns quality/admission. Workflow/controller changes require independent
+trusted review. Release inspect separately preserves exact predecessor admission,
+and whole terminal Release/Recovery/public verification remains mandatory.
 
 Coordinate manual Release dispatches/reruns with a pause in merging. Starting
 a run at unchanged main does not invalidate an already-green PR's check proof,
 so strict branch protection alone cannot impose an absolute lock during those
-manual operations. Refresh admission after they finish. Enforcing that lock
-against arbitrary manual operations requires a dynamic merge coordinator or
-an administrator-managed merge lock; the local hooks re-query on every operation.
+manual operations. Refresh admission after they finish. A fresh query and explicit
+owner observations do not make merging atomic. Enforcing an absolute lock against
+arbitrary manual operations requires a separately scoped dynamic merge
+coordinator or an administrator-managed merge lock.
 
 First installation uses an explicit administrator-pinned exception because
 legacy main lacks the controller: `ADMISSION_BOOTSTRAP_BASE_SHA` must equal
@@ -164,7 +184,7 @@ both variables after main contains the controller; ordinary PR/head input is
 never a fallback controller source. GitHub concurrency alone retains only one
 pending run and cannot enforce these admission restrictions.
 
-The first-install base is
+The historical first-install base was
 `eb4fc447be5491f2e665b3bde005c622b5083853`. Its legacy Release run
 `41364245310`, attempt 1, failed before build and predates Recovery installation.
 The `legacy_recovery` policy block admits only this audited case. The read-only
@@ -194,8 +214,9 @@ checks that identity. Clients that already installed a published build cannot
 be downgraded by withdrawing its feed. Ship a corrected higher build for those
 clients.
 
-Failures retrieving or changing GitHub state remain visible and keep the gates
-closed. If GitHub is unavailable during withdrawal, an operator must verify the
+Failures retrieving or changing GitHub state remain visible and keep integration
+and promotion closed. Independent preparation, local quality, commits and branch
+work continue. If GitHub is unavailable during withdrawal, an operator must verify the
 draft/latest state when service returns; automation cannot promise a remote
 mutation during an outage. The error identifies this required recovery.
 
@@ -204,9 +225,10 @@ release. It refuses an active or newer release, verifies ownership before
 re-drafting any partial publication, verifies the previous healthy release and
 its assets, and uploads a record binding failed run/attempt/SHA to healthy
 tag/SHA. Only a completed successful recovery workflow and matching record
-unlock a remediation commit. No running release, arbitrary divergence, or
-unverified rollback can use this exception. GitHub/API failure leaves the gate
-closed until a recovery rerun completes. Recovery evidence retains 90 days;
+unlock integration/promotion of a reviewed, quality-valid remediation. Its branch
+can be prepared before Recovery completes. No running release, arbitrary
+divergence, or unverified rollback can use this exception. GitHub/API failure
+leaves integration/promotion closed until a recovery rerun completes. Recovery evidence retains 90 days;
 rerun recovery if its evidence has expired before remediation.
 
 For a transient build failure, rerun the same failed workflow. Its draft may be
