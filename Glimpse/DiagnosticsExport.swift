@@ -31,6 +31,21 @@ enum DiagnosticsExport {
         private let lock = NSLock()
         private var active: Request?
         private static let candidateLimit = 10_000
+        private let submitWorker: @Sendable (@escaping @Sendable () -> Void) -> Void
+        private let awaitDeadline: @Sendable (TimeInterval) async throws -> Void
+
+        /// Scheduling seams keep the same timeout origin and synchronous worker.
+        init(
+            submitWorker: @escaping @Sendable (@escaping @Sendable () -> Void) -> Void = {
+                DispatchQueue.global(qos: .utility).async(execute: $0)
+            },
+            awaitDeadline: @escaping @Sendable (TimeInterval) async throws -> Void = {
+                try await Task.sleep(for: .seconds($0))
+            }
+        ) {
+            self.submitWorker = submitWorker
+            self.awaitDeadline = awaitDeadline
+        }
 
         private final class Request: @unchecked Sendable {
             private let lock = NSLock()
@@ -94,8 +109,8 @@ enum DiagnosticsExport {
                     request.install(continuation)
                     // A detached timer owns no SDK state and never joins the
                     // synchronous worker. Cancellation/deadline can deliver first.
-                    let timer = Task.detached(priority: .utility) {
-                        do { try await Task.sleep(for: .seconds(timeout)) }
+                    let timer = Task.detached(priority: .utility) { [awaitDeadline] in
+                        do { try await awaitDeadline(timeout) }
                         catch { return }
                         request.deliver(.success(LogResult(
                             output: "", timedOut: true, truncated: false,
@@ -103,7 +118,7 @@ enum DiagnosticsExport {
                         )))
                     }
                     request.installTimer(timer)
-                    DispatchQueue.global(qos: .utility).async {
+                    submitWorker {
                         let result: Result<LogResult, any Error> = autoreleasepool {
                             Result {
                                 try Self.readEntries(request: request, outputLimit: outputLimit, read: read)
