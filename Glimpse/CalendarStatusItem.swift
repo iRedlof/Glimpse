@@ -21,6 +21,8 @@ final class CalendarStatusItem {
     private var displayChangeObserver: Any?
     private var wakeObserver: Any?
     private var timeChangeObserver: Any?
+    // Set once on the main actor; the thread-safe removal happens in deinit.
+    nonisolated(unsafe) private var screenParametersObserver: Any?
     // nonisolated(unsafe): only assigned once on the main actor in setup() and only
     // read in deinit; the opaque observer token is never mutated concurrently. This
     // lets the nonisolated deinit remove the observer without needing isolated deinit
@@ -33,6 +35,9 @@ final class CalendarStatusItem {
     private let calendarClient = CalendarClient.liveValue
 
     deinit {
+        if let screenParametersObserver {
+            NotificationCenter.default.removeObserver(screenParametersObserver)
+        }
         // CalendarStatusItem is a lifetime singleton, but remove the distributed
         // observer explicitly for correctness — block-based observers are retained
         // by the center until removed. removeObserver is thread-safe.
@@ -90,6 +95,13 @@ final class CalendarStatusItem {
     }
 
     private func observeSystemEvents() {
+        screenParametersObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.refreshVisiblePanelPlacement() }
+        }
+
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
@@ -146,6 +158,10 @@ final class CalendarStatusItem {
         )
         button.image = image
         statusItem?.length = image.size.width
+        // Status-item layout applies the image width on the next runloop tick.
+        DispatchQueue.main.async { [weak self] in
+            self?.refreshVisiblePanelPlacement()
+        }
     }
 
     /// Compute the next midnight (00:00:01) after the given date.
@@ -232,39 +248,33 @@ final class CalendarStatusItem {
 
         guard let screen = currentStatusItemScreen() ?? NSScreen.main else { return }
 
-        let panelWidth = CalendarPanel.panelWidth
-        let panelHeight = CalendarPanel.panelHeight
-        let caretHeight = CalendarPanel.caretHeight
-        let gapBelowMenuBar = CalendarPanel.gapBelowMenuBar
-        let edgeMargin: CGFloat = 10
-
-        var panelX = round(statusItemRect.midX - panelWidth / 2)
-        let panelY = statusItemRect.minY - panelHeight - caretHeight - gapBelowMenuBar
-
-        if panelX + panelWidth + edgeMargin > screen.frame.maxX {
-            panelX = screen.frame.maxX - panelWidth - edgeMargin
+        guard let placement = PanelGeometry.placement(
+            statusItemFrame: statusItemRect, visibleFrame: screen.visibleFrame,
+            desiredHeight: panel?.layoutState.totalHeight
+                ?? CalendarPanel.panelHeight + CalendarPanel.caretHeight
+        ) else {
+            AppLogger.statusItem.error("Cannot show panel with invalid screen geometry")
+            return
         }
-        if panelX < screen.frame.minX + edgeMargin {
-            panelX = screen.frame.minX + edgeMargin
-        }
-
-        let caretOffset = max(16, min(statusItemRect.midX - panelX, panelWidth - 16))
-
-        let contentRect = NSRect(
-            x: panelX,
-            y: panelY,
-            width: panelWidth,
-            height: panelHeight + caretHeight
-        )
-
         if panel == nil {
-            panel = CalendarPanel(contentRect: contentRect, caretOffset: caretOffset)
-        } else {
-            panel?.caretXOffset = caretOffset
+            panel = CalendarPanel(
+                contentRect: placement.frame, caretOffset: placement.caretXOffset
+            )
         }
-
-        panel?.setFrame(contentRect, display: true)
-        panel?.makeKeyAndOrderFront(nil)
         panel?.prepareForReopen()
+        panel?.updatePlacement(statusItemFrame: statusItemRect, visibleFrame: screen.visibleFrame)
+        panel?.makeKeyAndOrderFront(nil)
+    }
+
+    /// Refresh an already visible panel without sending the reopen/reset action.
+    private func refreshVisiblePanelPlacement() {
+        guard let panel, panel.isVisible,
+              let button = statusItem?.button, let buttonWindow = button.window,
+              let screen = currentStatusItemScreen()
+        else { return }
+        let statusItemRect = buttonWindow.convertToScreen(
+            button.convert(button.bounds, to: nil)
+        )
+        panel.updatePlacement(statusItemFrame: statusItemRect, visibleFrame: screen.visibleFrame)
     }
 }

@@ -4,27 +4,45 @@ import SwiftUI
 
 @MainActor
 final class CalendarPanel: NSPanel {
-    static let panelWidth: CGFloat = 316
+    static let panelWidth = PanelGeometry.panelWidth
     static let panelHeight: CGFloat = 420
-    static let caretHeight: CGFloat = 12
-    static let gapBelowMenuBar: CGFloat = 6
+    static let caretHeight = PanelGeometry.caretHeight
+    static let gapBelowMenuBar = PanelGeometry.gapBelowMenuBar
 
-    var caretXOffset: CGFloat = 0
+    let layoutState = PanelLayoutState()
+
+    var caretXOffset: CGFloat {
+        get { layoutState.caretXOffset }
+        set {
+            layoutState.updatePlacement(
+                maximumHeight: layoutState.maximumHeight, caretXOffset: newValue
+            )
+        }
+    }
     var isPinned = false
     var isTextInputActive = false
     private var previousApp: NSRunningApplication?
     private let calendarStore: StoreOf<CalendarFeature>
-    private var hostingView: NSHostingView<CalendarPopoverView>?
+    private var hostingView: NSHostingView<AnyView>?
     private var sizeObservation: NSKeyValueObservation?  // invalidated on dealloc via ARC
     private var pendingResize: DispatchWorkItem?
     private var hasShownOnce = false
+    private var statusItemFrame: NSRect?
+    private var visibleFrame: NSRect?
 
-    init(contentRect: NSRect, caretOffset: CGFloat) {
+    convenience init(contentRect: NSRect, caretOffset: CGFloat) {
         let store = Store(initialState: CalendarFeature.State()) {
             CalendarFeature()
         }
+        self.init(contentRect: contentRect, caretOffset: caretOffset, calendarStore: store)
+    }
+
+    init(contentRect: NSRect, caretOffset: CGFloat, calendarStore store: StoreOf<CalendarFeature>,
+         content: ((PanelLayoutState) -> AnyView)? = nil) {
         self.calendarStore = store
-        self.caretXOffset = caretOffset
+        layoutState.updatePlacement(
+            maximumHeight: layoutState.maximumHeight, caretXOffset: caretOffset
+        )
         super.init(
             contentRect: contentRect,
             styleMask: [.nonactivatingPanel, .fullSizeContentView],
@@ -41,8 +59,9 @@ final class CalendarPanel: NSPanel {
         collectionBehavior = [.moveToActiveSpace]
         animationBehavior = .utilityWindow
 
-        let popoverView = CalendarPopoverView(store: store, panel: self)
-        let hosting = NSHostingView(rootView: popoverView)
+        let root = content?(layoutState)
+            ?? AnyView(CalendarPopoverView(store: store, panel: self, layout: layoutState))
+        let hosting = NSHostingView(rootView: root)
         hosting.frame = contentRect
         contentView = hosting
         hostingView = hosting
@@ -57,6 +76,22 @@ final class CalendarPanel: NSPanel {
                 self?.scheduleResizeToFitContent()
             }
         }
+    }
+
+    func updatePlacement(statusItemFrame: NSRect, visibleFrame: NSRect) {
+        guard let placement = PanelGeometry.placement(
+            statusItemFrame: statusItemFrame, visibleFrame: visibleFrame,
+            desiredHeight: layoutState.naturalContentHeight + Self.caretHeight
+        ) else {
+            AppLogger.general.error("Ignoring invalid panel anchor or visible bounds")
+            return
+        }
+        self.statusItemFrame = statusItemFrame
+        self.visibleFrame = visibleFrame
+        layoutState.updatePlacement(
+            maximumHeight: placement.maximumHeight, caretXOffset: placement.caretXOffset
+        )
+        applyFrame(placement.frame)
     }
 
     override var canBecomeKey: Bool { true }
@@ -74,40 +109,29 @@ final class CalendarPanel: NSPanel {
 
     /// Resize the panel to fit the hosting view's intrinsic content size,
     /// anchored to the top (menu bar edge). Width is always fixed at panelWidth.
-    private func resizeToFitContent() {
+    func resizeToFitContent() {
         guard let hosting = hostingView else { return }
         let fittingSize = hosting.intrinsicContentSize
-        guard fittingSize.height > 0, fittingSize.width > 0 else { return }
-
-        let newHeight = min(fittingSize.height, screen?.visibleFrame.height ?? 800)
-        let currentFrame = frame
-
-        // Anchor to top: keep the top edge fixed, adjust origin.y downward
-        let newY = currentFrame.maxY - newHeight
-        let newFrame = NSRect(
-            x: currentFrame.origin.x,
-            y: newY,
-            width: Self.panelWidth,
-            height: newHeight
-        )
-
-        // Idempotency guard: bail if the frame is already effectively correct.
-        // setFrame triggers a hosting-view layout pass, which re-emits the
-        // intrinsicContentSize KVO that scheduled this call. Without this guard
-        // the observe -> setFrame -> observe cycle never reaches a fixed point
-        // and pegs the main thread at the debounce rate (~20 Hz). Comparing with
-        // a sub-pixel tolerance lets the loop settle instead of spinning.
-        let tolerance: CGFloat = 0.5
-        if abs(newFrame.height - currentFrame.height) < tolerance
-            && abs(newFrame.width - currentFrame.width) < tolerance
-            && abs(newFrame.origin.y - currentFrame.origin.y) < tolerance {
-            hasShownOnce = true
+        guard fittingSize.height.isFinite, fittingSize.height > 0,
+              fittingSize.width.isFinite, fittingSize.width > 0
+        else {
+            AppLogger.general.error("Ignoring invalid panel intrinsic size")
             return
         }
-
-        // Skip animation on first show to avoid visible resize jump
-        let shouldAnimate = hasShownOnce
+        guard let statusItemFrame, let visibleFrame else { return }
+        updatePlacement(statusItemFrame: statusItemFrame, visibleFrame: visibleFrame)
         hasShownOnce = true
+    }
+
+    private func applyFrame(_ newFrame: NSRect) {
+        // All components participate, including x after a status item/screen change.
+        // A frame update can emit another intrinsic-size observation; unchanged
+        // geometry terminates that feedback loop.
+        if PanelGeometry.framesMatch(newFrame, frame) {
+            return
+        }
+        // Initial placement does not spend the first-resize animation exemption.
+        let shouldAnimate = hasShownOnce && isVisible
         setFrame(newFrame, display: true, animate: shouldAnimate)
     }
 

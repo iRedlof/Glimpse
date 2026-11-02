@@ -6,7 +6,9 @@ struct CalendarPopoverView: View {
     @Bindable var store: StoreOf<CalendarFeature>
     weak var panel: CalendarPanel?
 
-    @State private var scrollAccumulator: CGFloat = 0
+    let layout: PanelLayoutState
+
+    @State private var scrollRouter = CalendarScrollRouter()
     @State private var scrollMonitor: Any?
     @State private var isMouseOverCalendar = false
     @State private var hoveredDate: Date?
@@ -19,85 +21,119 @@ struct CalendarPopoverView: View {
     @State private var aiFieldActive: Bool = false
     @FocusState private var aiFieldFocused: Bool
     @State private var showQuitConfirm: Bool = false
-    @State private var preferencesStore = Store(initialState: PreferencesFeature.State.live()) {
-        PreferencesFeature()
-    }
-    private let scrollThreshold: CGFloat = 5.0
-    private let maxScrollContribution: CGFloat = 1.5
+    @State private var preferencesStore: StoreOf<PreferencesFeature>
     private let caretHeight = CalendarPanel.caretHeight
 
-    var body: some View {
-        VStack(spacing: 0) {
-            caretView
-                .frame(height: caretHeight)
+    init(store: StoreOf<CalendarFeature>, panel: CalendarPanel? = nil,
+         layout: PanelLayoutState? = nil,
+         preferencesStore: StoreOf<PreferencesFeature>? = nil) {
+        self.store = store
+        self.panel = panel
+        self.layout = layout ?? panel?.layoutState ?? PanelLayoutState()
+        self._preferencesStore = State(initialValue: preferencesStore ?? Store(
+            initialState: PreferencesFeature.State.live()
+        ) { PreferencesFeature() })
+    }
 
-            VStack(spacing: 12) {
-                if store.showingPreferences {
-                    PreferencesView(store: preferencesStore)
-                }
-                headerView
-                if store.showAISearch {
-                    aiQueryField
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-                calendarSection
-                    .onHover { hovering in
-                        isMouseOverCalendar = hovering
-                        if !hovering { hoveredDate = nil }
+    var body: some View {
+        ScrollViewReader { reader in
+            VStack(spacing: 0) {
+                caretView.frame(height: caretHeight)
+                PanelViewport(layout: layout) {
+                    VStack(spacing: 12) {
+                        if store.showingPreferences {
+                            PreferencesView(store: preferencesStore)
+                        }
+                        headerView
+                        if store.showAISearch {
+                            aiQueryField
+                                .id("panel-ai-input")
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                        calendarSection
+                            .onHover { hovering in
+                                isMouseOverCalendar = hovering
+                                if !hovering {
+                                    hoveredDate = nil
+                                    scrollRouter.suspendNavigation()
+                                }
+                            }
+                        selectedDateInfo
+                        eventsSection
+                        footerView
                     }
-                selectedDateInfo
-                eventsSection
-                footerView
+                    .padding()
+                    .id("panel-content-top")
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: AppDesign.CornerRadius.lg)
+                        .fill(.regularMaterial)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: AppDesign.CornerRadius.lg))
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: AppDesign.CornerRadius.lg)
-                    .fill(.regularMaterial)
-            )
+            .frame(width: PanelGeometry.panelWidth)
+            .onAppear {
+                store.send(.onAppear)
+                setupKeyMonitor()
+                setupScrollMonitor()
+            }
+            .onDisappear {
+                removeMonitors()
+                store.send(.onDisappear)
+            }
+            .onChange(of: store.showingPreferences) { _, _ in
+                reader.scrollTo("panel-content-top", anchor: .top)
+                scrollRouter.suspendNavigation()
+            }
+            .onChange(of: layout.isOverflowing) { _, _ in
+                scrollRouter.suspendNavigation()
+            }
+            .onChange(of: aiFieldActive) { _, active in
+                panel?.isTextInputActive = active
+                if active { reader.scrollTo("panel-ai-input", anchor: .center) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .calendarPreferencesDidChange)) { _ in
+                store.send(.reloadPreferences)
+                showQuitConfirm = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .calendarPanelWillHide)) { notification in
+                guard notification.object as? CalendarPanel === panel else { return }
+                removeMonitors()
+                aiTask?.cancel()
+                aiTask = nil
+                aiProcessing = false
+                aiFieldActive = false
+                aiQueryText = ""
+                aiErrorMessage = nil
+                isRecordingHotkey = false
+                showQuitConfirm = false
+                isMouseOverCalendar = false
+                hoveredDate = nil
+                store.send(.onDisappear)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .calendarPanelDidShow)) { notification in
+                guard notification.object as? CalendarPanel === panel else { return }
+                scrollRouter.reset()
+                reader.scrollTo("panel-content-top", anchor: .top)
+                setupKeyMonitor()
+                setupScrollMonitor()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .hotkeyRecordingDidChange)) { notification in
+                isRecordingHotkey = notification.object as? Bool ?? false
+                scrollRouter.suspendNavigation()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                if panel?.isVisible == true { store.send(.refreshCalendarAuthorization) }
+            }
         }
-        .frame(width: 300)
-        .onAppear {
-            store.send(.onAppear)
-            setupKeyMonitor()
-            setupScrollMonitor()
-        }
-        .onDisappear {
-            removeMonitors()
-            store.send(.onDisappear)
-        }
-        .onChange(of: aiFieldActive) { _, active in
-            panel?.isTextInputActive = active
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .calendarPreferencesDidChange)) { _ in
-            store.send(.reloadPreferences)
-            showQuitConfirm = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .calendarPanelWillHide)) { notification in
-            guard notification.object as? CalendarPanel === panel else { return }
-            removeMonitors()
-            aiTask?.cancel()
-            aiTask = nil
-            aiProcessing = false
-            aiFieldActive = false
-            aiQueryText = ""
-            aiErrorMessage = nil
-            isRecordingHotkey = false
-            showQuitConfirm = false
-            isMouseOverCalendar = false
-            hoveredDate = nil
-            store.send(.onDisappear)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .calendarPanelDidShow)) { notification in
-            guard notification.object as? CalendarPanel === panel else { return }
-            setupKeyMonitor()
-            setupScrollMonitor()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .hotkeyRecordingDidChange)) { notification in
-            isRecordingHotkey = notification.object as? Bool ?? false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            if panel?.isVisible == true { store.send(.refreshCalendarAuthorization) }
-        }
+    }
+
+    nonisolated static func scrollPhase(_ phase: NSEvent.Phase) -> CalendarScrollRouter.Phase {
+        if phase.contains(.cancelled) { return .cancelled }
+        if phase.contains(.ended) { return .ended }
+        if !phase.intersection([.began, .mayBegin]).isEmpty { return .began }
+        if !phase.intersection([.changed, .stationary]).isEmpty { return .changed }
+        return .none
     }
 
     // MARK: - Event Monitors
@@ -180,22 +216,22 @@ struct CalendarPopoverView: View {
     private func setupScrollMonitor() {
         guard scrollMonitor == nil else { return }
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-            // Only navigate months when the cursor is over the calendar grid
-            guard let panel, panel.isVisible, event.window === panel,
-                  isMouseOverCalendar, !isRecordingHotkey else { return event }
-
-            let delta = event.scrollingDeltaY
-            let clamped = max(-maxScrollContribution, min(maxScrollContribution, delta))
-            scrollAccumulator += clamped
-
-            if scrollAccumulator > scrollThreshold {
-                scrollAccumulator = 0
-                store.send(.goToPreviousMonth)
-            } else if scrollAccumulator < -scrollThreshold {
-                scrollAccumulator = 0
-                store.send(.goToNextMonth)
+            let result = scrollRouter.route(
+                delta: event.scrollingDeltaY,
+                panelVisible: panel?.isVisible == true,
+                eventIsForPanel: panel != nil && event.window === panel,
+                overCalendar: isMouseOverCalendar,
+                recordingShortcut: isRecordingHotkey,
+                contentOverflows: layout.isOverflowing,
+                phase: Self.scrollPhase(event.phase),
+                momentumPhase: Self.scrollPhase(event.momentumPhase)
+            )
+            switch result.direction {
+            case .previous: store.send(.goToPreviousMonth)
+            case .next: store.send(.goToNextMonth)
+            case nil: break
             }
-            return event
+            return result.consumesEvent ? nil : event
         }
     }
 
@@ -208,15 +244,15 @@ struct CalendarPopoverView: View {
             NSEvent.removeMonitor(monitor)
             scrollMonitor = nil
         }
-        scrollAccumulator = 0
+        scrollRouter.reset()
     }
 
     // MARK: - Caret
 
     private var caretView: some View {
-        GeometryReader { geometry in
+        GeometryReader { _ in
             let caretWidth = AppDesign.Caret.width
-            let xOffset = panel?.caretXOffset ?? geometry.size.width / 2
+            let xOffset = layout.caretXOffset
 
             Path { path in
                 let r = AppDesign.Caret.tipRadius
