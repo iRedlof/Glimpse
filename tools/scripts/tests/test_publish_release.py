@@ -145,7 +145,14 @@ except Exception as error:
 """)
         # macOS artifact commands are exercised by live audit separately.
         verifier = self.scripts / "verify-dmg.sh"
-        verifier.write_text("#!/bin/bash\nexit 0\n")
+        verifier.write_text("""#!/usr/bin/env python3
+import json,os,pathlib,sys
+path=pathlib.Path(os.environ['FAKE_GH_STATE'])
+state=json.loads(path.read_text())
+state['events'].append('artifact-verify')
+path.write_text(json.dumps(state))
+sys.exit({'dmg-signature-failure':23,'dmg-gatekeeper-failure':3}.get(state['mode'],0))
+""")
         verifier.chmod(0o755)
         project = self.root / "Glimpse.xcodeproj"
         project.mkdir()
@@ -207,6 +214,17 @@ except Exception as error:
         self.assertIn("digest", result.stderr)
         self.assertTrue(state["release"]["draft"])
         self.assertNotIn("publish", state["events"])
+
+    def test_downloaded_container_failure_keeps_draft_private(self):
+        for mode in ("dmg-signature-failure", "dmg-gatekeeper-failure"):
+            with self.subTest(mode=mode):
+                result, state = self.run_release(mode)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("upload", state["events"])
+                self.assertIn("artifact-verify", state["events"])
+                self.assertTrue(state["release"]["draft"])
+                self.assertNotIn("publish", state["events"])
+                self.assertNotIn("release_verified=true", (self.root / "output").read_text())
 
     def test_public_health_failure_withdraws_owned_release(self):
         result, state = self.run_release("public-health-failure")

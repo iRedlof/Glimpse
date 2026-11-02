@@ -201,6 +201,32 @@ contracts, 27 monitoring fixtures and scoped static checks. Root's refreshed
 exact-main Recovery gate passed before staging. Normal staged and hosted
 checks and signed public verification remain mandatory.
 
+PR #8 passed staged and hosted source/merge checks and merged normally as
+`b37a4d4bc8f67bff728dd75b581fc0fc6849dd3a` with the approved tree.
+Release `41378309147` attempt 1 succeeded completely, including real handoff
+of draft `431002599`, public downloads, final verification and metrics
+(`release_verified=true`, 255.12 seconds). The public manifest binds source/run
+and artifact digests; latest-feed bytes match. Root and the release specialist
+independently refreshed the live admission gate.
+
+The independent macOS artifact audit then exposed a missing container-signature
+gate: the app is correctly signed/notarized and accepted by Gatekeeper, and the
+DMG ticket validates, but the DMG itself is unsigned and its direct Gatekeeper
+assessment rejects it. Root and QA reproduced the exact result on anonymous
+downloads. Full artifact acceptance and retirement of the first-install policy
+exception remain open. A higher-version correction will sign the DMG using the
+already selected identity before notarization and reject unsigned/wrong-team or
+Gatekeeper-rejected containers before publication.
+
+The v1.4.5/build 12 correction passed independent frozen-diff A4/A7/A8 review,
+129 tooling contracts, 27 monitoring fixtures and static checks. Failure
+fixtures precede production changes and reject signing/strict verification
+before notarization and downloaded identity/ticket/Gatekeeper failures before
+mounting/publication. Existing signing credentials and Sparkle keys are reused.
+Root confirmed unchanged app/Core behavior and carried forward bounded
+product/UX acceptance; scoped readiness now matches all four versions/builds
+and README. Staged/hosted and actual signed public-container gates remain open.
+
 Constraints: no signing-key generation, no installed-app mutation, no destructive
 source reverts. Product, UX, code,
 and QA readiness require explicit evidence. GitHub concurrency retains only

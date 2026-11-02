@@ -5,12 +5,13 @@ import subprocess
 import tempfile
 import unittest
 
-from test_signing_identity import workflow_run
+from test_signing_identity import IDENTITY, workflow_run
 
 
 class HeadlessDMGContracts(unittest.TestCase):
     def run_fixture(self, packaging_status=0, notary_status=0, staple_status=0,
-                    validation_status=0, include_app_notary=False, include_icon=False):
+                    validation_status=0, include_app_notary=False, include_icon=False,
+                    signing_status=0, signature_verification_status=0):
         temporary = tempfile.TemporaryDirectory(prefix="release dmg fixture ")
         self.addCleanup(temporary.cleanup)
         root = pathlib.Path(temporary.name).resolve()
@@ -60,6 +61,10 @@ elif command=='xcrun':
     else:
         sys.exit(2)
 elif command=='codesign':
+    if '--sign' in args:
+        sys.exit(int(os.environ['FIXTURE_SIGNING_STATUS']))
+    if '--verify' in args:
+        sys.exit(int(os.environ['FIXTURE_SIGNATURE_VERIFICATION_STATUS']))
     print('Authority=Developer ID Application: Fixture')
     print('Runtime Version=fixture')
 elif command=='ditto':
@@ -71,7 +76,11 @@ elif command=='ditto':
                "APPLE_ID_PASSWORD": "fixture-password", "TEAM_ID": "TEAM123456",
                "FIXTURE_TRACE": str(trace), "FIXTURE_PACKAGING_STATUS": str(packaging_status),
                "FIXTURE_NOTARY_STATUS": str(notary_status), "FIXTURE_STAPLE_STATUS": str(staple_status),
-               "FIXTURE_VALIDATION_STATUS": str(validation_status), "TMPDIR": str(root)}
+               "FIXTURE_VALIDATION_STATUS": str(validation_status),
+               "FIXTURE_SIGNING_STATUS": str(signing_status),
+               "FIXTURE_SIGNATURE_VERIFICATION_STATUS": str(signature_verification_status),
+               "SIGNING_IDENTITY": IDENTITY, "SIGNING_KEYCHAIN": str(root / "job signing.keychain-db"),
+               "TMPDIR": str(root)}
         script = workflow_run("Create and notarize DMG")
         if include_app_notary:
             script = workflow_run("Notarize app") + "\n" + script
@@ -99,7 +108,22 @@ elif command=='ditto':
         self.assertEqual((contents / "Glimpse.app/Contents/MacOS/Glimpse").read_bytes(), source.read_bytes())
         self.assertEqual(os.readlink(contents / "Applications"), "/Applications")
         signing = [entry["args"] for entry in observed if entry["command"] == "codesign"]
-        self.assertEqual(signing, [["-dvv", "./build/export/Glimpse.app"]])
+        self.assertEqual(signing, [
+            ["-dvv", "./build/export/Glimpse.app"],
+            ["--force", "--sign", IDENTITY, "--keychain", str(root / "job signing.keychain-db"),
+             "--timestamp", "./build/Glimpse-1.4.4.dmg"],
+            ["--verify", "--strict", "--verbose=2", "./build/Glimpse-1.4.4.dmg"],
+        ])
+        sign_index = next(index for index, entry in enumerate(observed)
+                          if entry["command"] == "codesign" and "--sign" in entry["args"])
+        verify_index = next(index for index, entry in enumerate(observed)
+                            if entry["command"] == "codesign" and "--verify" in entry["args"])
+        notary_index = next(index for index, entry in enumerate(observed)
+                            if entry["args"][:3] == ["notarytool", "submit", "./build/Glimpse-1.4.4.dmg"])
+        icon_index = next(index for index, entry in enumerate(observed) if entry["command"] == "SetFile")
+        self.assertLess(icon_index, sign_index)
+        self.assertLess(sign_index, verify_index)
+        self.assertLess(verify_index, notary_index)
         notarization = [entry["args"] for entry in observed
                         if entry["command"] == "xcrun" and entry["args"][:2] == ["notarytool", "submit"]]
         for args, artifact in zip(notarization, ["./build/Glimpse-notarize.zip", "./build/Glimpse-1.4.4.dmg"]):
@@ -123,6 +147,18 @@ elif command=='ditto':
         self.assertEqual(result.returncode, 64, result.stdout + result.stderr)
         self.assertEqual([entry["command"] for entry in observed], ["create-dmg"])
         self.assertFalse((root / "build/Glimpse-1.4.4.dmg").exists())
+        self.assertFalse((root / "workflow-proceeded.txt").exists())
+
+    def test_dmg_signing_failure_propagates_and_skips_notarization(self):
+        result, root, observed = self.run_fixture(signing_status=31)
+        self.assertEqual(result.returncode, 31, result.stdout + result.stderr)
+        self.assertFalse(any(entry["command"] == "xcrun" for entry in observed))
+        self.assertFalse((root / "workflow-proceeded.txt").exists())
+
+    def test_dmg_signature_verification_failure_skips_notarization(self):
+        result, root, observed = self.run_fixture(signature_verification_status=33)
+        self.assertEqual(result.returncode, 33, result.stdout + result.stderr)
+        self.assertFalse(any(entry["command"] == "xcrun" for entry in observed))
         self.assertFalse((root / "workflow-proceeded.txt").exists())
 
     def test_notary_failure_propagates_and_skips_stapling(self):

@@ -36,3 +36,18 @@ The local baseline in `docs/qa-baseline.md` is installed **1.4.3 / build 10**, a
 5. **DevOps + Reviewer:** verify delivery/recovery in executed runs and close documented repository enforcement and per-commit coverage gaps; measure release-cycle and recovery outcomes across multiple releases.
 
 The first release provides clearer state, safer boundaries, and useful evidence. The ongoing goal remains dependable availability across the user's machines.
+
+## Packaging correction carry-forward — v1.4.5 / build 12
+
+The v1.4.5 follow-up changes container signing/verification and release metadata.
+The accepted app/Core product behavior above is carried forward only while that
+behavioral source remains unchanged from public source
+`b37a4d4bc8f67bff728dd75b581fc0fc6849dd3a`; root must verify that boundary.
+The correction addresses an independently reproduced unsigned-container
+Gatekeeper rejection. Code/QA, exact staged/hosted checks and actual signed public
+container acceptance remain separate gates. Historical other-machine crashes,
+unattended restart and sustained performance criteria remain open.
+
+Root and independent QA verified the unchanged app/Core behavioral-source
+boundary and synchronized version/build metadata. The bounded product phase
+carries forward; this does not approve the remaining native or artifact gates.

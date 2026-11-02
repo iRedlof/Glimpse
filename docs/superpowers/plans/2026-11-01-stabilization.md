@@ -177,3 +177,20 @@ staged/hosted checks and first signed public verification remain pending.
 Independent frozen-diff QA passed all 123 tooling and 27 monitoring tests
 with static checks and no A4/A7/A8 blocker. Root refreshed the exact-main
 Recovery gate successfully. Staged/hosted and public gates remain open.
+
+PR #8 merged normally as `b37a4d4bc8f67bff728dd75b581fc0fc6849dd3a` after
+staged and hosted checks. Release `41378309147` succeeded completely and
+published v1.4.4; real draft handoff, anonymous hash/feed/source verification and
+the admission gate passed. Independent macOS QA confirms the contained app's
+signature/notarization/Gatekeeper/entitlements, but found the DMG itself unsigned
+and rejected by direct Gatekeeper assessment. Full artifact acceptance remains
+open. The v1.4.5/build 12 follow-up signs the container before notarization and
+adds downloaded signature/team/Gatekeeper gates. The first-install exception
+stays until those public checks pass; native restart, UI and soak remain open.
+
+Independent frozen-diff QA accepts the packaging correction with no A4/A7/A8
+code blocker: 129 tooling, 27 monitoring tests and static checks pass.
+Root/QA confirmed unchanged app/Core behavior and synchronized 1.4.5/build 12
+metadata; scoped readiness matches. Existing product/UX acceptance carries
+forward with native limits unchanged. Staged/hosted and real public checks
+remain required.
