@@ -433,46 +433,49 @@ struct CalendarPopoverView: View {
         let isSelected = store.selectedDate.map { cal.isDate($0, inSameDayAs: day.date) } ?? false
         let isHovered = hoveredDate.map { cal.isDate($0, inSameDayAs: day.date) } ?? false
 
-        return Text("\(dayNumber)")
-            .font(.system(.body, design: .rounded))
-            .fontWeight(isToday || isSelected ? .bold : .regular)
-            .foregroundStyle(foregroundColor(for: day, isToday: isToday, isSelected: isSelected))
-            .frame(maxWidth: .infinity)
-            .frame(height: AppDesign.Grid.cellHeight)
-            .background {
-                if isToday {
-                    Circle()
-                        .fill(Color.accentColor)
-                        .frame(
-                            width: AppDesign.Grid.todayCircleSize,
-                            height: AppDesign.Grid.todayCircleSize
-                        )
-                } else if isSelected {
-                    Circle()
-                        .strokeBorder(Color.accentColor, lineWidth: 2)
-                        .frame(
-                            width: AppDesign.Grid.todayCircleSize,
-                            height: AppDesign.Grid.todayCircleSize
-                        )
-                } else if isHovered {
-                    Circle()
-                        .strokeBorder(Color.secondary.opacity(AppDesign.Grid.hoverBorderOpacity), lineWidth: 1)
-                        .frame(
-                            width: AppDesign.Grid.todayCircleSize,
-                            height: AppDesign.Grid.todayCircleSize
-                        )
-                } else if isWorkdayColumn && day.isCurrentMonth {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.accentColor.opacity(AppDesign.Grid.workdayTintOpacity))
+        return Button {
+            store.send(.dateTapped(day.date))
+        } label: {
+            Text("\(dayNumber)")
+                .font(.system(.body, design: .rounded))
+                .fontWeight(isToday || isSelected ? .bold : .regular)
+                .foregroundStyle(foregroundColor(for: day, isToday: isToday, isSelected: isSelected))
+                .frame(maxWidth: .infinity)
+                .frame(height: AppDesign.Grid.cellHeight)
+                .background {
+                    if isToday {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(
+                                width: AppDesign.Grid.todayCircleSize,
+                                height: AppDesign.Grid.todayCircleSize
+                            )
+                    } else if isSelected {
+                        Circle()
+                            .strokeBorder(Color.accentColor, lineWidth: 2)
+                            .frame(
+                                width: AppDesign.Grid.todayCircleSize,
+                                height: AppDesign.Grid.todayCircleSize
+                            )
+                    } else if isHovered {
+                        Circle()
+                            .strokeBorder(Color.secondary.opacity(AppDesign.Grid.hoverBorderOpacity), lineWidth: 1)
+                            .frame(
+                                width: AppDesign.Grid.todayCircleSize,
+                                height: AppDesign.Grid.todayCircleSize
+                            )
+                    } else if isWorkdayColumn && day.isCurrentMonth {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.accentColor.opacity(AppDesign.Grid.workdayTintOpacity))
+                    }
                 }
-            }
-            .foregroundStyle(isToday ? .white : foregroundColor(for: day, isToday: false, isSelected: isSelected))
-            .contentShape(Rectangle())
+                .foregroundStyle(isToday ? .white : foregroundColor(for: day, isToday: false, isSelected: isSelected))
+                .contentShape(Rectangle())
+        }
+            .buttonStyle(.plain)
+            .focusable(false)
             .onHover { hovering in
                 hoveredDate = hovering ? day.date : nil
-            }
-            .onTapGesture {
-                store.send(.dateTapped(day.date))
             }
             .accessibilityLabel(dayAccessibilityLabel(day, dayNumber: dayNumber, isToday: isToday))
             .accessibilityAddTraits(isSelected ? .isSelected : [])
