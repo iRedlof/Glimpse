@@ -272,131 +272,31 @@ struct CalendarPopoverView: View {
     // MARK: - Header
 
     private var headerView: some View {
-        HStack {
-            Text(store.monthYearString)
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            HStack(spacing: AppDesign.Spacing.sm + 2) {
-                Button { store.send(.goToPreviousMonth) } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.body.weight(.semibold))
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .accessibilityLabel("Previous month")
-
-                Button { store.send(.goToToday) } label: {
-                    Image(systemName: "circle.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(
-                            store.isShowingCurrentMonth
-                                ? Color.secondary.opacity(0.3)
-                                : Color.accentColor
-                        )
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .disabled(store.isShowingCurrentMonth
-                    && store.selectedDate.map { store.calendar.isDateInToday($0) } == true)
-                .accessibilityLabel("Go to today")
-
-                Button { store.send(.goToNextMonth) } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.body.weight(.semibold))
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .accessibilityLabel("Next month")
-            }
-        }
+        CalendarHeaderControls(
+            monthYearString: store.monthYearString,
+            isShowingCurrentMonth: store.isShowingCurrentMonth,
+            todayIsDisabled: store.isShowingCurrentMonth
+                && store.selectedDate.map { store.calendar.isDateInToday($0) } == true,
+            previous: { store.send(.goToPreviousMonth) },
+            today: { store.send(.goToToday) },
+            next: { store.send(.goToNextMonth) }
+        )
     }
 
     // MARK: - AI Query Field
 
-    @ViewBuilder
     private var aiQueryField: some View {
-        HStack(spacing: AppDesign.Spacing.sm) {
-            Image(systemName: "sparkle")
-                .font(.caption)
-                .foregroundStyle(
-                    aiProcessing ? Color.accentColor :
-                    aiFieldActive ? Color.accentColor :
-                    Color.secondary.opacity(0.4)
-                )
-
-            if aiFieldActive {
-                TextField("e.g. next Friday, Christmas...", text: $aiQueryText)
-                    .textFieldStyle(.plain)
-                    .font(.subheadline)
-                    .focused($aiFieldFocused)
-                    .onSubmit { submitAIQuery() }
-                    .onAppear {
-                        panel?.activateForTextInput()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            aiFieldFocused = true
-                        }
-                    }
-
-                if aiProcessing {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .frame(width: 16, height: 16)
-                } else {
-                    Button {
-                        aiFieldActive = false
-                        aiQueryText = ""
-                        aiErrorMessage = nil
-                        // Don't call deactivateTextInput — it closes the panel
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .focusable(false)
+        CalendarDateSearchRow(
+            query: $aiQueryText, isActive: $aiFieldActive,
+            isProcessing: aiProcessing, error: $aiErrorMessage,
+            focused: $aiFieldFocused, onSubmit: submitAIQuery,
+            onEditorAppear: {
+                panel?.activateForTextInput()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    aiFieldFocused = true
                 }
-            } else {
-                Button {
-                    aiFieldActive = true
-                } label: {
-                    Text("Go to date...  ⌘G")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
             }
-        }
-        .padding(.horizontal, AppDesign.Spacing.sm)
-        .padding(.vertical, AppDesign.Spacing.xs + 2)
-        .background(
-            RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
-                .fill(Color.secondary.opacity(aiFieldActive ? 0.10 : 0.06))
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
-                .strokeBorder(
-                    aiFieldActive ? Color.accentColor.opacity(0.3) : Color.clear,
-                    lineWidth: 1
-                )
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if !aiFieldActive {
-                aiFieldActive = true
-            }
-        }
-        .accessibilityLabel("Go to date using AI")
-
-        if let error = aiErrorMessage {
-            Text(error)
-                .font(.caption)
-                .foregroundStyle(.red)
-        }
     }
 
     private func submitAIQuery() {
@@ -747,72 +647,26 @@ struct CalendarPopoverView: View {
     }
 
     private var footerButtons: some View {
-        HStack {
-            Button {
+        CalendarFooterControls(
+            isPinned: store.isPinned,
+            showingPreferences: store.showingPreferences,
+            quit: {
                 withAnimation(AppDesign.Animation.standard) {
                     showQuitConfirm = true
                 }
-            } label: {
-                Image(systemName: "power")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .accessibilityLabel("Quit Glimpse")
-
-            Spacer()
-
-            Button {
-                AboutWindow.show()
-            } label: {
-                Image(systemName: "info.circle")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .accessibilityLabel("About Glimpse")
-
-            Button {
+            },
+            about: { AboutWindow.show() },
+            togglePin: {
                 store.send(.togglePin)
                 panel?.isPinned = store.isPinned
-            } label: {
-                Image(systemName: store.isPinned ? "pin.fill" : "pin")
-                    .font(.body)
-                    .foregroundStyle(store.isPinned ? Color.accentColor : .secondary)
-                    .rotationEffect(.degrees(store.isPinned ? 0 : 45))
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .accessibilityLabel(store.isPinned ? "Unpin window" : "Pin window")
-
-            Button(action: openAppleCalendar) {
-                Image(systemName: "calendar")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .accessibilityLabel("Open Calendar app")
-
-            Button {
+            },
+            openCalendar: openAppleCalendar,
+            togglePreferences: {
                 withAnimation(AppDesign.Animation.standard) {
                     _ = store.send(.togglePreferences)
                 }
-            } label: {
-                Image(systemName: store.showingPreferences ? "gearshape.fill" : "gearshape")
-                    .font(.body)
-                    .foregroundStyle(
-                        store.showingPreferences ? Color.accentColor : .secondary
-                    )
             }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .accessibilityLabel(
-                store.showingPreferences ? "Close preferences" : "Open preferences"
-            )
-        }
+        )
     }
 
     private var quitConfirmation: some View {
@@ -874,3 +728,251 @@ struct CalendarPopoverView: View {
     }
 }
 
+@MainActor
+struct CalendarHeaderControls: View {
+    let monthYearString: String
+    let isShowingCurrentMonth: Bool
+    let todayIsDisabled: Bool
+    let previous: () -> Void
+    let today: () -> Void
+    let next: () -> Void
+
+    var body: some View {
+        HStack {
+            Text(monthYearString)
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+
+            Spacer()
+
+            HStack(spacing: AppDesign.Spacing.sm + 2) {
+                Button(action: previous) {
+                    Image(systemName: "chevron.left")
+                        .font(.body.weight(.semibold))
+                        .frame(width: AppDesign.Control.iconTargetSize,
+                               height: AppDesign.Control.iconTargetSize)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .accessibilityLabel("Previous month")
+
+                Button(action: today) {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 8))
+                        .foregroundStyle(
+                            isShowingCurrentMonth
+                                ? Color.secondary.opacity(0.3)
+                                : Color.accentColor
+                        )
+                        .frame(width: AppDesign.Control.iconTargetSize,
+                               height: AppDesign.Control.iconTargetSize)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .disabled(todayIsDisabled)
+                .accessibilityLabel("Go to today")
+
+                Button(action: next) {
+                    Image(systemName: "chevron.right")
+                        .font(.body.weight(.semibold))
+                        .frame(width: AppDesign.Control.iconTargetSize,
+                               height: AppDesign.Control.iconTargetSize)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .accessibilityLabel("Next month")
+            }
+        }
+        .padding(.trailing, AppDesign.Control.iconTrailingClearance)
+    }
+
+}
+
+@MainActor
+struct CalendarFooterControls: View {
+    let isPinned: Bool
+    let showingPreferences: Bool
+    let quit: () -> Void
+    let about: () -> Void
+    let togglePin: () -> Void
+    let openCalendar: () -> Void
+    let togglePreferences: () -> Void
+
+    var body: some View {
+        HStack(spacing: AppDesign.Spacing.sm) {
+            Button {
+                quit()
+            } label: {
+                Image(systemName: "power")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(width: AppDesign.Control.iconTargetSize,
+                           height: AppDesign.Control.iconTargetSize)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .accessibilityLabel("Quit Glimpse")
+
+            Spacer()
+
+            Button {
+                about()
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(width: AppDesign.Control.iconTargetSize,
+                           height: AppDesign.Control.iconTargetSize)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .accessibilityLabel("About Glimpse")
+
+            Button {
+                togglePin()
+            } label: {
+                Image(systemName: isPinned ? "pin.fill" : "pin")
+                    .font(.body)
+                    .foregroundStyle(isPinned ? Color.accentColor : .secondary)
+                    .rotationEffect(.degrees(isPinned ? 0 : 45))
+                    .frame(width: AppDesign.Control.iconTargetSize,
+                           height: AppDesign.Control.iconTargetSize)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .accessibilityLabel(isPinned ? "Unpin window" : "Pin window")
+
+            Button(action: openCalendar) {
+                Image(systemName: "calendar")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(width: AppDesign.Control.iconTargetSize,
+                           height: AppDesign.Control.iconTargetSize)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .accessibilityLabel("Open Calendar app")
+
+            Button {
+                togglePreferences()
+            } label: {
+                Image(systemName: showingPreferences ? "gearshape.fill" : "gearshape")
+                    .font(.body)
+                    .foregroundStyle(
+                        showingPreferences ? Color.accentColor : .secondary
+                    )
+                    .frame(width: AppDesign.Control.iconTargetSize,
+                           height: AppDesign.Control.iconTargetSize)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .accessibilityLabel(
+                showingPreferences ? "Close preferences" : "Open preferences"
+            )
+        }
+        .padding(.trailing, AppDesign.Control.iconTrailingClearance)
+    }
+
+}
+
+@MainActor
+struct CalendarDateSearchRow: View {
+    @Binding var query: String
+    @Binding var isActive: Bool
+    let isProcessing: Bool
+    @Binding var error: String?
+    let focused: FocusState<Bool>.Binding
+    let onSubmit: () -> Void
+    let onEditorAppear: () -> Void
+
+    var body: some View {
+        HStack(spacing: AppDesign.Spacing.sm) {
+            Image(systemName: "sparkle")
+                .font(.caption)
+                .foregroundStyle(
+                    isProcessing ? Color.accentColor :
+                    isActive ? Color.accentColor :
+                    Color.secondary.opacity(0.4)
+                )
+
+            if isActive {
+                TextField("e.g. next Friday, Christmas...", text: $query)
+                    .textFieldStyle(.plain)
+                    .font(.subheadline)
+                    .accessibilityLabel("Go to date using AI")
+                    .focused(focused)
+                    .onSubmit { onSubmit() }
+                    .onAppear(perform: onEditorAppear)
+
+                if isProcessing {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 16, height: 16)
+                } else {
+                    Button {
+                        isActive = false
+                        query = ""
+                        error = nil
+                        // Don't call deactivateTextInput — it closes the panel
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(width: AppDesign.Control.dismissTargetSize,
+                                   height: AppDesign.Control.dismissTargetSize)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .accessibilityLabel("Close date search")
+                    .accessibilityHint("Clears the query and closes date search.")
+                }
+            } else {
+                Button {
+                    isActive = true
+                } label: {
+                    Text("Go to date...  ⌘G")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .accessibilityLabel("Go to date using AI")
+            }
+        }
+        .padding(.horizontal, AppDesign.Spacing.sm)
+        .padding(.vertical, AppDesign.Spacing.xs + 2)
+        .background(
+            RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
+                .fill(Color.secondary.opacity(isActive ? 0.10 : 0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
+                .strokeBorder(
+                    isActive ? Color.accentColor.opacity(0.3) : Color.clear,
+                    lineWidth: 1
+                )
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !isActive {
+                isActive = true
+            }
+        }
+
+        if let error = error {
+            Text(error)
+                .font(.caption)
+                .foregroundStyle(.red)
+        }
+    }
+}

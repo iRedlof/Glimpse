@@ -36,6 +36,16 @@ enum AppDesign {
         static let accentLineHeight: CGFloat = 1.5
     }
 
+    enum Control {
+        static let iconTargetSize: CGFloat = 28
+        static let dismissTargetSize: CGFloat = 24
+
+        @MainActor
+        static var iconTrailingClearance: CGFloat {
+            max(0, NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) - Spacing.md)
+        }
+    }
+
     // MARK: - Calendar Grid
 
     enum Grid {
