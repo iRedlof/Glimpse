@@ -5,6 +5,18 @@ import SwiftUI
 
 struct PreferencesView: View {
     @Bindable var store: StoreOf<PreferencesFeature>
+    @State private var hotkeyPreferences: HotkeyPreferencesModel
+    private let notificationCenter: NotificationCenter
+
+    init(
+        store: StoreOf<PreferencesFeature>,
+        hotkeyPreferences: HotkeyPreferencesModel? = nil,
+        notificationCenter: NotificationCenter = .default
+    ) {
+        self.store = store
+        _hotkeyPreferences = State(initialValue: hotkeyPreferences ?? HotkeyPreferencesModel())
+        self.notificationCenter = notificationCenter
+    }
 
     private let allWeekdays = Array(1...7)
 
@@ -14,13 +26,13 @@ struct PreferencesView: View {
 
     private func notifyMenuBarChanged() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            NotificationCenter.default.post(name: .menuBarDisplayDidChange, object: nil)
+            notificationCenter.post(name: .menuBarDisplayDidChange, object: nil)
         }
     }
 
     private func notifyCalendarChanged() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            NotificationCenter.default.post(name: .calendarPreferencesDidChange, object: nil)
+            notificationCenter.post(name: .calendarPreferencesDidChange, object: nil)
         }
     }
 
@@ -46,7 +58,7 @@ struct PreferencesView: View {
                 .padding(.top, AppDesign.Spacing.xs)
         }
         .onAppear { store.send(.onAppear) }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+        .onReceive(notificationCenter.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             store.send(.refreshLaunchAtLogin)
         }
     }
@@ -91,7 +103,7 @@ struct PreferencesView: View {
             settingsRow {
                 Text("Filled background")
                 Spacer()
-                Toggle("", isOn: displayBinding(
+                Toggle("Filled background", isOn: displayBinding(
                     keyPath: \.showFilledBackground,
                     action: { .setShowFilledBackground($0) }
                 ))
@@ -113,16 +125,16 @@ struct PreferencesView: View {
     }
 
     private var displayToggleRow: some View {
-        let options: [(String, WritableKeyPath<MenuBarDisplayOptions, Bool>, (Bool) -> PreferencesFeature.Action)] = [
-            ("Icon", \.showIcon, { .setShowIcon($0) }),
-            ("Day", \.showDayOfWeek, { .setShowDayOfWeek($0) }),
-            ("Mon", \.showMonth, { .setShowMonth($0) }),
-            ("Date", \.showDate, { .setShowDate($0) }),
-            ("Year", \.showYear, { .setShowYear($0) }),
+        let options: [(String, String, WritableKeyPath<MenuBarDisplayOptions, Bool>, (Bool) -> PreferencesFeature.Action)] = [
+            ("Icon", "Show icon in menu bar", \.showIcon, { .setShowIcon($0) }),
+            ("Day", "Show day of week in menu bar", \.showDayOfWeek, { .setShowDayOfWeek($0) }),
+            ("Mon", "Show month in menu bar", \.showMonth, { .setShowMonth($0) }),
+            ("Date", "Show date in menu bar", \.showDate, { .setShowDate($0) }),
+            ("Year", "Show year in menu bar", \.showYear, { .setShowYear($0) }),
         ]
 
         return HStack(spacing: AppDesign.Spacing.xs + 2) {
-            ForEach(options, id: \.0) { label, keyPath, action in
+            ForEach(options, id: \.0) { label, accessibilityName, keyPath, action in
                 let isOn = store.displayOptions[keyPath: keyPath]
                 Button {
                     store.send(action(!isOn))
@@ -141,6 +153,8 @@ struct PreferencesView: View {
                 .buttonStyle(.plain)
                 .focusable(false)
                 .contentShape(RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2))
+                .accessibilityLabel(accessibilityName)
+                .accessibilityValue(isOn ? "On" : "Off")
             }
         }
         .frame(maxWidth: .infinity)
@@ -154,7 +168,7 @@ struct PreferencesView: View {
             settingsRow {
                 Text("Week starts on")
                 Spacer()
-                Picker("", selection: Binding(
+                Picker("Week starts on", selection: Binding(
                     get: { store.startOfWeekday },
                     set: { newValue in
                         store.send(.setStartOfWeekday(newValue))
@@ -223,7 +237,7 @@ struct PreferencesView: View {
             settingsRow {
                 Text("AI date search")
                 Spacer()
-                Toggle("", isOn: Binding(
+                Toggle("AI date search", isOn: Binding(
                     get: { store.showAISearch },
                     set: { newValue in
                         store.send(.setShowAISearch(newValue))
@@ -240,7 +254,7 @@ struct PreferencesView: View {
                 settingsRow {
                     Text("Provider")
                     Spacer()
-                    Picker("", selection: $store.aiProvider.sending(\.setAIProvider)) {
+                    Picker("AI provider", selection: $store.aiProvider.sending(\.setAIProvider)) {
                         ForEach(GlimpseCore.AIProvider.allCases, id: \.self) { provider in
                             Text(provider.displayName).tag(provider)
                         }
@@ -339,8 +353,6 @@ struct PreferencesView: View {
 
     // MARK: - Hotkey
 
-    @State private var hotkeyPreferences = HotkeyPreferencesModel()
-
     private var hotkeyRow: some View {
         VStack(alignment: .leading, spacing: AppDesign.Spacing.sm) {
             settingsRow {
@@ -417,7 +429,7 @@ struct PreferencesView: View {
             }
         }
         .onDisappear { hotkeyPreferences.cancelRecording() }
-        .onReceive(NotificationCenter.default.publisher(for: .calendarPanelWillHide)) { _ in
+        .onReceive(notificationCenter.publisher(for: .calendarPanelWillHide)) { _ in
             hotkeyPreferences.cancelRecording()
         }
     }
