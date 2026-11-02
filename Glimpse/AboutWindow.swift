@@ -202,6 +202,21 @@ struct AboutUpdateSection: View {
                     .foregroundStyle(.green)
             }
 
+        case .noUpdate:
+            VStack(spacing: AppDesign.Spacing.sm) {
+                statusText("No installable update was found.")
+                statusText("Check again or view Glimpse releases on GitHub.")
+                    .foregroundStyle(.secondary)
+                HStack(spacing: AppDesign.Spacing.sm) {
+                    checkButton("Check for Updates", accessibilityLabel: "Check for updates")
+                    releasesLink
+                }
+                if !updater.canCheckForUpdates {
+                    statusText("Checking is temporarily unavailable.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
         case let .error(failure):
             VStack(spacing: AppDesign.Spacing.sm) {
                 HStack(alignment: .firstTextBaseline, spacing: AppDesign.Spacing.xs) {

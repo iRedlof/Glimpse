@@ -85,7 +85,7 @@ struct SparkleUpdaterTests {
         #expect(fixture.driver.status == .checking)
         var acknowledgements = 0
         if latest {
-            fixture.driver.showUpdateNotFoundWithError(updateTestError) {
+            fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion)) {
                 acknowledgements += 1
             }
             #expect(fixture.driver.status == .latest)
@@ -119,6 +119,364 @@ struct SparkleUpdaterTests {
 @MainActor
 var updateTestError: NSError {
     NSError(domain: "GlimpseUpdateFixture", code: 1)
+}
+
+@MainActor
+func noUpdateTestError(
+    reason: SPUNoUpdateFoundReason, item: SUAppcastItem? = nil
+) -> NSError {
+    var metadata: [String: Any] = [
+        SPUNoUpdateFoundReasonKey: NSNumber(value: reason.rawValue)
+    ]
+    if let item { metadata[SPULatestAppcastItemFoundKey] = item }
+    return NSError(
+        domain: SUSparkleErrorDomain, code: Int(SUError.noUpdateError.rawValue),
+        userInfo: metadata
+    )
+}
+
+@MainActor
+struct UpdateNoUpdateTests {
+    @Test(arguments: [
+        (SPUNoUpdateFoundReason.unknown, UpdateStatus.noUpdate(.init(reason: .unknown, requirementVersion: nil))),
+        (.onLatestVersion, .latest),
+        (.onNewerThanLatestVersion, .noUpdate(.init(reason: .newerThanFeed, requirementVersion: nil))),
+        (.systemIsTooOld, .noUpdate(.init(reason: .systemTooOld, requirementVersion: nil))),
+        (.systemIsTooNew, .noUpdate(.init(reason: .systemTooNew, requirementVersion: nil))),
+        (.hardwareDoesNotSupportARM64, .noUpdate(.init(reason: .requiresAppleSilicon, requirementVersion: nil)))
+    ])
+    func reasonClassificationPreservesNativeMeaning(
+        reason: SPUNoUpdateFoundReason, expected: UpdateStatus
+    ) async {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        var acknowledgements = 0
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: reason)) {
+            acknowledgements += 1
+            #expect(fixture.driver.status == expected)
+        }
+        #expect(fixture.driver.status == expected)
+        #expect(acknowledgements == 1)
+        if fixture.driver.status == .latest { _ = await fixture.delay.waitForRequest(0) }
+    }
+
+    @Test(arguments: [
+        "arbitrary", "domain", "code", "missing", "future", "negative", "string", "null",
+        "true", "false", "fraction", "nan", "infinity", "negative-infinity",
+        "signed-max", "unsigned-max", "signed-wrap", "unsigned-wrap", "decimal-fraction"
+    ])
+    func untrustedOrMalformedReasonNeverClaimsLatest(input: String) async {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        var acknowledgements = 0
+        fixture.driver.showUpdateNotFoundWithError(malformedNoUpdateTestError(input)) {
+            acknowledgements += 1
+        }
+        #expect(fixture.driver.status == .noUpdate(.init(reason: .unknown, requirementVersion: nil)))
+        #expect(acknowledgements == 1)
+        if fixture.driver.status == .latest { _ = await fixture.delay.waitForRequest(0) }
+    }
+
+    @Test(arguments: ["sdk", "int", "double", "decimal"])
+    func nativeIntegralReasonBridgeIsAccepted(input: String) async {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        let value: Any
+        switch input {
+        case "sdk": value = NSNumber(value: SPUNoUpdateFoundReason.onLatestVersion.rawValue)
+        case "int": value = 1
+        case "double": value = NSNumber(value: 1.0)
+        default: value = NSDecimalNumber(string: "1")
+        }
+        let error = NSError(
+            domain: SUSparkleErrorDomain, code: Int(SUError.noUpdateError.rawValue),
+            userInfo: [SPUNoUpdateFoundReasonKey: value]
+        )
+        fixture.driver.showUpdateNotFoundWithError(error, acknowledgement: {})
+        #expect(fixture.driver.status == .latest)
+        let request = await fixture.delay.waitForRequest(0)
+        #expect(request.duration == .seconds(5))
+    }
+
+    @Test(arguments: [false, true])
+    func publicAppcastItemAdapterCopiesOnlyApplicableMetadata(tooNew: Bool) throws {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        let item = try noUpdateTestItem(minimum: " 14.0 \n", maximum: "27.0.1")
+        #expect(item.minimumSystemVersion == " 14.0 \n")
+        #expect(item.maximumSystemVersion == "27.0.1")
+        fixture.driver.showUpdateNotFoundWithError(
+            noUpdateTestError(reason: tooNew ? .systemIsTooNew : .systemIsTooOld, item: item),
+            acknowledgement: {}
+        )
+        #expect(fixture.driver.status == .noUpdate(.init(
+            reason: tooNew ? .systemTooNew : .systemTooOld,
+            requirementVersion: tooNew ? "27.0.1" : "14.0"
+        )))
+    }
+
+    @Test(arguments: [
+        (SPUNoUpdateFoundReason.unknown, UpdateStatus.noUpdate(.init(reason: .unknown, requirementVersion: nil))),
+        (.onLatestVersion, .latest),
+        (.onNewerThanLatestVersion, .noUpdate(.init(reason: .newerThanFeed, requirementVersion: nil))),
+        (.hardwareDoesNotSupportARM64, .noUpdate(.init(reason: .requiresAppleSilicon, requirementVersion: nil)))
+    ])
+    func nonSystemReasonsIgnoreConflictingThresholds(
+        reason: SPUNoUpdateFoundReason, expected: UpdateStatus
+    ) async throws {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        let item = try noUpdateTestItem(minimum: "99", maximum: "1")
+        fixture.driver.showUpdateNotFoundWithError(
+            noUpdateTestError(reason: reason, item: item), acknowledgement: {}
+        )
+        #expect(fixture.driver.status == expected)
+        if fixture.driver.status == .latest { _ = await fixture.delay.waitForRequest(0) }
+    }
+
+    @Test(arguments: [false, true], [
+        ("14", Optional("14")), ("14.0", "14.0"), ("14.0.1", "14.0.1"),
+        (" \t14.0 \n", "14.0"), (String(repeating: "1", count: 32), String(repeating: "1", count: 32)),
+        (String(repeating: "1", count: 33), nil), ("", nil), (" \n", nil),
+        (".14", nil), ("14.", nil), ("14..1", nil), ("14.0.1.2", nil),
+        ("14\u{0000}.0", nil), ("14\n.0", nil), ("14 0", nil),
+        ("١٤.٠", nil), ("１４.０", nil), ("macOS 14", nil), ("14.0-beta", nil)
+    ])
+    func requirementValidationPreservesReason(
+        tooNew: Bool, sample: (String, String?)
+    ) throws {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        let item = try noUpdateTestItem(
+            minimum: tooNew ? "13" : sample.0, maximum: tooNew ? sample.0 : "99"
+        )
+        fixture.driver.showUpdateNotFoundWithError(
+            noUpdateTestError(reason: tooNew ? .systemIsTooNew : .systemIsTooOld, item: item),
+            acknowledgement: {}
+        )
+        #expect(fixture.driver.status == .noUpdate(.init(
+            reason: tooNew ? .systemTooNew : .systemTooOld, requirementVersion: sample.1
+        )))
+    }
+
+    @Test(arguments: ["absent", "wrong-item", "missing-threshold"])
+    func missingItemDetailsNeverReplaceTheTrustedReason(input: String) throws {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        var metadata = noUpdateTestError(reason: .systemIsTooOld).userInfo
+        if input == "wrong-item" {
+            metadata[SPULatestAppcastItemFoundKey] = ["sparkle:minimumSystemVersion": "14"]
+        } else if input == "missing-threshold" {
+            metadata[SPULatestAppcastItemFoundKey] = try noUpdateTestItem(maximum: "99")
+        }
+        let error = NSError(
+            domain: SUSparkleErrorDomain, code: Int(SUError.noUpdateError.rawValue), userInfo: metadata
+        )
+        fixture.driver.showUpdateNotFoundWithError(error, acknowledgement: {})
+        #expect(fixture.driver.status == .noUpdate(.init(reason: .systemTooOld, requirementVersion: nil)))
+    }
+
+    @Test(arguments: [
+        SPUNoUpdateFoundReason.unknown, .onNewerThanLatestVersion, .systemIsTooOld,
+        .systemIsTooNew, .hardwareDoesNotSupportARM64
+    ])
+    func guidanceSurvivesNativeDismissalWithoutDeadline(reason: SPUNoUpdateFoundReason) async {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        var acknowledgements = 0
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: reason)) {
+            acknowledgements += 1
+        }
+        let prior = fixture.driver.status
+        guard case .noUpdate = prior else { Issue.record("Expected guidance"); return }
+        fixture.driver.dismissUpdateInstallation()
+        await drainUpdateExecutor()
+        #expect(fixture.driver.status == prior)
+        #expect(fixture.delay.requests.isEmpty)
+        #expect(acknowledgements == 1)
+        #expect(fixture.updater.canCheckForUpdates)
+        #expect(fixture.backend.startCount == 1)
+        #expect(fixture.backend.checkCount == 0)
+    }
+
+    @Test(arguments: [
+        SPUNoUpdateFoundReason.unknown, .onNewerThanLatestVersion, .systemIsTooOld,
+        .systemIsTooNew, .hardwareDoesNotSupportARM64
+    ])
+    func canceledLatestCannotEraseGuidance(reason: SPUNoUpdateFoundReason) async {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion), acknowledgement: {})
+        let request = await fixture.delay.waitForRequest(0)
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: reason), acknowledgement: {})
+        let prior = fixture.driver.status
+        guard case .noUpdate = prior else { Issue.record("Expected guidance"); return }
+        fixture.delay.resumeSuccessfully(request.id)
+        #expect(await fixture.delay.waitForReturn(request.id))
+        await drainUpdateExecutor()
+        #expect(fixture.driver.status == prior)
+        #expect(fixture.delay.requests.count == 1)
+    }
+
+    @Test(arguments: ["dismiss", "offer", "ready", "progress", "error", "latest", "check"])
+    func guidanceAcknowledgementCannotEraseReplacement(replacement: String) async {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        var acknowledgements = 0
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .systemIsTooOld)) {
+            acknowledgements += 1
+            #expect(fixture.driver.status == .noUpdate(.init(reason: .systemTooOld, requirementVersion: nil)))
+            switch replacement {
+            case "dismiss": fixture.driver.dismissUpdateInstallation()
+            case "offer": fixture.driver.presentUpdate(version: "B") { _ in }
+            case "ready": fixture.driver.showReady { _ in }
+            case "progress": fixture.driver.showDownloadInitiated(cancellation: {})
+            case "error": fixture.driver.showUpdaterError(updateTestError, acknowledgement: {})
+            case "latest":
+                fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion), acknowledgement: {})
+            default: fixture.updater.checkForUpdates()
+            }
+        }
+        let expected: UpdateStatus
+        switch replacement {
+        case "dismiss": expected = .noUpdate(.init(reason: .systemTooOld, requirementVersion: nil))
+        case "offer": expected = .available(version: "B")
+        case "ready": expected = .readyToInstall
+        case "progress": expected = .downloading
+        case "error": expected = .error(.update)
+        case "latest": expected = .latest
+        default: expected = .checking
+        }
+        #expect(fixture.driver.status == expected)
+        #expect(acknowledgements == 1)
+        if replacement == "latest" { _ = await fixture.delay.waitForRequest(0) }
+    }
+
+    @Test(arguments: [false, true])
+    func guidanceRetainsOwnedChoiceUntilNativeDismissal(ready: Bool) throws {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        var choices: [SPUUserUpdateChoice] = []
+        if ready {
+            fixture.driver.showReady { choices.append($0) }
+        } else {
+            fixture.driver.presentUpdate(version: "A") { choices.append($0) }
+        }
+        let oldID = try #require(ready ? fixture.driver.installChoiceID : fixture.driver.updateChoiceID)
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .systemIsTooOld), acknowledgement: {})
+        #expect((ready ? fixture.driver.installChoiceID : fixture.driver.updateChoiceID) == oldID)
+        fixture.updater.checkForUpdates()
+        fixture.driver.chooseUpdate(.install, id: oldID)
+        fixture.driver.chooseInstallAndRelaunch(id: oldID)
+        #expect(choices.isEmpty)
+        #expect(fixture.backend.checkCount == 0)
+        fixture.driver.dismissUpdateInstallation()
+        #expect(fixture.driver.status == .noUpdate(.init(reason: .systemTooOld, requirementVersion: nil)))
+        #expect(fixture.driver.updateChoiceID == nil)
+        #expect(fixture.driver.installChoiceID == nil)
+        if ready {
+            fixture.driver.showReady { choices.append($0) }
+        } else {
+            fixture.driver.presentUpdate(version: "B") { choices.append($0) }
+        }
+        let newID = try #require(ready ? fixture.driver.installChoiceID : fixture.driver.updateChoiceID)
+        #expect(newID != oldID)
+        fixture.driver.chooseUpdate(.install, id: oldID)
+        fixture.driver.chooseUpdate(.skip, id: oldID)
+        fixture.driver.chooseInstallAndRelaunch(id: oldID)
+        #expect(choices.isEmpty)
+        if ready {
+            fixture.driver.chooseInstallAndRelaunch(id: newID)
+        } else {
+            fixture.driver.chooseUpdate(.install, id: newID)
+        }
+        #expect(choices == [.install])
+    }
+
+    @Test(arguments: ["latest", "error", "offer", "guidance"])
+    func guidanceCheckRevalidatesEligibilityAndAdmitsOnce(outcome: String) async {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .systemIsTooOld), acknowledgement: {})
+        let prior = fixture.driver.status
+        fixture.backend.publishEligibility(false)
+        fixture.updater.checkForUpdates()
+        #expect(fixture.driver.status == prior)
+        #expect(fixture.backend.checkCount == 0)
+        fixture.backend.publishEligibility(true)
+        #expect(fixture.updater.canCheckForUpdates)
+        fixture.backend.canCheck = false
+        fixture.updater.checkForUpdates()
+        #expect(fixture.driver.status == prior)
+        #expect(fixture.backend.checkCount == 0)
+        fixture.backend.publishEligibility(true)
+        fixture.backend.onCheck = { #expect(fixture.driver.status == .checking) }
+        fixture.updater.checkForUpdates()
+        fixture.updater.checkForUpdates()
+        #expect(fixture.backend.checkCount == 1)
+        #expect(fixture.backend.startCount == 1)
+        #expect(fixture.driver.status == .checking)
+        switch outcome {
+        case "latest":
+            fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion), acknowledgement: {})
+            #expect(fixture.driver.status == .latest)
+            _ = await fixture.delay.waitForRequest(0)
+        case "error":
+            fixture.driver.showUpdaterError(updateTestError, acknowledgement: {})
+            #expect(fixture.driver.status == .error(.check))
+        case "offer":
+            fixture.driver.presentUpdate(version: "B") { _ in }
+            #expect(fixture.driver.status == .available(version: "B"))
+        default:
+            fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .systemIsTooNew), acknowledgement: {})
+            #expect(fixture.driver.status == .noUpdate(.init(reason: .systemTooNew, requirementVersion: nil)))
+        }
+    }
+}
+
+@MainActor
+private func malformedNoUpdateTestError(_ input: String) -> NSError {
+    if input == "arbitrary" { return updateTestError }
+    var domain = SUSparkleErrorDomain
+    var code = Int(SUError.noUpdateError.rawValue)
+    var metadata: [String: Any] = [SPUNoUpdateFoundReasonKey: NSNumber(value: 1)]
+    let malformed: Any?
+    switch input {
+    case "domain": domain = "GlimpseUpdateFixture"; malformed = NSNumber(value: 1)
+    case "code": code += 1; malformed = NSNumber(value: 1)
+    case "missing": malformed = nil
+    case "future": malformed = NSNumber(value: 99)
+    case "negative": malformed = NSNumber(value: -1)
+    case "string": malformed = "1"
+    case "null": malformed = NSNull()
+    case "true": malformed = NSNumber(value: true)
+    case "false": malformed = NSNumber(value: false)
+    case "fraction": malformed = NSNumber(value: 1.5)
+    case "nan": malformed = NSNumber(value: Double.nan)
+    case "infinity": malformed = NSNumber(value: Double.infinity)
+    case "negative-infinity": malformed = NSNumber(value: -Double.infinity)
+    case "signed-max": malformed = NSNumber(value: Int64.max)
+    case "unsigned-max": malformed = NSNumber(value: UInt64.max)
+    case "signed-wrap": malformed = NSNumber(value: Int64(4_294_967_297))
+    case "unsigned-wrap": malformed = NSNumber(value: UInt64(4_294_967_297))
+    default: malformed = NSDecimalNumber(string: "1.0000000000000000001")
+    }
+    metadata[SPUNoUpdateFoundReasonKey] = malformed
+    return NSError(domain: domain, code: code, userInfo: metadata)
+}
+
+/// Deprecated public constructor is used only for scalar metadata, never compatibility flags.
+@MainActor
+func noUpdateTestItem(minimum: String? = nil, maximum: String? = nil) throws -> SUAppcastItem {
+    var dictionary: [String: Any] = [
+        "enclosure": [
+            "url": "https://example.invalid/Glimpse.dmg",
+            "sparkle:version": "19", "length": "1", "type": "application/octet-stream"
+        ]
+    ]
+    dictionary["sparkle:minimumSystemVersion"] = minimum
+    dictionary["sparkle:maximumSystemVersion"] = maximum
+    return try #require(SUAppcastItem(dictionary: dictionary))
 }
 
 @MainActor
@@ -470,7 +828,7 @@ struct UpdateResultTests {
         let fixture = UpdaterFixture()
         defer { fixture.delay.drain() }
         var acknowledgements = 0
-        fixture.driver.showUpdateNotFoundWithError(updateTestError) { acknowledgements += 1 }
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion)) { acknowledgements += 1 }
         #expect(fixture.driver.status == .latest)
         #expect(acknowledgements == 1)
         let request = await fixture.delay.waitForRequest(0)
@@ -487,7 +845,7 @@ struct UpdateResultTests {
     func canceledLatestCannotEraseNewPresentation(replacement: String) async {
         let fixture = UpdaterFixture()
         defer { fixture.delay.drain() }
-        fixture.driver.showUpdateNotFoundWithError(updateTestError, acknowledgement: {})
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion), acknowledgement: {})
         let a = await fixture.delay.waitForRequest(0)
         switch replacement {
         case "error": fixture.driver.showUpdaterError(updateTestError, acknowledgement: {})
@@ -500,7 +858,7 @@ struct UpdateResultTests {
             fixture.driver.showInstallingUpdate(
                 withApplicationTerminated: false, retryTerminatingApplication: {}
             )
-        case "latest": fixture.driver.showUpdateNotFoundWithError(updateTestError, acknowledgement: {})
+        case "latest": fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion), acknowledgement: {})
         default: Issue.record("Unknown result fixture")
         }
         let expected: UpdateStatus
@@ -563,7 +921,7 @@ struct UpdateResultTests {
         }
         switch callback {
         case "error": fixture.driver.showUpdaterError(updateTestError, acknowledgement: acknowledge)
-        case "latest": fixture.driver.showUpdateNotFoundWithError(updateTestError, acknowledgement: acknowledge)
+        case "latest": fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion), acknowledgement: acknowledge)
         default: fixture.driver.showUpdateInstalledAndRelaunched(false, acknowledgement: acknowledge)
         }
         let expected: UpdateStatus
@@ -592,7 +950,7 @@ struct UpdateResultTests {
         }
     }
 
-    @Test(arguments: ["initialization", "error", "latest"])
+    @Test(arguments: ["initialization", "error", "latest", "guidance"])
     func installationFinishedPreservesAnExistingTerminalResult(result: String) async {
         let fixture = UpdaterFixture(startError: result == "initialization" ? updateTestError : nil)
         defer { fixture.delay.drain() }
@@ -602,8 +960,11 @@ struct UpdateResultTests {
         case "error":
             fixture.driver.showUpdaterError(updateTestError, acknowledgement: {})
             expected = .error(.update)
+        case "guidance":
+            fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .systemIsTooOld), acknowledgement: {})
+            expected = .noUpdate(.init(reason: .systemTooOld, requirementVersion: nil))
         default:
-            fixture.driver.showUpdateNotFoundWithError(updateTestError, acknowledgement: {})
+            fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion), acknowledgement: {})
             _ = await fixture.delay.waitForRequest(0)
             expected = .latest
         }
@@ -620,7 +981,7 @@ struct UpdateResultTests {
     func delayFailureDoesNotFalselyDismissLatest() async {
         let fixture = UpdaterFixture()
         defer { fixture.delay.drain() }
-        fixture.driver.showUpdateNotFoundWithError(updateTestError, acknowledgement: {})
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion), acknowledgement: {})
         let request = await fixture.delay.waitForRequest(0)
         fixture.delay.resumeThrowing(request.id, error: updateTestError)
         _ = await fixture.delay.waitForReturn(request.id)

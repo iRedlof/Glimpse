@@ -143,7 +143,7 @@ struct AboutUpdateSectionTests {
         switch state {
         case "checking": fixture.driver.showUserInitiatedUpdateCheck(cancellation: {})
         case "latest":
-            fixture.driver.showUpdateNotFoundWithError(updateTestError, acknowledgement: {})
+            fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion), acknowledgement: {})
             _ = await fixture.delay.waitForRequest(0)
         case "check-error":
             fixture.driver.showUserInitiatedUpdateCheck(cancellation: {})
