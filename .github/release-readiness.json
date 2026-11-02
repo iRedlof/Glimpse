@@ -1,22 +1,22 @@
 {
-  "version": "1.4.9",
-  "build": "16",
+  "version": "1.4.10",
+  "build": "17",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-01-panel-screen-fit-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-02-update-retry-acceptance.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-01-panel-screen-fit-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-02-update-retry-acceptance.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-01-panel-screen-fit-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-02-update-retry-acceptance.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-01-panel-screen-fit-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-02-update-retry-acceptance.md"
     }
   }
 }

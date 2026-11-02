@@ -65,7 +65,7 @@ private struct AboutView: View {
                     .foregroundStyle(.tertiary)
             }
 
-            updateSection
+            AboutUpdateSection(updater: updater, appVersion: appVersion)
 
             Divider()
 
@@ -129,110 +129,6 @@ private struct AboutView: View {
         .frame(width: 300)
     }
 
-    // MARK: - Update Section
-
-    @ViewBuilder
-    private var updateSection: some View {
-        switch updater.userDriver.status {
-        case .idle:
-            Button("Check for Updates") {
-                updater.checkForUpdates()
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .font(.caption)
-            .foregroundStyle(Color.accentColor)
-            .disabled(!updater.canCheckForUpdates)
-
-        case .checking:
-            HStack(spacing: 6) {
-                ProgressView()
-                    .controlSize(.small)
-                    .scaleEffect(0.7)
-                Text("Checking for updates…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-        case .latest:
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.green)
-                Text("You're on the latest version")
-                    .font(.caption)
-                    .foregroundStyle(.green)
-            }
-
-        case let .error(msg):
-            HStack(spacing: 4) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.red)
-                Text(msg)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-
-        case let .available(newVersion):
-            VStack(spacing: 6) {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.accentColor)
-                    Text("\(appVersion) → \(newVersion)")
-                        .font(.caption.weight(.medium))
-                }
-                HStack(spacing: AppDesign.Spacing.md) {
-                    Button("Install") {
-                        updater.userDriver.pendingReply?(.install)
-                        updater.userDriver.pendingReply = nil
-                    }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .buttonStyle(.plain)
-                    .focusable(false)
-
-                    Button("Skip") {
-                        updater.userDriver.pendingReply?(.skip)
-                        updater.userDriver.pendingReply = nil
-                        updater.userDriver.status = .idle
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .buttonStyle(.plain)
-                    .focusable(false)
-                }
-            }
-
-        case .downloading:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small).scaleEffect(0.7)
-                Text("Downloading…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-        case .extracting:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small).scaleEffect(0.7)
-                Text("Installing…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-        case .readyToInstall:
-            Button("Install & Relaunch") {
-                updater.userDriver.pendingInstallReply?(.install)
-                updater.userDriver.pendingInstallReply = nil
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(Color.accentColor)
-            .buttonStyle(.plain)
-            .focusable(false)
-        }
-    }
-
     // MARK: - Diagnostics
 
     private func exportDiagnostics() {
@@ -260,5 +156,185 @@ private struct AboutView: View {
                 }
             }
         }
+    }
+}
+
+@MainActor
+struct AboutUpdateSection: View {
+    let updater: SparkleUpdater
+    let appVersion: String
+    private static let releasesURL = URL(string: "https://github.com/iRedlof/Glimpse/releases/latest")
+
+    // MARK: - Update Section
+
+    @ViewBuilder
+    var body: some View {
+        switch updater.userDriver.status {
+        case .idle:
+            checkButton("Check for Updates", accessibilityLabel: "Check for updates")
+
+        case .initializationFailed:
+            VStack(spacing: AppDesign.Spacing.sm) {
+                statusText("Updates are unavailable.")
+                statusText("Get the latest Glimpse release from GitHub.")
+                    .foregroundStyle(.secondary)
+                releasesLink
+            }
+
+        case .checking:
+            HStack(spacing: AppDesign.Spacing.sm) {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.7)
+                Text("Checking for updates…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+        case .latest:
+            HStack(spacing: AppDesign.Spacing.xs) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.green)
+                    .accessibilityHidden(true)
+                Text("You're on the latest version")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+            }
+
+        case let .error(failure):
+            VStack(spacing: AppDesign.Spacing.sm) {
+                HStack(alignment: .firstTextBaseline, spacing: AppDesign.Spacing.xs) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                        .accessibilityHidden(true)
+                    statusText(failure == .check
+                               ? "Couldn’t check for updates."
+                               : "The update couldn’t be completed.")
+                }
+                if failure == .update {
+                    statusText("Check again for available updates.")
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: AppDesign.Spacing.sm) {
+                    if failure == .check {
+                        checkButton("Retry", accessibilityLabel: "Retry checking for updates")
+                    } else {
+                        checkButton("Check for Updates", accessibilityLabel: "Check for updates")
+                    }
+                    releasesLink
+                }
+                if failure == .check, !updater.canCheckForUpdates {
+                    statusText("Retry is temporarily unavailable.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+        case let .available(newVersion):
+            let id = updater.userDriver.updateChoiceID
+            VStack(spacing: AppDesign.Spacing.sm) {
+                HStack(spacing: AppDesign.Spacing.xs) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.accentColor)
+                        .accessibilityHidden(true)
+                    Text("\(appVersion) → \(newVersion)")
+                        .font(.caption.weight(.medium))
+                }
+                HStack(spacing: AppDesign.Spacing.md) {
+                    Button {
+                        if let id { updater.userDriver.chooseUpdate(.install, id: id) }
+                    } label: {
+                        actionLabel("Install")
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Install update")
+                    .disabled(id == nil)
+
+                    Button {
+                        if let id { updater.userDriver.chooseUpdate(.skip, id: id) }
+                    } label: {
+                        actionLabel("Skip")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Skip this update")
+                    .disabled(id == nil)
+                }
+            }
+
+        case .downloading:
+            HStack(spacing: AppDesign.Spacing.sm) {
+                ProgressView().controlSize(.small).scaleEffect(0.7)
+                Text("Downloading…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+        case .extracting:
+            HStack(spacing: AppDesign.Spacing.sm) {
+                ProgressView().controlSize(.small).scaleEffect(0.7)
+                Text("Installing…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+        case .readyToInstall:
+            let id = updater.userDriver.installChoiceID
+            Button {
+                if let id { updater.userDriver.chooseInstallAndRelaunch(id: id) }
+            } label: {
+                actionLabel("Install & Relaunch")
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Color.accentColor)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Install update and relaunch Glimpse")
+            .disabled(id == nil)
+        }
+    }
+
+    private func checkButton(_ title: String, accessibilityLabel: String) -> some View {
+        Button {
+            updater.checkForUpdates()
+        } label: {
+            actionLabel(title)
+        }
+        .buttonStyle(.plain)
+        .font(.caption)
+        .foregroundStyle(Color.accentColor)
+        .accessibilityLabel(accessibilityLabel)
+        .disabled(!updater.canCheckForUpdates)
+    }
+
+    @ViewBuilder
+    private var releasesLink: some View {
+        if let destination = Self.releasesURL {
+            Link(destination: destination) {
+                actionLabel("View Releases")
+            }
+            .buttonStyle(.plain)
+            .font(.caption)
+            .foregroundStyle(Color.accentColor)
+            .accessibilityLabel("View Glimpse releases on GitHub")
+        }
+    }
+
+    private func actionLabel(_ title: String) -> some View {
+        Text(title)
+            .padding(.horizontal, AppDesign.Spacing.sm)
+            .padding(.vertical, AppDesign.Spacing.xs)
+            .contentShape(Rectangle())
+    }
+
+    private func statusText(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

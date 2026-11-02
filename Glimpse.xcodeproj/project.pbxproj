@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DD00000000000000000082 /* AboutUpdateSectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000083 /* AboutUpdateSectionTests.swift */; };
+		DD00000000000000000080 /* SparkleUpdaterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000081 /* SparkleUpdaterTests.swift */; };
 		DD0000000000000000007C /* PanelLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000007D /* PanelLayoutTests.swift */; };
 		DD0000000000000000007A /* PanelViewport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000007B /* PanelViewport.swift */; };
 		DD00000000000000000078 /* PanelLayoutState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000079 /* PanelLayoutState.swift */; };
@@ -61,6 +63,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		DD00000000000000000083 /* AboutUpdateSectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutUpdateSectionTests.swift; sourceTree = "<group>"; };
+		DD00000000000000000081 /* SparkleUpdaterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdaterTests.swift; sourceTree = "<group>"; };
 		DD0000000000000000007D /* PanelLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelLayoutTests.swift; sourceTree = "<group>"; };
 		DD0000000000000000007B /* PanelViewport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelViewport.swift; sourceTree = "<group>"; };
 		DD00000000000000000079 /* PanelLayoutState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelLayoutState.swift; sourceTree = "<group>"; };
@@ -182,6 +186,8 @@
 		BB00000000000000000008 /* GlimpseTests */ = {
 			isa = PBXGroup;
 			children = (
+				DD00000000000000000083 /* AboutUpdateSectionTests.swift */,
+				DD00000000000000000081 /* SparkleUpdaterTests.swift */,
 				DD0000000000000000007D /* PanelLayoutTests.swift */,
 				DD00000000000000000075 /* PanelGeometryTests.swift */,
 				DD00000000000000000077 /* CalendarScrollRouterTests.swift */,
@@ -321,6 +327,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DD00000000000000000082 /* AboutUpdateSectionTests.swift in Sources */,
+				DD00000000000000000080 /* SparkleUpdaterTests.swift in Sources */,
 				DD0000000000000000007C /* PanelLayoutTests.swift in Sources */,
 				DD00000000000000000074 /* PanelGeometryTests.swift in Sources */,
 				DD00000000000000000076 /* CalendarScrollRouterTests.swift in Sources */,
@@ -410,7 +418,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -418,7 +426,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.9;
+				MARKETING_VERSION = 1.4.10;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -435,7 +443,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -443,7 +451,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.9;
+				MARKETING_VERSION = 1.4.10;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -458,9 +466,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.9;
+				MARKETING_VERSION = 1.4.10;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -475,9 +483,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.9;
+				MARKETING_VERSION = 1.4.10;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

@@ -1,6 +1,6 @@
 # Glimpse
 
-[![Version](https://img.shields.io/badge/version-1.4.9-green)](https://github.com/iRedlof/Glimpse/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.4.10-green)](https://github.com/iRedlof/Glimpse/releases/latest)
 [![Download](https://img.shields.io/badge/download-DMG-brightgreen)](https://github.com/iRedlof/Glimpse/releases/latest)
 
 [![Release](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml/badge.svg)](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml)
@@ -22,7 +22,7 @@ A lightweight macOS menu bar calendar app. Click the date icon to see the curren
 - **Workday highlighting** — configure which days are workdays
 - **Pin window** — keep the calendar visible while working
 - **Grouped preferences** — Display, Calendar, Features cards with branded divider
-- **Auto-updates** — Sparkle with inline status in About window
+- **Auto-updates** — inline status in About, guarded retry after failed checks, and an official release link when updating is unavailable
 - **Shortcuts.app** — "Show Glimpse Calendar" available via Siri and Shortcuts
 - **Launch at login** — actual macOS registration status, with a shortcut to approve it in Login Items
 
