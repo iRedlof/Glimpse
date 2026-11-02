@@ -177,6 +177,18 @@ automation imports the existing certificate and Sparkle key; it generates no
 distribution key. A trusted self-hosted runner must have Xcode, Swift, Python,
 `gh`, and `create-dmg` available.
 
+CI selects exactly one valid `Developer ID Application` identity for `TEAM_ID`
+from the temporary signing keychain. A disposable executable signing probe
+checks private-key access before archive. Archive and export both use manual
+signing with that certificate's SHA-1; archive signing explicitly names the
+temporary keychain. This avoids automatic archive signing selecting a different
+development identity from the runner's login keychain. The original keychain
+search list is restored and the job keychain is deleted during cleanup.
+The first modern Release exposed this distinction: its imported distribution
+identity was valid, but automatic signing chose a login-keychain development
+identity and failed before publication. Ordinary automated Recovery verified
+v1.4.3 and permitted the signing correction.
+
 Set the optional repository Actions variable `GLIMPSE_BUILD_ROOT` to a storage
 directory writable by that runner. Quality archives, dependency build caches,
 release archives, exported apps, and DMGs use unique directories there. Without
@@ -184,7 +196,9 @@ it, quality uses the checkout's ignored `build` directory and release uses
 runner temporary storage. Fork tests use hosted runner storage. For local
 quality/release preparation, the same environment variable or worktree Git
 configuration `glimpse.buildRoot` selects storage; no machine path is hardcoded.
-Hooks and quality/release jobs also route temporary files through that storage.
+Hooks use that storage for archived source and their temporary files. Quality
+builds and their child-process temporary files use the separate internal workspace
+described above; release jobs route their temporary files through selected storage.
 Public-download verification uses system curl with TLS verification, HTTPS-only
 transfers/redirects and a 60-second transfer deadline, ignoring custom curl
 configuration. Failed or partial downloads cannot produce verification success.
