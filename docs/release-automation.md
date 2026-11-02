@@ -9,6 +9,11 @@ head identity, per-revision logs, and the first failed SHA. A failed intermediat
 commit blocks the batch even if its head would pass. The batch timeout is 120
 minutes; timeout fails the required check rather than dropping revisions.
 
+The current quality runner owns orchestration and cleanup. Its tooling and
+monitoring suites, version checker and dependency-pin checker execute from the
+same archive as the app/core source. This prevents a later tooling fix from
+masking an intermediate revision's failure.
+
 Quality builds use a private temporary workspace below `RUNNER_TEMP` in CI, or
 `/tmp` locally. This contains DerivedData, core build scratch and child-process
 temporary files; ordinary exit removes only that generated workspace. Logs,
@@ -49,6 +54,11 @@ The workflow:
    latest feed even when retried independently. The gate anchors the manifest
    to a successful artifact-producing build attempt and a successful latest
    final verification job. The whole workflow must succeed.
+
+DMG packaging uses create-dmg's supported `--skip-jenkins` mode to avoid Finder
+AppleScript on a CI runner. The image still contains the app and an Applications
+shortcut; custom Finder icon positioning is omitted. App/DMG notarization,
+stapling, Sparkle signing and local/draft/public verification remain mandatory.
 
 The latest pre-existing v1.4.3 was independently audited on 2026-11-01:
 source/tag/main SHA `1eaae2643625f435c3a5b176b7f63b5de1ebcd21`,

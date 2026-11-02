@@ -17,10 +17,11 @@ WORK_DIR="$(mktemp -d "$WORK_ROOT/glimpse-quality.XXXXXX")"
 trap 'rm -rf -- "$WORK_DIR"' EXIT
 mkdir -p "$WORK_DIR/tmp"
 export TMPDIR="$WORK_DIR/tmp"
-python3 -m unittest discover -s "$SCRIPT_DIR/tests" -v
-python3 -m unittest discover -s "$SCRIPT_DIR/../monitoring" -p 'test_*.py' -v
-python3 "$SCRIPT_DIR/release-control.py" version --root "$ROOT"
-python3 "$SCRIPT_DIR/check-dependency-pins.py" --root "$ROOT"
+# Current orchestration owns cleanup; tooling under test belongs to the source archive.
+python3 -m unittest discover -s "$ROOT/tools/scripts/tests" -v
+python3 -m unittest discover -s "$ROOT/tools/monitoring" -p 'test_*.py' -v
+python3 "$ROOT/tools/scripts/release-control.py" version --root "$ROOT"
+python3 "$ROOT/tools/scripts/check-dependency-pins.py" --root "$ROOT"
 LOCKFILES=(GlimpseCore/Package.resolved Glimpse.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved)
 shasum -a 256 "${LOCKFILES[@]}" > "$RESULT_DIR/dependency-pins.before.sha256"
 xcodebuild -version

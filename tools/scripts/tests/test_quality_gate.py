@@ -15,16 +15,18 @@ class LocalQualityContracts(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         root = pathlib.Path(temporary.name).resolve()
         scripts = root / "controller/tools/scripts"
-        (scripts / "tests").mkdir(parents=True)
-        (scripts.parent / "monitoring").mkdir()
-        for directory in (scripts / "tests", scripts.parent / "monitoring"):
+        scripts.mkdir(parents=True)
+        source = root / "archived-source"
+        source_scripts = source / "tools/scripts"
+        (source_scripts / "tests").mkdir(parents=True)
+        (source_scripts.parent / "monitoring").mkdir()
+        for directory in (source_scripts / "tests", source_scripts.parent / "monitoring"):
             (directory / "test_fixture.py").write_text(
                 "import unittest\nclass Fixture(unittest.TestCase):\n def test_available(self): self.assertTrue(True)\n"
             )
         shutil.copy(SCRIPTS / "quality-gate.sh", scripts)
         for name in ("release-control.py", "check-dependency-pins.py"):
-            (scripts / name).write_text("print('fixture source validation passed')\n")
-        source = root / "archived-source"
+            (source_scripts / name).write_text("print('fixture source validation passed')\n")
         lockfiles = (source / "GlimpseCore/Package.resolved",
                      source / "Glimpse.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
         for path in lockfiles:
@@ -197,13 +199,15 @@ if '-resultBundlePath' in sys.argv:
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             scripts = root / "controller/tools/scripts"
-            (scripts / "tests").mkdir(parents=True)
-            (scripts.parent / "monitoring").mkdir()
-            for directory in (scripts / "tests", scripts.parent / "monitoring"):
+            scripts.mkdir(parents=True)
+            source = root / "archived-source"
+            source_scripts = source / "tools/scripts"
+            (source_scripts / "tests").mkdir(parents=True)
+            (source_scripts.parent / "monitoring").mkdir()
+            for directory in (source_scripts / "tests", source_scripts.parent / "monitoring"):
                 (directory / "test_fixture.py").write_text(
                     "import unittest\nclass Fixture(unittest.TestCase):\n def test_available(self): self.assertTrue(True)\n"
                 )
-            source = root / "archived-source"
             lockfiles = (source / "GlimpseCore/Package.resolved",
                          source / "Glimpse.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
             for path in lockfiles:
@@ -211,7 +215,7 @@ if '-resultBundlePath' in sys.argv:
                 path.write_text("original\n")
             shutil.copy(SCRIPTS / "quality-gate.sh", scripts)
             for name in ("release-control.py", "check-dependency-pins.py"):
-                (scripts / name).write_text("print('source validation passed')\n")
+                (source_scripts / name).write_text("print('source validation passed')\n")
             bin_dir = root / "bin"
             bin_dir.mkdir()
             for name in ("git", "xcodebuild"):

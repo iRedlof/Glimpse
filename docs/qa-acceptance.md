@@ -11,7 +11,7 @@ chosen-file diagnostics correction. Results:
 `/Volumes/xHome/Github/Glimpse/build/validation/app-validation-final-4.xcresult`.
 Core verification records **62 passing tests in five suites**, exit 0, in
 `/tmp/glimpse-core-green.log`; core source was unchanged afterward.
-Release tooling has **91 passing contracts** and monitoring has **27 passing
+Release tooling has **100 passing contracts** and monitoring has **27 passing
 fixtures**. Independent review also ran the contracts in a nongit staged-archive
 environment. A subsequent real-hook attempt exposed Git repository variables
 leaking into temporary fixture repositories. The commit was rejected; clearing
@@ -107,3 +107,39 @@ restoration and certificate cleanup even when restoration fails. Bash syntax,
 ShellCheck for all five changed workflow blocks, actionlint and diff checks
 passed. These tests use fake signing commands; actual private-key access,
 archive/export and notarization remain hosted release requirements.
+
+The signing correction's real staged hook passed 57 app, 62 core, 91 tooling
+and 27 monitoring tests for `ee60a1f1b1fa3e2be014f0be6a865a3adbe11fdb`.
+Its push and PR Quality workflows passed the source and PR merge snapshot.
+PR #6 merged as `b9017a70b1f09142755cd988af180884b4e3e321`.
+Release `41374516171` attempt 1 then passed 57 app and 62 core tests,
+the exact signing probe, Archive, Export and app notarization. It failed before
+DMG notarization when create-dmg's cosmetic Finder AppleScript timed out.
+Automatic Recovery `41374986732` attempt 1 passed and bound healthy v1.4.3
+to the exact failed release/source. Public v1.4.4 remains unverified.
+
+A real harmless DMG fixture using the supported `--skip-jenkins` option passed
+packaging. Read-only mounting confirmed exact app content and a `/Applications`
+shortcut; no Finder customization script ran, and the fixture was cleaned up.
+This is independent packaging evidence, not notarization or public-release proof.
+
+Independent A4/A7/A8 review passed 95 tooling contracts and 27 monitoring fixtures
+for the archived-tooling correction. Its real Git archive/history regressions
+verify all four component paths, rejection of intermediate failures before
+builds, recorded SHA provenance and private cleanup with retained evidence.
+The signing selector regression uses the real helper with a deliberately broken
+intermediate implementation. Validator and monitoring cases include synthetic
+fixtures; Xcode/Swift commands are stubbed. Actual staged-source and hosted
+app/core checks remain required.
+
+Five packaging regressions execute the workflow's extracted app-notarization and
+DMG shell with fake packaging/notary tools. Four failed before the headless
+option was added; all five then passed. They verify staged app content and the
+Applications link, optional icon arguments, unchanged app/DMG notarization and
+ticket validation, packaging failure before notarization, notarization failure
+before stapling, exhausted stapling retries and failed ticket validation. These
+command fixtures complement the real harmless packaging check; they do not
+contact Apple's notarization service.
+Independent final A4/A7/A8 QA passed all 100 tooling contracts and 27 monitoring
+fixtures, scoped shell checks, actionlint and whitespace checks. It found no
+code blocker. Exact staged app/core and hosted/public checks remain mandatory.
