@@ -1,5 +1,40 @@
 import AppIntents
-import AppKit
+import Foundation
+
+enum CalendarShowError: LocalizedError {
+    case notReady
+    case unavailableAnchor
+    case invalidGeometry
+
+    var errorDescription: String? {
+        switch self {
+        case .notReady:
+            "Glimpse is still starting. Try Show Calendar again."
+        case .unavailableAnchor, .invalidGeometry:
+            "Couldn't open the calendar. Try again from Glimpse's menu-bar icon."
+        }
+    }
+}
+
+@MainActor
+final class CalendarShowCommand {
+    static let shared = CalendarShowCommand()
+    private var target: (@MainActor () throws -> Void)?
+
+    @discardableResult
+    func register(
+        _ target: (@MainActor () throws -> Void)?
+    ) -> (@MainActor () throws -> Void)? {
+        let previous = self.target
+        self.target = target
+        return previous
+    }
+
+    func requestShow() throws {
+        guard let target else { throw CalendarShowError.notReady }
+        try target()
+    }
+}
 
 struct ShowCalendarIntent: AppIntent {
     // Safety: AppIntent static properties are initialized once and read-only after init.
@@ -10,9 +45,7 @@ struct ShowCalendarIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-            appDelegate.calendarStatusItem.statusItemClicked()
-        }
+        try CalendarShowCommand.shared.requestShow()
         return .result()
     }
 }

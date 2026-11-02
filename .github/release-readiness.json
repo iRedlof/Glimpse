@@ -1,22 +1,22 @@
 {
-  "version": "1.4.12",
-  "build": "19",
+  "version": "1.4.13",
+  "build": "20",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-02-update-guidance-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-02-calendar-show-acceptance.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-02-update-guidance-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-02-calendar-show-acceptance.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-02-update-guidance-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-02-calendar-show-acceptance.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-02-update-guidance-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-02-calendar-show-acceptance.md"
     }
   }
 }
