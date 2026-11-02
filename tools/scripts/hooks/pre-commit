@@ -1,0 +1,29 @@
+#!/bin/bash
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+export PYTHONDONTWRITEBYTECODE=1
+BUILD_ROOT="${GLIMPSE_BUILD_ROOT:-$(git config --get glimpse.buildRoot || true)}"
+BUILD_ROOT="${BUILD_ROOT:-$ROOT/build}"
+mkdir -p "$BUILD_ROOT/tmp"
+export TMPDIR="$BUILD_ROOT/tmp"
+python3 "$ROOT/tools/scripts/release-control.py" gate
+cd "$ROOT"
+if ! git diff --quiet || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+  echo "Stage all source changes before committing: the quality gate tests the exact working tree." >&2
+  exit 1
+fi
+STAGED_TREE="$(git write-tree)"
+SOURCE_DIR="$(mktemp -d "$BUILD_ROOT/staged-source.XXXXXX")"
+trap 'rm -rf "$SOURCE_DIR"' EXIT
+git archive "$STAGED_TREE" | tar -x -C "$SOURCE_DIR"
+(
+  # Git exports repository state to hooks; archived tests create their own repos.
+  while IFS= read -r variable; do unset "$variable"; done < <(git rev-parse --local-env-vars)
+  GLIMPSE_SOURCE_ROOT="$SOURCE_DIR" GLIMPSE_BUILD_ROOT="$BUILD_ROOT" \
+    "$SOURCE_DIR/tools/scripts/quality-gate.sh"
+)
+if [[ "$(git write-tree)" != "$STAGED_TREE" ]] || ! git diff --quiet ||
+    [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+  echo "Source changed during tests; stage changes and run the commit checks again." >&2
+  exit 1
+fi

@@ -1,0 +1,150 @@
+name: Quality
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prior-release:
+    name: Previous release verified
+    # Release.inspect verifies the predecessor on main; PR admission checks
+    # current main using only the trusted default-branch gate implementation.
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      statuses: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+          path: trusted-controller
+      - name: Select trusted controller or exact audited first-install commit
+        id: controller
+        env:
+          BOOTSTRAP_BASE_SHA: ${{ vars.ADMISSION_BOOTSTRAP_BASE_SHA }}
+          BOOTSTRAP_SHA: ${{ vars.ADMISSION_BOOTSTRAP_SHA }}
+        run: |
+          MAIN_SHA=$(git -C trusted-controller rev-parse HEAD)
+          if [[ -f trusted-controller/tools/scripts/release-control.py ]]; then
+            CONTROLLER_SHA="$MAIN_SHA"
+          else
+            [[ "$BOOTSTRAP_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$BOOTSTRAP_SHA" =~ ^[0-9a-f]{40}$ ]]
+            test "$MAIN_SHA" = "$BOOTSTRAP_BASE_SHA"
+            CONTROLLER_SHA="$BOOTSTRAP_SHA"
+          fi
+          echo "sha=$CONTROLLER_SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.controller.outputs.sha }}
+          persist-credentials: false
+          path: trusted-controller
+      - name: Verify current main distribution or exact completed recovery
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 trusted-controller/tools/scripts/release-control.py gate
+
+  tooling:
+    name: Release tooling checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Release failure and rollback contract tests
+        run: |
+          python3 -m unittest discover -s tools/scripts/tests -v
+          python3 -m unittest discover -s tools/monitoring -p 'test_*.py' -v
+          python3 tools/scripts/check-dependency-pins.py
+          python3 tools/scripts/release-control.py version
+          for script in tools/scripts/*.sh tools/scripts/hooks/*; do bash -n "$script"; done
+
+  app-and-core:
+    # Untrusted fork code must not execute on the persistent signing machine.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test the app and core with immutable dependency pins
+        id: quality
+        env:
+          GLIMPSE_BUILD_ROOT: ${{ vars.GLIMPSE_BUILD_ROOT }}
+          BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: tools/scripts/test-source-revisions.sh
+      - name: Preserve complete test logs and result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.quality.outputs.results_dir }}
+          if-no-files-found: warn
+          retention-days: 30
+
+  app-and-core-fork:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test untrusted fork on a disposable macOS runner
+        id: quality
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: tools/scripts/test-source-revisions.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-fork-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.quality.outputs.results_dir }}
+          if-no-files-found: warn
+          retention-days: 30
+
+  app-tests-verified:
+    name: App and core tests
+    needs: [app-and-core, app-and-core-fork]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require tests on the appropriate runner
+        env:
+          FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          TRUSTED_TESTS: ${{ needs.app-and-core.result }}
+          FORK_TESTS: ${{ needs.app-and-core-fork.result }}
+        run: |
+          if [[ "$FORK_PR" == true ]]; then
+            test "$FORK_TESTS" = success
+            test "$TRUSTED_TESTS" = skipped
+          else
+            test "$TRUSTED_TESTS" = success
+            test "$FORK_TESTS" = skipped
+          fi

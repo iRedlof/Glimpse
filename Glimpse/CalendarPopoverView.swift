@@ -1,4 +1,5 @@
 import GlimpseCore
+import EventKit
 import SwiftUI
 
 struct CalendarPopoverView: View {
@@ -10,6 +11,8 @@ struct CalendarPopoverView: View {
     @State private var isMouseOverCalendar = false
     @State private var hoveredDate: Date?
     @State private var keyMonitor: Any?
+    @State private var isRecordingHotkey = false
+    @State private var aiTask: Task<Void, Never>?
     @State private var aiQueryText: String = ""
     @State private var aiProcessing: Bool = false
     @State private var aiErrorMessage: String?
@@ -69,18 +72,64 @@ struct CalendarPopoverView: View {
             store.send(.reloadPreferences)
             showQuitConfirm = false
         }
+        .onReceive(NotificationCenter.default.publisher(for: .calendarPanelWillHide)) { notification in
+            guard notification.object as? CalendarPanel === panel else { return }
+            removeMonitors()
+            aiTask?.cancel()
+            aiTask = nil
+            aiProcessing = false
+            aiFieldActive = false
+            aiQueryText = ""
+            aiErrorMessage = nil
+            isRecordingHotkey = false
+            showQuitConfirm = false
+            isMouseOverCalendar = false
+            hoveredDate = nil
+            store.send(.onDisappear)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .calendarPanelDidShow)) { notification in
+            guard notification.object as? CalendarPanel === panel else { return }
+            setupKeyMonitor()
+            setupScrollMonitor()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hotkeyRecordingDidChange)) { notification in
+            isRecordingHotkey = notification.object as? Bool ?? false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if panel?.isVisible == true { store.send(.refreshCalendarAuthorization) }
+        }
     }
 
     // MARK: - Event Monitors
 
+    /// Routing contract for the reused panel and its text editors.
+    nonisolated static func shouldHandleNavigation(
+        panelVisible: Bool, eventIsForPanel: Bool,
+        editingText: Bool, modified: Bool
+    ) -> Bool {
+        panelVisible && eventIsForPanel && !editingText && !modified
+    }
+
     private func setupKeyMonitor() {
+        guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard let panel, panel.isVisible, event.window === panel,
+                  !isRecordingHotkey else { return event }
+            let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+            let editingText = panel.firstResponder is NSTextView || store.showingPreferences
             // Cmd+G — activate inline AI input (if enabled)
-            if event.keyCode == 5 && event.modifierFlags.contains(.command) && store.showAISearch {
+            if event.keyCode == 5 && modifiers == .command && store.showAISearch {
                 aiFieldActive = true
                 return nil
             }
 
+            if [123, 124, 125, 126].contains(event.keyCode),
+               !Self.shouldHandleNavigation(
+                    panelVisible: panel.isVisible, eventIsForPanel: event.window === panel,
+                    editingText: editingText, modified: !modifiers.isEmpty
+               ) {
+                return event
+            }
             switch event.keyCode {
             case 123:
                 store.send(.goToPreviousMonth)
@@ -95,10 +144,13 @@ struct CalendarPopoverView: View {
                 store.send(.goToPreviousYear)
                 return nil
             case 36, 76: // Enter
+                guard modifiers.isEmpty else { return event }
                 if aiFieldActive {
                     submitAIQuery()
-                } else if !store.isShowingCurrentMonth {
+                } else if !editingText {
                     store.send(.goToToday)
+                } else {
+                    return event
                 }
                 return nil
             case 53:
@@ -106,7 +158,7 @@ struct CalendarPopoverView: View {
                     aiFieldActive = false
                     aiQueryText = ""
                     aiErrorMessage = nil
-                    panel?.deactivateTextInput()
+                    panel.deactivateTextInput()
                     return nil
                 }
                 if store.showingPreferences {
@@ -115,8 +167,8 @@ struct CalendarPopoverView: View {
                     }
                 } else {
                     store.send(.closePanel)
-                    panel?.isPinned = false
-                    panel?.orderOut(nil)
+                    panel.isPinned = false
+                    panel.orderOut(nil)
                 }
                 return nil
             default:
@@ -126,9 +178,11 @@ struct CalendarPopoverView: View {
     }
 
     private func setupScrollMonitor() {
+        guard scrollMonitor == nil else { return }
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
             // Only navigate months when the cursor is over the calendar grid
-            guard isMouseOverCalendar else { return event }
+            guard let panel, panel.isVisible, event.window === panel,
+                  isMouseOverCalendar, !isRecordingHotkey else { return event }
 
             let delta = event.scrollingDeltaY
             let clamped = max(-maxScrollContribution, min(maxScrollContribution, delta))
@@ -209,7 +263,8 @@ struct CalendarPopoverView: View {
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
-                .disabled(store.isShowingCurrentMonth)
+                .disabled(store.isShowingCurrentMonth
+                    && store.selectedDate.map { store.calendar.isDateInToday($0) } == true)
                 .accessibilityLabel("Go to today")
 
                 Button { store.send(.goToNextMonth) } label: {
@@ -316,21 +371,21 @@ struct CalendarPopoverView: View {
 
         guard AIDateHelper.activeProvider() != .none else {
             aiProcessing = false
-            aiErrorMessage = "Set up Groq API key in preferences or use macOS 26+"
+            aiErrorMessage = "On-device AI is unavailable. Choose Cloud AI in Preferences."
             return
         }
 
-        Task {
+        aiTask?.cancel()
+        aiTask = Task { @MainActor in
             let date = await AIDateHelper.parseNaturalLanguageDate(query)
-            await MainActor.run {
-                aiProcessing = false
-                if let date {
-                    aiQueryText = ""
-                    aiFieldActive = false
-                    store.send(.aiDateResult(date))
-                } else {
-                    aiErrorMessage = "Couldn't parse that date. Try: \"next Friday\" or \"Jan 2028\""
-                }
+            guard !Task.isCancelled else { return }
+            aiProcessing = false
+            if let date {
+                aiQueryText = ""
+                aiFieldActive = false
+                store.send(.aiDateResult(date))
+            } else {
+                aiErrorMessage = "Couldn't parse that date. Try: \"next Friday\" or \"Jan 2028\""
             }
         }
     }
@@ -532,39 +587,83 @@ struct CalendarPopoverView: View {
 
     // MARK: - Events Section
 
+    private var eventsDayTitle: String {
+        let date = store.eventsDate ?? store.selectedDate ?? Date()
+        return store.calendar.isDateInToday(date)
+            ? "Today"
+            : date.formatted(.dateTime.month(.abbreviated).day().year())
+    }
+
+    private var calendarAccessMessage: String {
+        switch store.calendarAuthorizationStatus {
+        case .restricted: "Calendar access is restricted on this Mac."
+        case .writeOnly: "Allow full calendar access to read events."
+        default: "Calendar access is off."
+        }
+    }
+
     @ViewBuilder
     private var eventsSection: some View {
-        if !store.calendarAccessGranted {
-            Button {
-                store.send(.requestCalendarAccess)
-            } label: {
-                HStack {
-                    Image(systemName: "calendar.badge.plus")
-                        .font(.subheadline)
-                    Text("Show today's events")
-                        .font(.subheadline)
-                }
-                .foregroundStyle(.secondary)
+        if store.isRequestingCalendarAccess {
+            HStack(spacing: AppDesign.Spacing.sm) {
+                ProgressView().controlSize(.small)
+                Text("Requesting calendar access…").font(.subheadline)
             }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .accessibilityLabel("Grant calendar access to show events")
-        } else if store.todayEvents.isEmpty {
+        } else if !store.calendarAccessGranted {
+            VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
+                if store.calendarAuthorizationStatus == .notDetermined {
+                    Button("Show calendar events") { store.send(.requestCalendarAccess) }
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                        .accessibilityLabel("Grant calendar access to show events")
+                } else {
+                    Text(calendarAccessMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if store.calendarAuthorizationStatus != .restricted {
+                        Button("Open Calendar Privacy Settings") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                        .font(.caption)
+                    }
+                }
+                if let error = store.calendarAccessError {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                }
+            }
+        } else if store.isLoadingEvents {
+            HStack(spacing: AppDesign.Spacing.sm) {
+                ProgressView().controlSize(.small)
+                Text("Loading events…").font(.subheadline).foregroundStyle(.secondary)
+            }
+        } else if let error = store.eventsError {
+            VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
+                Text("Couldn’t load events: \(error)").font(.caption).foregroundStyle(.red)
+                Button("Retry") { store.send(.retryEvents) }
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .accessibilityLabel("Retry loading calendar events")
+            }
+        } else if store.events.isEmpty {
             HStack {
                 Image(systemName: "calendar")
                     .font(.subheadline)
                     .foregroundStyle(.tertiary)
-                Text("No events today")
+                Text(eventsDayTitle == "Today" ? "No events today" : "No events on \(eventsDayTitle)")
                     .font(.subheadline)
                     .foregroundStyle(.tertiary)
             }
         } else {
             VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
-                Text("Today")
+                Text(eventsDayTitle)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
 
-                ForEach(store.todayEvents.prefix(5)) { event in
+                ForEach(store.events.prefix(5)) { event in
                     HStack(spacing: AppDesign.Spacing.sm) {
                         RoundedRectangle(cornerRadius: 1.5)
                             .fill(Color.accentColor)
@@ -583,8 +682,8 @@ struct CalendarPopoverView: View {
                     .accessibilityLabel("\(event.title), \(event.timeString)")
                 }
 
-                if store.todayEvents.count > 5 {
-                    Text("+\(store.todayEvents.count - 5) more")
+                if store.events.count > 5 {
+                    Text("+\(store.events.count - 5) more")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }

@@ -1,0 +1,231 @@
+# Production review — 2026-11-01
+
+**Bounded source and delivery review passed.** The startup, input, event,
+diagnostics and release corrections passed review, including the narrow
+first-install recovery, strict public downloads and temporary storage routing.
+The canonical repository's failed legacy run requires the pinned recovery
+attestation described below; integrated staged tests and hosted execution remain
+independent gates. This conclusion includes the limits below; it does not
+establish the cause of the crash reported on another Mac or certify unperformed
+native interaction and restart scenarios. This reviewer did not change release
+readiness settings.
+
+Reviewed actual tracked and untracked worktree source, tests, monitoring, hooks,
+controller and workflow files against baseline
+`1eaae2643625f435c3a5b176b7f63b5de1ebcd21`, following `CLAUDE.md`,
+`.claude/rules/pre-production-review.md` A1–A8, applicable Swift rules,
+`known-issues.md`, and the stabilization design/plan. Product, UX and QA evidence
+was inspected separately from implementation and test results.
+
+## Findings and correction assessment
+
+The initial review found five concrete delivery defects. All are resolved in
+the final reviewed script snapshot, with independent regression verification.
+
+| Section / priority | Initial finding | Final behavior and evidence |
+| --- | --- | --- |
+| A7/A8 — P1 | A successful same-source dispatch replaced the latest run identity and permanently closed admission despite unchanged healthy distribution. | `verify_previous` accepts a successful newer exact-source run only with its successful `release-verified` job. The public manifest retains the original artifact-producing workflow identity. Same-source success and missing-final-verification fixtures pass. |
+| A7/A8 — P1 | A failed same-source internal dispatch could not recover an unchanged earlier publication because source equality was rejected. | `recover_release` distinguishes the failed workflow's owned publication from an earlier verified publication of the same source. Failed-run recovery records bind the exact failed run/attempt/SHA. Same-source failure/recovery fixtures pass. |
+| A7/A8 — P1 | A downstream rerun invalidated the manifest's unchanged publishing attempt. | `verify_healthy_release` verifies the successful original artifact-producing `build` attempt, the latest successful final verification job and whole run. A manifest from a failed build attempt remains rejected. Retained-publication and transient-final-job retry fixtures pass. |
+| A7/A8 — P1 | Recovery assumed inspect ran in the latest attempt, although “rerun failed jobs” can retain inspect's earlier artifact. | Inspect exposes the actual previous-record artifact name; recovery locates the retained nonexpired record for the failed workflow before scoped withdrawal. The attempt-2 recovery fixture uses attempt-1 inspection evidence and verifies restored distribution. |
+| A7/A8 — P2 | Repeating the documented local quality command reused an existing `.xcresult` path and failed. | `quality-gate.sh:11` creates a unique run directory. Two consecutive local fixture runs produce distinct result bundles and succeed. |
+
+Correction review also caught and resolved three related problems:
+
+- A retried final verification job could report success using a carried-over
+  build output after recovery had withdrawn the publication. The final Ubuntu
+  job now anonymously re-downloads the public DMG, manifest and exact/latest
+  feeds, rechecks hashes, source/run identity and latest status, and rejects a
+  withdrawn release. The separate original build attempt remains the evidence
+  for macOS signing/notarization checks.
+- Pre-commit previously tested a mutable working tree. It now archives the exact
+  staged tree, tests that snapshot, and rejects index, tracked working-tree or
+  untracked source changes made during testing. A concurrent index-change
+  fixture requires a new test run.
+- Nongit staged archives and inherited `GLIMPSE_SOURCE_ROOT` exposed real test
+  fixture failures. Offline hook fixtures now own their temporary Git
+  repository; nested quality fixtures clear inherited source/build/result/output
+  overrides. All contracts pass again in that archived environment.
+
+These assessments inspect the final implementation and execute its fixtures.
+They do not claim that a GitHub publication, withdrawal or recovery mutation was
+performed during review.
+
+### A1/A7/A8 — P1 resolved: sandboxed diagnostics lacked a chosen-file grant
+
+Integration review found that `Glimpse/Glimpse.entitlements` enables app sandboxing
+without a filesystem grant, while the earlier `DiagnosticsExport.swift:72`
+constructed and wrote a Desktop path directly. Collector-only tests did not
+exercise report export. The final correction uses an asynchronous `NSSavePanel`
+with plain-text output and a filename/Desktop suggestion, adds
+`com.apple.security.files.user-selected.read-write`, and writes only the returned
+destination through `export(to:)`. Cancellation restores idle before collection;
+write errors remain observable with Retry, and success retains Show in Finder
+and Export again. The source and three report-destination regressions were
+reviewed; all three pass in the final app suite. Native save-panel/Powerbox
+behavior remains a separate unexecuted QA scenario.
+
+### A7/A8 — P1 resolved: Git hook environment contaminated nested test repositories
+
+The first actual commit-hook integration attempt failed before compilation:
+Git-exported repository/index variables reached archived tests, and nested
+fixture Git commands operated on the hook's repository rather than their own.
+The parent reported eight fixture errors/two failures and restored only the
+introduced shared local configuration; no commit resulted from that attempt.
+
+The corrected `tools/scripts/hooks/pre-commit:18` runs archive quality in a
+subshell that clears every repository variable named by
+`git rev-parse --local-env-vars`. The outer hook retains those variables for
+archive creation and the final index/working-tree comparison. The regression
+exports `GIT_DIR`, `GIT_INDEX_FILE`, `GIT_WORK_TREE` and `GIT_PREFIX`, then checks
+that a nested test repository owns its configuration and commit. Temporary paths
+are canonicalized to avoid `/var` versus `/private/var` alias failures.
+
+This reviewer independently reproduced a failing previous hook and passing
+corrected hook using only temporary fixture repositories. The complete current
+59-test suite passed both in the checkout and a nongit archive context. The
+actual staged commit-hook retry remains an integration step.
+
+### A4/A7 — P1 resolved in source: embedded feed and canonical artifact identity
+
+Repository metadata identifies ID `1186432839` as `iRedlof/Glimpse`. The controller
+and generated new feeds now use that canonical repository, and the old
+`rlchandani/Glimpse` feed is accepted only for the exact pinned legacy release.
+This review caught the remaining old `Glimpse/Info.plist:30` feed while
+`tools/scripts/verify-dmg.sh:38` expected canonical `SUFeedURL` for a new artifact.
+That mismatch would fail downloaded app identity verification. The source feed
+is now canonical as well. The 61 contract tests include accepting the exact
+pinned legacy feed and rejecting the old alias for a newer release.
+
+### A7 — P1 resolved in source: canonical main predates Recovery installation
+
+Independent read-only API checks found canonical main at
+`eb4fc447be5491f2e665b3bde005c622b5083853`, a newer repository-transfer/version
+commit. Release run `41364245310` completed with failure in `Test (GlimpseCore)`;
+its build was skipped. The pinned v1.4.3 source/run remain unchanged and healthy,
+but canonical `recovery.yml` lookup returned HTTP 404. The controller's live gate
+therefore remained closed before the first-install recovery attestation.
+
+The controller now admits only this exact pre-installation failure after fresh
+verification of its skipped build, absent v1.4.4 publication/tag and unchanged
+healthy distribution. A distinct status binds the exact failed run/attempt/SHA,
+healthy tag/full SHA, canonical target URL and completion timestamp. The policy
+pins its numeric status ID and authenticated creator. The newest matching status
+wins, so revocation cannot leave an older green status effective. Reruns, another
+release, build success, publication, changed healthy identity or ordinary main
+advancement remain closed. Only the active first main Release push whose source
+has the failed revision as its sole parent may inspect that predecessor.
+
+Independent review passed all 74 contracts in both the checkout and a nongit
+archive with inherited snapshot settings, plus actionlint, shell syntax and
+warning-level ShellCheck. The read-only live bootstrap request passed and its
+109-character description binds the full healthy SHA. The strict download helper
+independently retrieved the pinned 795-byte feed with matching SHA-256. No new
+actionable source blocker was found. The reviewer made no remote mutation.
+
+Root subsequently created status `57802094024` with creator ID `891898` at
+`2026-11-02T00:55:30Z` using that freshly verified exact request and pinned its ID.
+The failed workflow conclusion remains failure. The exception must be removed
+after the first normal successful public release; future failures use Recovery.
+The repository-transfer changes were retained and independently verified after
+source integration. The independently rerun live gate exits 0, recording
+`verified_remote_sha` equal to `eb4fc447be5491f2e665b3bde005c622b5083853`.
+
+### A7 — public verification and selected temporary storage
+
+Public downloads use `/usr/bin/curl --disable` with certificate verification,
+HTTPS-only transfer/redirect protocols, a 60-second curl deadline and 70-second
+subprocess deadline. Certificate or other transfer failure removes partial output
+and fails verification; no insecure TLS option is present. The public final job
+checks tagged and latest feed bytes in addition to manifest/DMG integrity.
+Local hook temporary files, quality-run temporary files and release-job temporary
+files use their selected build storage, avoiding internal-disk exhaustion while
+external storage is available. Both changes passed independent scope review.
+
+## A1–A8 checklist
+
+| Section | Review result |
+| --- | --- |
+| A1 — Permissions and accessibility | Event reads require full access at the reducer and actor boundary. Permission requests originate from an explicit user action; denied/restricted/write-only states clear prior events and present recovery controls. Diagnostics now asks for a file through NSSavePanel and includes the matching user-selected read/write entitlement. Existing calendar/date accessibility structure remains intact, and new startup/retry controls have accessible text. Native VoiceOver, TCC/Powerbox changes and small-screen fit have not been verified. |
+| A2 — Panel and menu bar | Re-show collapses preferences and resets transient store state. Explicit hide notification clears pending resize/input state, removes monitors and restores prior-app activation. Pin behavior, existing screen/caret clamping, single-image menu rendering, midnight refresh and resize convergence are retained. Repeated native focus, Space, multi-monitor and menu overflow scenarios remain unexecuted. |
+| A3 — Carbon and input | Persisted hotkeys are range- and modifier-validated before unsigned conversion. Routing requires the visible originating panel; text arrows and modified navigation pass through. Monitor setup is idempotent, and hide explicitly removes key/scroll monitors. Recorder lifecycle suspends calendar handling and cancels on hide/Escape. Automated checks exercise routing decisions rather than delivered native events or lifetime. Existing shortcut-registration conflict feedback remains deferred. |
+| A4 — Sparkle | The new embedded/generated HTTPS feeds now use the canonical repository; the old feed is accepted only for the pinned legacy release. The EdDSA public key and updater callbacks remain intact. Local/downloaded DMG verification checks team/bundle/version/build/source, hardened runtime, notarization, Gatekeeper and cryptographic Sparkle signature. Publication begins as an empty draft; withdrawal requires workflow/SHA ownership. Corrected retry/recovery paths retain artifact identity and recheck public distribution. |
+| A5 — AI | Existing proxy protections and FoundationModels compile/runtime guards remain intact. Intentionally deferred automatic-provider behavior is preserved. Hide cancels the retained query task; completion checks cancellation before UI mutation. Error text names Cloud AI recovery. Native caret, Return and Escape behavior remains untested. |
+| A6 — Preferences and EventKit | Startup UI derives its switch from observed macOS status, preserves approval/not-found/unavailable distinctions, serializes registration changes, re-reads success/error status and refreshes after activation. Weekday/workday values are sanitized at load. EventKit owns its store on a serial actor, uses selected local calendar-day boundaries, and rejects stale responses with date plus request UUID. Loading, empty, error, retry, revocation and access states are distinct. |
+| A7 — Quality, performance and security | Reviewed exact SHA/run/attempt checks, ownership, drift classification, external storage and temporary processes. No newly exposed source secret or user-derived subprocess argument was found. Diagnostics avoid pipe backpressure, enforce a ten-second child deadline and read at most a 1 MiB log excerpt into memory; the report also contains its header/settings, and temporary disk output may exceed 1 MiB during that interval. About retains Show in Finder, Export again and Retry. Hosted admission and client-hook limits are stated below. |
+| A8 — Tests | Regression coverage includes startup status/operations, malformed settings, selected-day/DST conversion, stale responses, cancellation/revocation, diagnostics volume/deadline/failure and chosen-destination/partial-report/write-failure paths, release identity/recovery, staged-source changes, batched commits, archived test execution and Git hook repository-environment isolation. The history harness tests every introduced source commit and the PR merge result, records requested/tested/failed SHAs, and fails on an intermediate bad commit. Fork app/core tests use a disposable hosted macOS runner; the required aggregate fails unless the appropriate runner succeeds. |
+
+## Verification evidence
+
+This reviewer independently ran the prior rename snapshot:
+
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/scripts/tests -v`:
+  **61 tests, zero failures, exit 0**. Log: `/tmp/glimpse-review-tooling-rename.log`.
+- The preceding 59-contract snapshot also passed from a nongit copied tools/policy snapshot with inherited
+  `GLIMPSE_SOURCE_ROOT`, external build storage and `GITHUB_OUTPUT`:
+  **59 tests, zero failures, exit 0**. Log: `/tmp/glimpse-review-archived-hook-env.log`.
+- Monitoring fixtures: **27 tests, zero failures, exit 0**.
+  Log: `/tmp/glimpse-review-monitoring.log`.
+- `actionlint` for all three workflows, shell syntax, `shellcheck --severity=warning`
+  for scripts/hooks, `git diff --check`,
+  dependency-pin consistency and version synchronization: **exit 0**.
+  The app/core have 15 matching pins and version **1.4.4/build 11**.
+- The earlier old-alias read-only gate exited 0 for public v1.4.3 at baseline
+  `1eaae2643625f435c3a5b176b7f63b5de1ebcd21`. At the pre-attestation
+  snapshot, the canonical gate **exited 1** because the newer failed main had
+  no verified recovery.
+  Log: `/tmp/glimpse-review-rename-livegate.log`.
+- Separate live `verify_healthy_release` through canonical API **exits 0**:
+  v1.4.3, baseline source, publishing run `30221537836`, release `360125950`.
+  This distinguishes healthy distribution from the failed-main admission issue.
+
+This reviewer inspected, rather than duplicated, the app/core build results:
+`/tmp/glimpse-core-green.log` records **62 passing tests in five suites**.
+The latest About/save-panel/metadata app rerun in `/tmp/glimpse-app-final.log`
+records **57 passing tests in nine suites** and `TEST SUCCEEDED`, with result
+bundle `/Volumes/xHome/Github/Glimpse/build/validation/app-validation-final-4.xcresult`.
+It preceded the canonical feed URL change. Core source was unchanged after the recorded core run. Complete staged-hook
+verification remains the final integration check after review documents are
+staged.
+
+The subsequent bootstrap/TLS/storage snapshot passed **74 contracts** independently
+in both the checkout and nongit archive, plus all workflow and shell checks.
+Independent QA additionally passed **74 contracts and 27 monitoring fixtures**.
+The release specialist used the strict helper for the public DMG/tagged/latest
+feed audit and confirmed pinned hashes and identical feed bytes. These supplement,
+and do not replace, the final integrated staged app/core check.
+
+## Enforcement and native limits
+
+The applied canonical main protection was independently read through GitHub API:
+strict up-to-date
+checks `App and core tests`, `Release tooling checks` and `Previous release
+verified`, each bound to GitHub Actions producer 15368; enforced administrators;
+required PRs with zero required approvals and no bypass allowances reported; no
+force push or branch deletion; required linear history and conversation
+resolution. This reviewer did not apply settings.
+
+For normal protected merges, advancing main makes competing PRs stale; their
+updated heads must rerun admission against current main until its release or
+exact recovery succeeds. Admission runs for every PR using the trusted main
+controller, with an explicit full-SHA administrator-pinned bootstrap when legacy
+main lacks that controller. Missing/mismatched bootstrap values fail closed.
+The main reusable quality call skips self-admission because Release.inspect
+verifies its predecessor.
+
+Static required checks cannot revoke a green PR's earlier admission proof when
+a manual dispatch/rerun starts Release at unchanged main. Such manual operations
+require coordinated merge pause and a fresh gate before the owner's merge, as
+documented in release automation. Absolute locking across arbitrary same-source
+manual runs would need dynamic admission. Configured local hooks re-query state
+but `--no-verify`, other clones and changed hook configuration can bypass them.
+Workflow/controller changes rely on trusted maintainer review.
+
+The isolated QA copy established startup/menu presence and 60.47 seconds of idle
+closed-panel behavior. Its older copied version metadata and native UI tool
+window limitation are recorded in `docs/qa-live.md`. It did not exercise final
+About/save-panel/Powerbox actions, delivered keyboard events, repeated panel
+lifetimes, real EventKit permissions/errors, multi-monitor behavior or login/restart. Product
+and UX acceptance are limited to the bounded source contract. No installed-app,
+login registration, TCC or restart mutation was performed by this reviewer, and
+the original other-Mac crash root cause remains unproven.

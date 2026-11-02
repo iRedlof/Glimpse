@@ -143,10 +143,7 @@ else
   info "    security find-generic-password -s 'https://sparkle-project.org' -a 'ed25519' -w"
   info "  Then import here using Option A."
   info ""
-  info "Option C — Generate new key (⚠️ BREAKS updates for existing users):"
-  info "  Only do this if you have zero users or are OK with a forced reinstall."
-  info "    /path/to/generate_keys"
-  info "  Then update SUPublicEDKey in Info.plist with the new public key."
+  info "The existing distribution key must be restored; do not generate a replacement."
 
   if $SETUP_MODE; then
     GENERATE_KEYS=$(find ~/Library/Developer/Xcode/DerivedData -name "generate_keys" -path "*/artifacts/*" -type f 2>/dev/null | head -1)

@@ -1,11 +1,12 @@
 import ComposableArchitecture
+import EventKit
 import Foundation
 
 @Reducer
 public struct CalendarFeature: Sendable {
 
     @ObservableState
-    public struct State: Equatable {
+    public struct State: Equatable, Sendable {
         public var displayedMonth: Date
         public var days: [CalendarDay] = []
         public var gridInfo: GridInfo = GridInfo(startCol: 0, endCol: 6, endRow: 5)
@@ -13,10 +14,18 @@ public struct CalendarFeature: Sendable {
         public var workdays: Set<Int> = [2, 3, 4, 5, 6]
         public var isPinned: Bool = false
         public var showingPreferences: Bool = false
-        public var todayEvents: [CalendarEvent] = []
-        public var calendarAccessGranted: Bool = false
+        public var events: [CalendarEvent] = []
+        public var eventsDate: Date?
+        public var eventsRequestID: UUID?
+        public var isLoadingEvents = false
+        public var eventsError: String?
+        public var calendarAuthorizationStatus: EKAuthorizationStatus = .notDetermined
+        public var isRequestingCalendarAccess = false
+        public var calendarAccessError: String?
         public var selectedDate: Date?
         public var showAISearch: Bool = true
+
+        public var calendarAccessGranted: Bool { calendarAuthorizationStatus == .fullAccess }
 
         public var selectedDateInfo: String? {
             guard let date = selectedDate else { return nil }
@@ -59,8 +68,12 @@ public struct CalendarFeature: Sendable {
         case onDisappear
         case prepareForReopen
         case requestCalendarAccess
-        case calendarAccessResult(Bool)
-        case eventsLoaded([CalendarEvent])
+        case calendarAccessResult(EKAuthorizationStatus)
+        case calendarAccessFailed(String, EKAuthorizationStatus)
+        case refreshCalendarAuthorization
+        case retryEvents
+        case eventsLoaded(date: Date, requestID: UUID, events: [CalendarEvent])
+        case eventsFailed(date: Date, requestID: UUID, message: String)
         case aiDateResult(Date?)
         case reloadPreferences
     }
@@ -69,6 +82,9 @@ public struct CalendarFeature: Sendable {
     @Dependency(\.calendarClient) var calendarClient
     @Dependency(\.preferencesClient) var preferencesClient
     @Dependency(\.eventKitClient) var eventKitClient
+    @Dependency(\.uuid) var uuid
+
+    private enum CancelID { case events, calendarAccess }
 
     public init() {}
 
@@ -80,15 +96,7 @@ public struct CalendarFeature: Sendable {
                 state.workdays = preferencesClient.loadWorkdays()
                 state.showAISearch = preferencesClient.loadShowAISearch()
                 recomputeDays(&state)
-                let status = eventKitClient.authorizationStatus()
-                if status == .fullAccess {
-                    state.calendarAccessGranted = true
-                    return .run { send in
-                        let events = await eventKitClient.fetchTodayEvents()
-                        await send(.eventsLoaded(events))
-                    }
-                }
-                return .none
+                return loadEvents(&state)
 
             case .goToPreviousMonth:
                 if let prev = state.calendar.date(
@@ -130,7 +138,7 @@ public struct CalendarFeature: Sendable {
                 state.displayedMonth = date.now
                 state.selectedDate = date.now
                 recomputeDays(&state)
-                return .none
+                return loadEvents(&state)
 
             case let .dateTapped(date):
                 // Toggle selection: tap again to deselect
@@ -140,27 +148,7 @@ public struct CalendarFeature: Sendable {
                 } else {
                     state.selectedDate = date
                 }
-                // Fetch events for the selected/deselected date
-                if state.calendarAccessGranted {
-                    if let selected = state.selectedDate {
-                        return .run { [selected, calendar = state.calendar] send in
-                            let events = await eventKitClient.fetchTodayEvents()
-                            let filtered = events.filter { event in
-                                calendar.isDate(event.startDate, inSameDayAs: selected) ||
-                                calendar.isDate(event.endDate, inSameDayAs: selected) ||
-                                (event.startDate < selected && event.endDate > selected)
-                            }
-                            await send(.eventsLoaded(filtered))
-                        }
-                    } else {
-                        // Deselected — restore today's events
-                        return .run { send in
-                            let events = await eventKitClient.fetchTodayEvents()
-                            await send(.eventsLoaded(events))
-                        }
-                    }
-                }
-                return .none
+                return loadEvents(&state)
 
             case .togglePin:
                 state.isPinned.toggle()
@@ -172,26 +160,74 @@ public struct CalendarFeature: Sendable {
 
             case .closePanel:
                 state.isPinned = false
-                return .none
+                state.isLoadingEvents = false
+                state.eventsRequestID = nil
+                return .cancel(id: CancelID.events)
 
             case .requestCalendarAccess:
-                return .run { send in
-                    let granted = await eventKitClient.requestAccess()
-                    await send(.calendarAccessResult(granted))
+                guard !state.isRequestingCalendarAccess else { return .none }
+                let status = eventKitClient.authorizationStatus()
+                guard status == .notDetermined else {
+                    return loadEvents(&state, authorizationStatus: status)
                 }
-
-            case let .calendarAccessResult(granted):
-                state.calendarAccessGranted = granted
-                if granted {
-                    return .run { send in
-                        let events = await eventKitClient.fetchTodayEvents()
-                        await send(.eventsLoaded(events))
+                state.calendarAuthorizationStatus = status
+                state.isRequestingCalendarAccess = true
+                state.calendarAccessError = nil
+                return .run { send in
+                    do {
+                        _ = try await eventKitClient.requestAccess()
+                        try Task.checkCancellation()
+                        await send(.calendarAccessResult(eventKitClient.authorizationStatus()))
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        guard !Task.isCancelled else { return }
+                        AppLogger.calendar.error("Calendar access request failed: \(error.localizedDescription, privacy: .public)")
+                        await send(.calendarAccessFailed(error.localizedDescription, eventKitClient.authorizationStatus()))
                     }
                 }
+                .cancellable(id: CancelID.calendarAccess)
+
+            case let .calendarAccessResult(status):
+                state.isRequestingCalendarAccess = false
+                state.calendarAccessError = nil
+                return loadEvents(&state, authorizationStatus: status)
+
+            case let .calendarAccessFailed(message, status):
+                state.isRequestingCalendarAccess = false
+                let effect = loadEvents(&state, authorizationStatus: status)
+                state.calendarAccessError = message
+                return effect
+
+            case .refreshCalendarAuthorization:
+                return loadEvents(&state)
+
+            case .retryEvents:
+                return loadEvents(&state)
+
+            case let .eventsLoaded(requestedDate, requestID, events):
+                guard state.eventsRequestID == requestID,
+                      state.eventsDate == requestedDate else { return .none }
+                let status = eventKitClient.authorizationStatus()
+                guard status == .fullAccess else {
+                    return loadEvents(&state, authorizationStatus: status)
+                }
+                state.isLoadingEvents = false
+                state.eventsRequestID = nil
+                state.events = events
+                state.eventsError = nil
                 return .none
 
-            case let .eventsLoaded(events):
-                state.todayEvents = events
+            case let .eventsFailed(requestedDate, requestID, message):
+                guard state.eventsRequestID == requestID,
+                      state.eventsDate == requestedDate else { return .none }
+                let status = eventKitClient.authorizationStatus()
+                guard status == .fullAccess else {
+                    return loadEvents(&state, authorizationStatus: status)
+                }
+                state.isLoadingEvents = false
+                state.eventsRequestID = nil
+                state.eventsError = message
                 return .none
 
             case .reloadPreferences:
@@ -206,6 +242,7 @@ public struct CalendarFeature: Sendable {
                     state.displayedMonth = date
                     state.selectedDate = date
                     recomputeDays(&state)
+                    return loadEvents(&state)
                 }
                 return .none
 
@@ -213,7 +250,9 @@ public struct CalendarFeature: Sendable {
                 state.showingPreferences = false
                 state.displayedMonth = date.now
                 recomputeDays(&state)
-                return .none
+                state.isLoadingEvents = false
+                state.eventsRequestID = nil
+                return .cancel(id: CancelID.events)
 
             case .prepareForReopen:
                 // The NSPanel is reused via orderOut/orderFront, so SwiftUI
@@ -228,13 +267,7 @@ public struct CalendarFeature: Sendable {
                 state.workdays = preferencesClient.loadWorkdays()
                 state.showAISearch = preferencesClient.loadShowAISearch()
                 recomputeDays(&state)
-                // selectedDate was just reset to today; refresh today's events so a
-                // panel reopened after events changed doesn't show stale data.
-                guard state.calendarAccessGranted else { return .none }
-                return .run { send in
-                    let events = await eventKitClient.fetchTodayEvents()
-                    await send(.eventsLoaded(events))
-                }
+                return loadEvents(&state)
             }
         }
     }
@@ -242,5 +275,44 @@ public struct CalendarFeature: Sendable {
     private func recomputeDays(_ state: inout State) {
         state.days = calendarClient.calendarDays(state.displayedMonth, state.calendar)
         state.gridInfo = calendarClient.gridInfo(state.days)
+    }
+
+    private func loadEvents(
+        _ state: inout State,
+        authorizationStatus: EKAuthorizationStatus? = nil
+    ) -> Effect<Action> {
+        let status = authorizationStatus ?? eventKitClient.authorizationStatus()
+        if status != state.calendarAuthorizationStatus {
+            state.calendarAccessError = nil
+        }
+        state.calendarAuthorizationStatus = status
+        state.events = []
+        state.eventsError = nil
+        guard status == .fullAccess else {
+            state.eventsDate = nil
+            state.eventsRequestID = nil
+            state.isLoadingEvents = false
+            return .cancel(id: CancelID.events)
+        }
+
+        let requestedDate = state.calendar.startOfDay(for: state.selectedDate ?? date.now)
+        let requestID = uuid()
+        state.eventsDate = requestedDate
+        state.eventsRequestID = requestID
+        state.isLoadingEvents = true
+        return .run { send in
+            do {
+                let events = try await eventKitClient.fetchEvents(requestedDate)
+                try Task.checkCancellation()
+                await send(.eventsLoaded(date: requestedDate, requestID: requestID, events: events))
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                AppLogger.calendar.error("Calendar event query failed: \(error.localizedDescription, privacy: .public)")
+                await send(.eventsFailed(date: requestedDate, requestID: requestID, message: error.localizedDescription))
+            }
+        }
+        .cancellable(id: CancelID.events, cancelInFlight: true)
     }
 }

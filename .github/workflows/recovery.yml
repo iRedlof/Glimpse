@@ -1,0 +1,47 @@
+name: Release Recovery
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      failed_run_id:
+        description: Completed failed main Release run to recover
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: glimpse-release-main
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  recovery-verified:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion != 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Verify scoped withdrawal and bind recovery to failed source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FAILED_RUN_ID: ${{ inputs.failed_run_id || github.event.workflow_run.id }}
+        run: |
+          python3 tools/scripts/release-control.py recover \
+            --failed-run-id "$FAILED_RUN_ID" --output release-recovery.json
+          cat release-recovery.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-recovery.json
+          retention-days: 90

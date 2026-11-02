@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 enum AboutWindow {
@@ -72,7 +73,7 @@ private struct AboutView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Export Diagnostics")
                         .font(.subheadline)
-                    Text("Saves logs and settings to Desktop")
+                    Text("Save logs and settings to a file")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -87,15 +88,30 @@ private struct AboutView: View {
                 case .exporting:
                     ProgressView().controlSize(.small).scaleEffect(0.7)
                 case let .exported(path):
-                    Button("Show in Finder") {
-                        NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
+                    VStack(alignment: .trailing, spacing: AppDesign.Spacing.xs) {
+                        Button("Show in Finder") {
+                            NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
+                        }
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                        Button("Export again") { exportDiagnostics() }
+                            .buttonStyle(.plain)
+                            .focusable(false)
+                            .font(.caption)
+                            .foregroundStyle(Color.accentColor)
                     }
-                    .buttonStyle(.plain)
-                    .focusable(false)
-                    .font(.caption)
-                    .foregroundStyle(.green)
                 case let .failed(msg):
-                    Text(msg).font(.caption2).foregroundStyle(.red)
+                    VStack(alignment: .trailing, spacing: AppDesign.Spacing.xs) {
+                        Text(msg).font(.caption2).foregroundStyle(.red)
+                        Button("Retry") { exportDiagnostics() }
+                            .buttonStyle(.plain)
+                            .focusable(false)
+                            .font(.caption)
+                            .foregroundStyle(Color.accentColor)
+                            .accessibilityLabel("Retry exporting diagnostics")
+                    }
                 }
             }
 
@@ -221,16 +237,27 @@ private struct AboutView: View {
 
     private func exportDiagnostics() {
         diagnosticState = .exporting
-        Task {
-            do {
-                let url = try await DiagnosticsExport.export()
-                await MainActor.run { diagnosticState = .exported(url.path) }
-                try? await Task.sleep(for: .seconds(10))
-                await MainActor.run {
-                    if case .exported = diagnosticState { diagnosticState = .idle }
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.plainText]
+        savePanel.canCreateDirectories = true
+        savePanel.directoryURL = FileManager.default.urls(
+            for: .desktopDirectory, in: .userDomainMask
+        ).first
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        savePanel.nameFieldStringValue = "Glimpse-Diagnostics-\(timestamp).txt"
+        savePanel.begin { response in
+            guard response == .OK, let destination = savePanel.url else {
+                diagnosticState = .idle
+                return
+            }
+            Task { @MainActor in
+                do {
+                    let url = try await DiagnosticsExport.export(to: destination)
+                    diagnosticState = .exported(url.path)
+                } catch {
+                    diagnosticState = .failed(error.localizedDescription)
                 }
-            } catch {
-                await MainActor.run { diagnosticState = .failed(error.localizedDescription) }
             }
         }
     }

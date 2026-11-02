@@ -22,11 +22,19 @@ struct HotkeyCombo: Equatable, Hashable {
         UserDefaults.standard.set(Int(modifiers), forKey: "hotkeyModifiers")
     }
 
-    static func load() -> HotkeyCombo {
-        if UserDefaults.standard.object(forKey: "hotkeyKeyCode") != nil {
-            let code = UserDefaults.standard.integer(forKey: "hotkeyKeyCode")
-            let mods = UserDefaults.standard.integer(forKey: "hotkeyModifiers")
-            return HotkeyCombo(keyCode: UInt32(code), modifiers: UInt32(mods))
+    static func load(defaults: UserDefaults = .standard) -> HotkeyCombo {
+        if defaults.object(forKey: "hotkeyKeyCode") != nil {
+            let code = defaults.integer(forKey: "hotkeyKeyCode")
+            let mods = defaults.integer(forKey: "hotkeyModifiers")
+            let allowedModifiers = UInt32(cmdKey | shiftKey | optionKey | controlKey)
+            guard (0...127).contains(code),
+                  let keyCode = UInt32(exactly: code),
+                  let modifiers = UInt32(exactly: mods),
+                  modifiers != 0, modifiers & ~allowedModifiers == 0 else {
+                AppLogger.preferences.error("Invalid saved hotkey; using default")
+                return .default
+            }
+            return HotkeyCombo(keyCode: keyCode, modifiers: modifiers)
         }
         return .default
     }

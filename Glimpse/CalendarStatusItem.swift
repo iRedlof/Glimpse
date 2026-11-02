@@ -8,6 +8,9 @@ extension Notification.Name {
     /// the SwiftUI → AppKit boundary where TCA stores are not shared.
     static let menuBarDisplayDidChange = Notification.Name("menuBarDisplayDidChange")
     static let calendarPreferencesDidChange = Notification.Name("calendarPreferencesDidChange")
+    static let calendarPanelWillHide = Notification.Name("calendarPanelWillHide")
+    static let calendarPanelDidShow = Notification.Name("calendarPanelDidShow")
+    static let hotkeyRecordingDidChange = Notification.Name("hotkeyRecordingDidChange")
 }
 
 @MainActor

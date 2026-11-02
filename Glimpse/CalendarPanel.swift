@@ -119,6 +119,15 @@ final class CalendarPanel: NSPanel {
     /// selected, and reload any preferences changed while hidden.
     func prepareForReopen() {
         calendarStore.send(.prepareForReopen)
+        NotificationCenter.default.post(name: .calendarPanelDidShow, object: self)
+    }
+
+    override func orderOut(_ sender: Any?) {
+        NotificationCenter.default.post(name: .calendarPanelWillHide, object: self)
+        pendingResize?.cancel()
+        isTextInputActive = false
+        deactivateTextInput()
+        super.orderOut(sender)
     }
 
     /// Activate the app so TextField can receive focus
