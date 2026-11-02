@@ -5,14 +5,17 @@ import Foundation
 public struct PreferencesFeature: Sendable {
 
     @ObservableState
-    public struct State: Equatable {
+    public struct State: Equatable, Sendable {
         public var startOfWeekday: Int = 1
         public var workdays: Set<Int> = [2, 3, 4, 5, 6]
         public var displayOptions: MenuBarDisplayOptions = .default
-        public var launchAtLogin: Bool = false
+        public var launchAtLoginStatus: LaunchAtLoginClient.Status = .notRegistered
+        public var isUpdatingLaunchAtLogin = false
         public var launchAtLoginError: String?
         public var showAISearch: Bool = true
         public var aiProvider: AIProvider = .auto
+
+        public var launchAtLogin: Bool { launchAtLoginStatus == .enabled }
 
         public init() {}
 
@@ -26,6 +29,7 @@ public struct PreferencesFeature: Sendable {
             state.displayOptions = prefs.loadDisplayOptions()
             state.showAISearch = prefs.loadShowAISearch()
             state.aiProvider = prefs.loadAIProvider()
+            state.launchAtLoginStatus = LaunchAtLoginClient.liveValue.status()
             return state
         }
     }
@@ -43,8 +47,9 @@ public struct PreferencesFeature: Sendable {
         case setShowYear(Bool)
         case setShowFilledBackground(Bool)
         case setLaunchAtLogin(Bool)
-        case launchAtLoginSucceeded
-        case launchAtLoginFailed(String)
+        case refreshLaunchAtLogin
+        case launchAtLoginSucceeded(LaunchAtLoginClient.Status)
+        case launchAtLoginFailed(String, LaunchAtLoginClient.Status)
 
         // Delegate actions for parent to react to
         case delegate(Delegate)
@@ -59,6 +64,8 @@ public struct PreferencesFeature: Sendable {
     @Dependency(\.preferencesClient) var preferencesClient
     @Dependency(\.launchAtLoginClient) var launchAtLoginClient
 
+    private enum CancelID { case launchAtLogin }
+
     public init() {}
 
     public var body: some ReducerOf<Self> {
@@ -68,7 +75,9 @@ public struct PreferencesFeature: Sendable {
                 state.startOfWeekday = preferencesClient.loadStartOfWeekday()
                 state.workdays = preferencesClient.loadWorkdays()
                 state.displayOptions = preferencesClient.loadDisplayOptions()
-                state.launchAtLogin = launchAtLoginClient.isEnabled()
+                if !state.isUpdatingLaunchAtLogin {
+                    state.launchAtLoginStatus = launchAtLoginClient.status()
+                }
                 state.showAISearch = preferencesClient.loadShowAISearch()
                 state.aiProvider = preferencesClient.loadAIProvider()
                 return .none
@@ -128,23 +137,41 @@ public struct PreferencesFeature: Sendable {
                 return .send(.delegate(.displayOptionsChanged(state.displayOptions)))
 
             case let .setLaunchAtLogin(enabled):
-                state.launchAtLogin = enabled
+                guard !state.isUpdatingLaunchAtLogin else { return .none }
+                state.isUpdatingLaunchAtLogin = true
+                state.launchAtLoginError = nil
                 return .run { send in
                     do {
-                        try launchAtLoginClient.setEnabled(enabled)
-                        await send(.launchAtLoginSucceeded)
+                        try await launchAtLoginClient.setEnabled(enabled)
+                        await send(.launchAtLoginSucceeded(launchAtLoginClient.status()))
                     } catch {
-                        await send(.launchAtLoginFailed(error.localizedDescription))
+                        AppLogger.preferences.error("Launch at login change failed: \(error.localizedDescription, privacy: .public)")
+                        await send(.launchAtLoginFailed(error.localizedDescription, launchAtLoginClient.status()))
                     }
                 }
+                .cancellable(id: CancelID.launchAtLogin)
 
-            case .launchAtLoginSucceeded:
+            case .refreshLaunchAtLogin:
+                guard !state.isUpdatingLaunchAtLogin else { return .none }
+                let status = launchAtLoginClient.status()
+                if status != state.launchAtLoginStatus {
+                    state.launchAtLoginError = nil
+                }
+                state.launchAtLoginStatus = status
+                return .none
+
+            case let .launchAtLoginSucceeded(status):
+                guard state.isUpdatingLaunchAtLogin else { return .none }
+                state.isUpdatingLaunchAtLogin = false
+                state.launchAtLoginStatus = status
                 state.launchAtLoginError = nil
                 return .none
 
-            case let .launchAtLoginFailed(errorMessage):
+            case let .launchAtLoginFailed(errorMessage, status):
+                guard state.isUpdatingLaunchAtLogin else { return .none }
+                state.isUpdatingLaunchAtLogin = false
                 state.launchAtLoginError = errorMessage
-                state.launchAtLogin = launchAtLoginClient.isEnabled()
+                state.launchAtLoginStatus = status
                 return .none
 
             case .delegate:

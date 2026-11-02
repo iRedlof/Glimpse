@@ -1,6 +1,7 @@
 import AppKit
 import Carbon
 import GlimpseCore
+import ServiceManagement
 import SwiftUI
 
 struct PreferencesView: View {
@@ -46,6 +47,9 @@ struct PreferencesView: View {
                 .padding(.top, AppDesign.Spacing.xs)
         }
         .onAppear { store.send(.onAppear) }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            store.send(.refreshLaunchAtLogin)
+        }
     }
 
     // MARK: - Reusable Card Container
@@ -254,22 +258,83 @@ struct PreferencesView: View {
 
             cardDivider
 
-            // Launch at login
+            launchAtLoginRow
+        }
+    }
+
+    private var launchAtLoginRow: some View {
+        VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
             settingsRow {
                 Text("Launch at login")
                 Spacer()
-                Toggle("", isOn: $store.launchAtLogin.sending(\.setLaunchAtLogin))
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .labelsHidden()
+                Toggle("Launch at login", isOn: Binding(
+                    get: { store.launchAtLogin },
+                    set: { store.send(.setLaunchAtLogin($0)) }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .labelsHidden()
+                .disabled(store.isUpdatingLaunchAtLogin || launchAtLoginNeedsRecovery)
+                .accessibilityLabel("Launch at login")
+                .accessibilityValue(launchAtLoginStatusText)
+            }
+
+            if store.isUpdatingLaunchAtLogin {
+                HStack(spacing: AppDesign.Spacing.xs) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("Updating login item…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            } else {
+                Text(launchAtLoginStatusText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             if let error = store.launchAtLoginError {
-                Text(error)
+                Text("Couldn’t change launch at login: \(error)")
                     .font(.caption)
                     .foregroundStyle(.red)
-                    .padding(.top, AppDesign.Spacing.xs)
             }
+
+            if launchAtLoginNeedsRecovery || store.launchAtLoginError != nil {
+                Button("Open Login Items") {
+                    SMAppService.openSystemSettingsLoginItems()
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.accentColor)
+                .padding(.vertical, AppDesign.Spacing.xs)
+                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .focusable(false)
+                .disabled(store.isUpdatingLaunchAtLogin)
+                .accessibilityLabel("Open Login Items in System Settings")
+            }
+        }
+    }
+
+    private var launchAtLoginNeedsRecovery: Bool {
+        switch store.launchAtLoginStatus {
+        case .requiresApproval, .notFound, .unavailable: true
+        case .enabled, .notRegistered: false
+        }
+    }
+
+    private var launchAtLoginStatusText: String {
+        switch store.launchAtLoginStatus {
+        case .enabled:
+            "Enabled for your next login."
+        case .requiresApproval:
+            "Approval required. Allow Glimpse in Login Items to launch at login."
+        case .notRegistered:
+            "Off. Glimpse won’t open automatically when you log in."
+        case .notFound:
+            "macOS couldn’t find Glimpse’s login item. Check that Glimpse is installed in Applications."
+        case .unavailable:
+            "macOS couldn’t determine Glimpse’s login item status."
         }
     }
 
@@ -380,12 +445,26 @@ struct PreferencesView: View {
             }
         }
         .onDisappear { stopRecording() }
+        .onReceive(NotificationCenter.default.publisher(for: .calendarPanelWillHide)) { _ in
+            stopRecording()
+        }
     }
 
     private func startRecording() {
+        guard !isRecordingHotkey,
+              let panel = NSApplication.shared.keyWindow as? NSPanel,
+              panel.isVisible else { return }
         isRecordingHotkey = true
         hotkeyConflict = nil
-        hotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        NotificationCenter.default.post(name: .hotkeyRecordingDidChange, object: true)
+        hotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak panel] event in
+            guard let panel, panel.isVisible,
+                  NSApplication.shared.keyWindow === panel,
+                  event.window === panel else { return event }
+            if event.keyCode == 53 {
+                stopRecording()
+                return nil
+            }
             let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
             guard !modifiers.isEmpty else { return event }
 
@@ -416,10 +495,14 @@ struct PreferencesView: View {
     }
 
     private func stopRecording() {
+        let wasRecording = isRecordingHotkey
         isRecordingHotkey = false
         if let monitor = hotkeyMonitor {
             NSEvent.removeMonitor(monitor)
             hotkeyMonitor = nil
+        }
+        if wasRecording {
+            NotificationCenter.default.post(name: .hotkeyRecordingDidChange, object: false)
         }
     }
 

@@ -1,6 +1,6 @@
 # Glimpse
 
-[![Version](https://img.shields.io/badge/version-1.4.3-green)](https://github.com/iRedlof/Glimpse/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.4.4-green)](https://github.com/iRedlof/Glimpse/releases/latest)
 [![Download](https://img.shields.io/badge/download-DMG-brightgreen)](https://github.com/iRedlof/Glimpse/releases/latest)
 
 [![Release](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml/badge.svg)](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml)
@@ -15,7 +15,7 @@ A lightweight macOS menu bar calendar app. Click the date icon to see the curren
 - **Menu bar popover** with month grid, week numbers, and contoured month border
 - **Date selection** — click any day to see full date info and week number
 - **AI date search** — press ⌘G and type "next Friday" or "Christmas"
-- **Today's events** — EventKit integration shows calendar events in the popover
+- **Selected-day events** — EventKit integration shows events for the chosen day, with loading and retry states
 - **Global hotkey** — configurable shortcut (default ⌘⇧C) to toggle from anywhere
 - **Customizable menu bar** — toggle icon, day, month, date, year with live preview
 - **Filled background mode** — solid pill style for the menu bar item
@@ -24,7 +24,7 @@ A lightweight macOS menu bar calendar app. Click the date icon to see the curren
 - **Grouped preferences** — Display, Calendar, Features cards with branded divider
 - **Auto-updates** — Sparkle with inline status in About window
 - **Shortcuts.app** — "Show Glimpse Calendar" available via Siri and Shortcuts
-- **Launch at login** — via macOS SMAppService
+- **Launch at login** — actual macOS registration status, with a shortcut to approve it in Login Items
 
 ## Setup
 
@@ -73,14 +73,19 @@ xcodebuild -project Glimpse.xcodeproj -scheme Glimpse -configuration Release -sk
 ### Testing
 
 ```bash
-# App tests (18 tests)
-xcodebuild -project Glimpse.xcodeproj -scheme Glimpse -skipMacroValidation test
+# Full quality gate: tooling contracts, dependency pins, app and core tests
+tools/scripts/quality-gate.sh
 
-# GlimpseCore tests (32 TCA TestStore tests)
-cd GlimpseCore && swift test
+# Core tests only
+cd GlimpseCore && swift test --force-resolved-versions
 ```
 
-50 tests total (18 app + 32 GlimpseCore). All use Swift Testing (`@Test`, `#expect`) — no XCTest.
+The Swift suites currently run 57 app tests and 62 core tests. They use Swift Testing
+(`@Test`, `#expect`). Python fixture tests exercise release verification, recovery,
+and runtime monitoring. Both Swift dependency lockfiles are checked in and must stay aligned.
+
+See [runtime monitoring](docs/monitoring.md), [QA baseline](docs/qa-baseline.md),
+and [stability roadmap](docs/stability-roadmap.md) for observation scope and acceptance criteria.
 
 ### Code Signing
 
@@ -123,14 +128,18 @@ GlimpseCore/                         # Local Swift Package (business logic)
 │   │                                # MenuBarFeature
 │   └── Models/                      # CalendarDay, CalendarEvent, GridInfo,
 │                                    # MenuBarDisplayOptions, AIProvider
-└── Tests/GlimpseCoreTests/          # 32 TCA TestStore tests
+└── Tests/GlimpseCoreTests/           # Reducer and dependency regression tests
 
-GlimpseTests/                        # 18 app-level tests
+GlimpseTests/                        # App-level Swift Testing suites
 
 tools/
 ├── scripts/
 │   ├── preflight.sh                 # Machine readiness check (--setup for interactive guided setup)
+│   ├── quality-gate.sh              # Tooling, app and core validation
+│   ├── release-control.py           # Previous release, readiness, recovery gates
 │   └── release-upload.sh            # Build → sign → notarize → create DMG
+├── monitoring/
+│   └── health-check.py              # Bounded process and retained crash observations
 └── resources/
     └── AppIcon.icns                 # App icon for DMG volume icon
 ```
@@ -150,155 +159,43 @@ tools/
 
 | Permission | Why | When Requested |
 |---|---|---|
-| **Calendar** | Show today's events (EventKit) | Click "Show today's events" |
+| **Calendar** | Show selected-day events (EventKit) | Click "Show calendar events" |
 
 No other permissions required. The app runs as a menu bar accessory (no dock icon).
 
 ## Releasing
 
-Releases are distributed via GitHub Releases. Push a version bump to `main` and GitHub Actions builds a signed, notarized DMG and creates the release automatically.
+GitHub Actions tests every introduced commit and the pull request merge result. A protected merge to `main` then runs the serialized Release workflow. App releases require passing app/core and tooling checks, a higher marketing version and Sparkle build number, and completed product, UX, code, and QA evidence in `.github/release-readiness.json`.
 
-### New Machine Setup
+Update all four `MARKETING_VERSION` settings, all four `CURRENT_PROJECT_VERSION` settings, and the README version badge together. Build numbers determine Sparkle update ordering and must increase. Documentation and developer tooling changes can keep the existing version when the controller proves they contain no app changes; they still run quality and final verification.
 
-When setting up a new development Mac for releases:
+The workflow signs and notarizes the app and DMG using the existing distribution credentials, embeds the exact source SHA, and verifies bundle identity, version/build, signing team, notarization, Gatekeeper acceptance, and the Sparkle signature. It creates a draft at that SHA, downloads and verifies its artifacts, publishes, and checks anonymous public downloads and the latest feed. The final verification job and whole workflow must succeed before the next protected merge is admitted.
+
+Each release contains `Glimpse-{version}.dmg`, `appcast.xml`, and `release-manifest.json`, which binds source, workflow attempt, and artifact digests. CI preserves per-commit SHA records, full test logs, result bundles, release metrics, and recovery evidence.
+
+Install the local commit/push gates in each checkout:
 
 ```bash
-# Check what's missing
+./tools/scripts/install-release-hooks.sh
+```
+
+The hooks query GitHub on every operation and block while the preceding remote release is pending or unverified. Pre-commit requires all source changes staged, tests an archive of the exact index, and rejects changes made while tests run. Hooks apply only to configured checkouts and can be bypassed with Git options or configuration. Hosted enforcement requires strict up-to-date pull requests, the required GitHub Actions checks `Previous release verified`, `Release tooling checks`, and `App and core tests`, and removal of direct-push/admin bypass. The admission controller comes from trusted main; first installation uses an exact administrator-pinned audited implementation commit. See [release automation](docs/release-automation.md) for setup and bootstrap details.
+
+Coordinate manual Release dispatches/reruns while merges are paused. A run at unchanged main cannot invalidate an already-green pull request through static branch checks; an absolute hosted lock during those manual operations needs a dynamic merge coordinator or administrator-managed lock.
+
+Failures keep the previous release available. Publication or public-health failures re-draft only the release owned by that workflow. The Release Recovery workflow verifies the restored distribution and records the exact failed run/SHA before allowing remediation commits. GitHub outages keep admission closed until verified recovery completes. A withdrawn version already installed by a client requires a corrected higher build; withdrawal cannot downgrade it.
+
+For local validation or release preparation:
+
+```bash
+./tools/scripts/quality-gate.sh
 ./tools/scripts/preflight.sh
-
-# Or run interactive guided setup (walks you through each missing item)
-./tools/scripts/preflight.sh --setup
-```
-
-This verifies all prerequisites and tells you exactly what's missing. With `--setup`, it prompts you to configure each missing item interactively.
-
-#### 1. Developer ID Certificate
-
-Open Xcode → Settings → Accounts → sign in with your Apple ID. Xcode downloads certificates automatically. Verify:
-
-```bash
-security find-identity -v -p codesigning | grep "Developer ID"
-```
-
-#### 2. Notarization Credentials
-
-Store your Apple notarization credentials in the Keychain (one-time per machine):
-
-```bash
-xcrun notarytool store-credentials "AC_PASSWORD" \
-  --apple-id YOUR_APPLE_ID \
-  --team-id YOUR_TEAM_ID \
-  --password YOUR_APP_SPECIFIC_PASSWORD
-```
-
-Generate an app-specific password at [appleid.apple.com](https://appleid.apple.com/account/manage) → Sign-In and Security → App-Specific Passwords.
-
-#### 3. Sparkle EdDSA Signing Key
-
-The Sparkle private key must be in your Keychain for update signing. **This is the most critical secret** — if lost, existing users can't verify updates.
-
-**Import from backup** (preferred):
-```bash
-# Find generate_keys in DerivedData (build the project first)
-find ~/Library/Developer/Xcode/DerivedData -name "generate_keys" -path "*/artifacts/*" -type f
-
-# Import the backed-up private key
-/path/to/generate_keys --import YOUR_PRIVATE_KEY_BASE64
-```
-
-**Export for backup** (do this on your current machine):
-```bash
-security find-generic-password -s "https://sparkle-project.org" -a "ed25519" -w
-```
-
-Save the output in your password manager. This one string restores signing on any Mac.
-
-### Version Bumping
-
-**Before pushing any user-facing change**, bump the version. This triggers the GitHub Actions release workflow.
-
-Update the version in **all 3 locations** (missing any will break the release). Use `/bump` to automate this:
-
-1. `Glimpse.xcodeproj/project.pbxproj` → `MARKETING_VERSION` (4 occurrences: Debug/Release × App/Tests)
-2. `Glimpse.xcodeproj/project.pbxproj` → `CURRENT_PROJECT_VERSION` (4 occurrences — must match build number)
-3. `README.md` → version badge
-
-Build number (`CURRENT_PROJECT_VERSION`) is critical — Sparkle uses it (not marketing version) to determine update ordering. Always increment it.
-
-Commit with: `chore: bump version to X.Y.Z`
-
-### How to Release
-
-#### GitHub Actions (Primary — triggered on push to main)
-
-1. Bump version in all 3 locations (use `/bump`)
-2. Commit: `git commit -m "chore: bump version to X.Y.Z"`
-3. Push to main → GitHub Actions builds and releases automatically
-
-#### Local Script (Backup)
-
-```bash
-# 1. Verify machine is ready (use --setup on first time)
-./tools/scripts/preflight.sh --setup
-
-# 2. Bump version
-# Use /bump or manually update the 3 locations
-
-# 3. Build, sign, notarize, create DMG
 ./tools/scripts/release-upload.sh
-
-# 4. Commit, tag, and push
-git add -A && git commit -m "chore: bump version to X.Y.Z"
-git tag v$(grep 'MARKETING_VERSION' Glimpse.xcodeproj/project.pbxproj | head -1 | sed 's/[^0-9.]//g')
-git push origin main --tags
-
-# 5. Create GitHub Release with the built artifacts
-gh release create v${VERSION} build/release/Glimpse-*.dmg build/release/appcast.xml --title v${VERSION} --generate-notes
 ```
 
-### What the Release Pipeline Does
+The local release script requires clean committed source, completed readiness, the previous-release gate, all quality checks, existing Developer ID/Sparkle credentials, and notarization. It prepares verified artifacts for inspection; publication goes through the GitHub workflow. Use `GLIMPSE_BUILD_ROOT` or worktree configuration `glimpse.buildRoot` to put build outputs on suitable storage. The GitHub Actions variable `GLIMPSE_BUILD_ROOT` configures the trusted runner's storage.
 
-1. Archives with `xcodebuild -scheme Glimpse -configuration Release`
-2. Exports and signs with Developer ID + hardened runtime
-3. Notarizes app + staples
-4. Creates styled DMG via `create-dmg` with background image
-5. Notarizes DMG
-6. Signs DMG with Sparkle EdDSA key
-7. Generates appcast.xml with `generate_appcast`
-8. Creates GitHub Release with DMG + appcast.xml attached
-
-### Release Artifacts
-
-Each GitHub Release contains:
-
-| File | Purpose |
-|---|---|
-| `Glimpse-{version}.dmg` | Styled DMG (signed + notarized) |
-| `appcast.xml` | Sparkle update feed |
-
-### Required Secrets
-
-| Secret | Purpose |
-|---|---|
-| `MACOS_CERTIFICATE` | Developer ID .p12 (base64-encoded) |
-| `MACOS_CERTIFICATE_PWD` | Password for .p12 |
-| `SPARKLE_PRIVATE_KEY` | EdDSA signing for Sparkle updates |
-| `APPLE_ID` | Notarization |
-| `APPLE_ID_PASSWORD` | Notarization (app-specific password) |
-| `TEAM_ID` | Notarization |
-
-### Troubleshooting
-
-Run preflight to diagnose issues:
-```bash
-./tools/scripts/preflight.sh          # Check only
-./tools/scripts/preflight.sh --setup  # Interactive fix for each failure
-```
-
-Common problems:
-- **"Developer ID certificate not found"** — Open Xcode, sign in, let it download certificates
-- **"Notarization credentials not configured"** — Run `xcrun notarytool store-credentials`
-- **"Sparkle EdDSA private key not in Keychain"** — Import from backup (see above)
+Required GitHub secrets are `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD`, `SPARKLE_PRIVATE_KEY`, `APPLE_ID`, `APPLE_ID_PASSWORD`, and `TEAM_ID`. Restore existing signing credentials from their secure backup when setting up another release machine. Do not replace the Sparkle key used by installed clients.
 
 ## Deferred Items
 

@@ -19,3 +19,7 @@ xcuserdata/
 .AppleDouble
 .LSOverride
 GlimpseCore/.build/
+
+# Python validation caches
+__pycache__/
+*.pyc

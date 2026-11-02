@@ -1,0 +1,10 @@
+{
+  "version": "1.4.4",
+  "build": "11",
+  "checks": {
+    "product": {"status": "passed", "evidence": "docs/product-acceptance.md"},
+    "ux": {"status": "passed", "evidence": "docs/ux-acceptance.md"},
+    "code": {"status": "passed", "evidence": "docs/code-review.md"},
+    "qa": {"status": "passed", "evidence": "docs/qa-acceptance.md"}
+  }
+}

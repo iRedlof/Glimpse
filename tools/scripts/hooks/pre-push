@@ -1,0 +1,9 @@
+#!/bin/bash
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+BUILD_ROOT="${GLIMPSE_BUILD_ROOT:-$(git config --get glimpse.buildRoot || true)}"
+BUILD_ROOT="${BUILD_ROOT:-$ROOT/build}"
+mkdir -p "$BUILD_ROOT/tmp"
+export TMPDIR="$BUILD_ROOT/tmp"
+# Git's push input is intentionally untouched; every push is gated.
+exec python3 "$ROOT/tools/scripts/release-control.py" gate

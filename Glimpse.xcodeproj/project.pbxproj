@@ -36,6 +36,8 @@
 		BB00000000000000000025 /* CalendarStatusItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000015 /* CalendarStatusItemTests.swift */; };
 		BB00000000000000000026 /* DateParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000016 /* DateParserTests.swift */; };
 		BB00000000000000000027 /* HotkeyComboTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000017 /* HotkeyComboTests.swift */; };
+		DD00000000000000000050 /* DiagnosticsExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000051 /* DiagnosticsExportTests.swift */; };
+		DD00000000000000000052 /* CalendarInputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000053 /* CalendarInputTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -81,6 +83,8 @@
 		BB00000000000000000015 /* CalendarStatusItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarStatusItemTests.swift; sourceTree = "<group>"; };
 		BB00000000000000000016 /* DateParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateParserTests.swift; sourceTree = "<group>"; };
 		BB00000000000000000017 /* HotkeyComboTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyComboTests.swift; sourceTree = "<group>"; };
+		DD00000000000000000051 /* DiagnosticsExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsExportTests.swift; sourceTree = "<group>"; };
+		DD00000000000000000053 /* CalendarInputTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarInputTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -160,6 +164,8 @@
 				BB00000000000000000015 /* CalendarStatusItemTests.swift */,
 				BB00000000000000000016 /* DateParserTests.swift */,
 				BB00000000000000000017 /* HotkeyComboTests.swift */,
+				DD00000000000000000051 /* DiagnosticsExportTests.swift */,
+				DD00000000000000000053 /* CalendarInputTests.swift */,
 			);
 			name = GlimpseTests;
 			path = GlimpseTests;
@@ -287,6 +293,8 @@
 				BB00000000000000000025 /* CalendarStatusItemTests.swift in Sources */,
 				BB00000000000000000026 /* DateParserTests.swift in Sources */,
 				BB00000000000000000027 /* HotkeyComboTests.swift in Sources */,
+				DD00000000000000000050 /* DiagnosticsExportTests.swift in Sources */,
+				DD00000000000000000052 /* CalendarInputTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -362,7 +370,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -387,7 +395,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -410,7 +418,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.4.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
@@ -427,7 +435,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.4.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;

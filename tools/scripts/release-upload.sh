@@ -3,14 +3,22 @@ set -euo pipefail
 
 # Glimpse Local Release Script
 # Builds, signs, creates DMG, generates Sparkle appcast.
-# The DMG + appcast are output to build/release/ for manual GitHub Release upload.
+# The DMG + appcast are output to build/release/ for verified local inspection.
+# Publication uses the gated GitHub workflow.
 #
 # Usage:
 #   ./tools/scripts/release-upload.sh
 #
-# Notarization is automatic when Developer ID certificate + AC_PASSWORD are available.
-# Without them, the script still works — just skips notarization (Sparkle EdDSA signing
-# is what matters for updates to existing users).
+# Developer ID and notarization are required for release artifacts.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$ROOT"
+python3 "$SCRIPT_DIR/release-control.py" gate
+python3 "$SCRIPT_DIR/release-control.py" readiness
+test -z "$(git status --porcelain)" || { echo "Release artifacts require a clean committed source"; exit 1; }
+SOURCE_SHA="$(git rev-parse HEAD)"
+BUILD_NUMBER="$(python3 "$SCRIPT_DIR/release-control.py" version | python3 -c 'import json,sys; print(json.load(sys.stdin)["build"])')"
 
 VERSION=$(grep 'MARKETING_VERSION' Glimpse.xcodeproj/project.pbxproj | head -1 | sed 's/[^0-9.]//g')
 SPARKLE_BIN=$(find ~/Library/Developer/Xcode/DerivedData -path "*/artifacts/sparkle/Sparkle/bin" -maxdepth 6 2>/dev/null | head -1)
@@ -20,11 +28,14 @@ if [ -z "$SPARKLE_BIN" ]; then
 fi
 SIGN_UPDATE="$SPARKLE_BIN/sign_update"
 GENERATE_APPCAST="$SPARKLE_BIN/generate_appcast"
-BUILD_DIR="build/release"
-DOWNLOAD_URL_PREFIX="https://github.com/rlchandani/Glimpse/releases/download/v${VERSION}"
+BUILD_ROOT="${GLIMPSE_BUILD_ROOT:-$(git config --get glimpse.buildRoot || true)}"
+BUILD_ROOT="${BUILD_ROOT:-$ROOT/build}"
+mkdir -p "$BUILD_ROOT"
+BUILD_DIR="$(mktemp -d "$BUILD_ROOT/local-release.XXXXXX")"
+REPOSITORY="$(python3 -c 'import json; print(json.load(open(".github/release-policy.json"))["repository"])')"
+DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/download/v${VERSION}"
 
 # Resolve paths (script may be called from project root)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RESOURCES_DIR="$SCRIPT_DIR/../resources"
 
 # Detect capabilities
@@ -38,6 +49,12 @@ if xcrun notarytool history --keychain-profile "AC_PASSWORD" &>/dev/null 2>&1; t
   HAS_NOTARIZATION=true
 fi
 
+if ! $HAS_DEVELOPER_ID || ! $HAS_NOTARIZATION; then
+  echo "Developer ID signing and notarization are required; release preparation stopped"
+  exit 1
+fi
+GLIMPSE_BUILD_ROOT="$BUILD_ROOT" "$SCRIPT_DIR/quality-gate.sh"
+
 echo "=== Glimpse Release v${VERSION} ==="
 echo ""
 echo "  Developer ID:  $($HAS_DEVELOPER_ID && echo '✅ Available' || echo '⚠️  Not found — skipping notarization')"
@@ -45,20 +62,15 @@ echo "  Notarization:  $($HAS_NOTARIZATION && echo '✅ Available' || echo '⚠�
 echo ""
 
 # Clean build directory
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"
+cp Glimpse/Info.plist "$BUILD_DIR/ReleaseInfo.plist"
+/usr/libexec/PlistBuddy -c "Add :GlimpseSourceSHA string $SOURCE_SHA" "$BUILD_DIR/ReleaseInfo.plist"
 
 if ! command -v create-dmg &>/dev/null; then
   echo "❌ create-dmg not found — install with: brew install create-dmg"
   exit 1
 fi
 
-# Export method
-if $HAS_DEVELOPER_ID; then
-  EXPORT_METHOD="developer-id"
-else
-  EXPORT_METHOD="mac-application"
-fi
+EXPORT_METHOD="developer-id"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -69,6 +81,9 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "📦 Archiving..."
 xcodebuild -project Glimpse.xcodeproj -scheme Glimpse -configuration Release \
   -skipMacroValidation \
+  -disableAutomaticPackageResolution \
+  -derivedDataPath "$BUILD_DIR/DerivedData" \
+  INFOPLIST_FILE="$BUILD_DIR/ReleaseInfo.plist" \
   archive -archivePath "$BUILD_DIR/archive.xcarchive" \
   -quiet
 
@@ -90,20 +105,16 @@ if [ ! -d "$APP_PATH" ]; then
 fi
 echo "✅ Export complete (method: ${EXPORT_METHOD})"
 
-# Step 3: Notarize (if available)
-if $HAS_DEVELOPER_ID && $HAS_NOTARIZATION; then
-  echo "🔏 Notarizing app..."
-  codesign -dvv "$APP_PATH" 2>&1 | grep -E "Authority|Runtime"
-  ditto -c -k --keepParent "$APP_PATH" "$BUILD_DIR/Glimpse.zip"
-  xcrun notarytool submit "$BUILD_DIR/Glimpse.zip" \
-    --keychain-profile "AC_PASSWORD" \
-    --wait
-  echo "📌 Stapling..."
-  xcrun stapler staple "$APP_PATH"
-  echo "✅ Notarization complete"
-else
-  echo "⏭️  Skipping notarization"
-fi
+# Step 3: Notarize
+echo "🔏 Notarizing app..."
+codesign -dvv "$APP_PATH" 2>&1 | grep -E "Authority|Runtime"
+ditto -c -k --keepParent "$APP_PATH" "$BUILD_DIR/Glimpse.zip"
+xcrun notarytool submit "$BUILD_DIR/Glimpse.zip" \
+  --keychain-profile "AC_PASSWORD" \
+  --wait
+echo "📌 Stapling..."
+xcrun stapler staple "$APP_PATH"
+echo "✅ Notarization complete"
 
 # Step 4: Create DMG
 echo "💿 Creating DMG..."
@@ -142,14 +153,12 @@ if [ -f "$RESOURCES_DIR/AppIcon.icns" ]; then
   rm -f "$ICON_RSRC"
 fi
 
-if $HAS_DEVELOPER_ID && $HAS_NOTARIZATION; then
-  echo "🔏 Notarizing DMG..."
-  xcrun notarytool submit "$BUILD_DIR/$DMG_NAME" \
-    --keychain-profile "AC_PASSWORD" \
-    --wait
-  xcrun stapler staple "$BUILD_DIR/$DMG_NAME"
-  echo "✅ DMG notarized"
-fi
+echo "🔏 Notarizing DMG..."
+xcrun notarytool submit "$BUILD_DIR/$DMG_NAME" \
+  --keychain-profile "AC_PASSWORD" \
+  --wait
+xcrun stapler staple "$BUILD_DIR/$DMG_NAME"
+echo "✅ DMG notarized"
 
 # Step 5: Sign for Sparkle
 echo "✏️  Signing for Sparkle..."
@@ -166,6 +175,7 @@ cp "$BUILD_DIR/$DMG_NAME" "$BUILD_DIR/appcast_source/"
 
 cp "$BUILD_DIR/appcast_source/appcast.xml" "$BUILD_DIR/appcast.xml"
 echo "✅ Appcast generated"
+"$SCRIPT_DIR/verify-dmg.sh" "$BUILD_DIR" "$VERSION" "$BUILD_NUMBER" "$SOURCE_SHA"
 
 # ─── Summary ───
 echo ""
@@ -174,13 +184,8 @@ echo "  Release v${VERSION} Complete"
 echo "═══════════════════════════════════════"
 echo "  DMG:     $BUILD_DIR/$DMG_NAME"
 echo "  Appcast: $BUILD_DIR/appcast.xml"
-if $HAS_DEVELOPER_ID && $HAS_NOTARIZATION; then
-  echo "  Signed:  ✅ Developer ID + Notarized"
-else
-  echo "  Signed:  ⚠️  Sparkle EdDSA only (no notarization)"
-fi
+echo "  Signed:  ✅ Developer ID + Notarized"
 echo ""
 echo "  Next steps:"
-echo "    git tag v${VERSION} && git push --tags"
-echo "    gh release create v${VERSION} $BUILD_DIR/$DMG_NAME $BUILD_DIR/appcast.xml --title v${VERSION} --generate-notes"
+echo "    Publish through the main-branch GitHub Release workflow after completed review."
 echo ""

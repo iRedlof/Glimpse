@@ -1,0 +1,36 @@
+{
+  "repository": "iRedlof/Glimpse",
+  "bundle_id": "com.rohit.Glimpse",
+  "team_id": "5D7M37QQLU",
+  "sparkle_public_key": "r3bpqxl5pEGWf6atYS0ZWP3FZyTVVcFAfDj22fuCioE=",
+  "legacy_recovery": {
+    "source_sha": "eb4fc447be5491f2e665b3bde005c622b5083853",
+    "failed_run_id": 41364245310,
+    "failed_run_attempt": 1,
+    "failed_tag": "v1.4.4",
+    "creator_id": 891898,
+    "status_id": 57802094024,
+    "healthy_tag": "v1.4.3",
+    "healthy_source_sha": "1eaae2643625f435c3a5b176b7f63b5de1ebcd21",
+    "healthy_run_id": 30221537836
+  },
+  "legacy_release": {
+    "repository": "rlchandani/Glimpse",
+    "tag": "v1.4.3",
+    "version": "1.4.3",
+    "build": "10",
+    "source_sha": "1eaae2643625f435c3a5b176b7f63b5de1ebcd21",
+    "workflow_run_id": 30221537836,
+    "audited_at": "2026-11-01",
+    "assets": {
+      "Glimpse-1.4.3.dmg": {
+        "size": 3531238,
+        "sha256": "5fa8e5c221940bec948ddebf69745ef5811582c4a9d0bbe792bf45be85edb411"
+      },
+      "appcast.xml": {
+        "size": 795,
+        "sha256": "a131aac12eb7460e7c47899e2ab0c3149936ce7ee49780bd10e78c9b37ccfcf5"
+      }
+    }
+  }
+}
