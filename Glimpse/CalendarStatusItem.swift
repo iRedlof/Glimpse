@@ -126,7 +126,7 @@ final class CalendarStatusItem {
         }
 
         let combo = HotkeyCombo.load()
-        GlobalHotkey.register(combo: combo) { [weak self] in
+        GlobalHotkey.shared.register(combo: combo) { [weak self] in
             self?.statusItemClicked()
         }
     }
