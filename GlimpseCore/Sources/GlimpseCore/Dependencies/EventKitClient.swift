@@ -64,22 +64,34 @@ extension EventKitClient: DependencyKey {
 
 /// Own the event store and EventKit objects on one serial actor. Only Sendable
 /// event models cross its boundary; synchronous queries run away from the UI.
-private actor EventStore {
+actor EventStore {
     private let store = EKEventStore()
+    private let authorizationStatus: @Sendable () -> EKAuthorizationStatus
+
+    init(
+        authorizationStatus: @escaping @Sendable () -> EKAuthorizationStatus = {
+            EKEventStore.authorizationStatus(for: .event)
+        }
+    ) {
+        self.authorizationStatus = authorizationStatus
+    }
 
     func requestAccess() async throws -> Bool {
         try await store.requestFullAccessToEvents()
     }
 
     func fetchEvents(for date: Date) throws -> [CalendarEvent] {
-        guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else {
+        try Task.checkCancellation()
+        guard authorizationStatus() == .fullAccess else {
             throw EventKitClient.QueryError.accessUnavailable
         }
         let interval = try EventKitClient.eventsInterval(for: date)
         let predicate = store.predicateForEvents(
             withStart: interval.start, end: interval.end, calendars: nil
         )
-        return store.events(matching: predicate)
+        let events = store.events(matching: predicate)
+        try Task.checkCancellation()
+        return events
             .compactMap(EventKitClient.calendarEvent(from:))
             .sorted { $0.startDate < $1.startDate }
     }

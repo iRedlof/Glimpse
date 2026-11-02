@@ -1,10 +1,22 @@
 {
-  "version": "1.4.6",
-  "build": "13",
+  "version": "1.4.7",
+  "build": "14",
   "checks": {
-    "product": {"status": "passed", "evidence": "docs/shortcut-product-ux-acceptance.md"},
-    "ux": {"status": "passed", "evidence": "docs/shortcut-product-ux-acceptance.md"},
-    "code": {"status": "passed", "evidence": "docs/shortcut-code-review.md"},
-    "qa": {"status": "passed", "evidence": "docs/shortcut-qa-acceptance.md"}
+    "product": {
+      "status": "passed",
+      "evidence": "docs/superpowers/reviews/2026-11-01-event-query-cancellation-acceptance.md"
+    },
+    "ux": {
+      "status": "passed",
+      "evidence": "docs/superpowers/reviews/2026-11-01-event-query-cancellation-acceptance.md"
+    },
+    "code": {
+      "status": "passed",
+      "evidence": "docs/superpowers/reviews/2026-11-01-event-query-cancellation-acceptance.md"
+    },
+    "qa": {
+      "status": "passed",
+      "evidence": "docs/superpowers/reviews/2026-11-01-event-query-cancellation-acceptance.md"
+    }
   }
 }
