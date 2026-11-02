@@ -119,7 +119,7 @@ This is a driver gate, not release eligibility; Task2 must replace its generic c
   `guidanceCheckRevalidatesEligibilityAndAdmitsOnce` covers observation/live disagreement, disabled→enabled, synchronous `.checking`, double press, no restart and new latest/error/offer/guidance outcomes.
   Use controlled continuations/drain, not real sleeps or unbounded waiting; serial native sessions cannot generate out-of-order results independently of their declared callbacks.
 - [x] **7. Run driver GREEN command and inspect receipts/xcresult.** Exact reason/lifecycle tests and unchanged UX-02 suites pass, with pins/source stable across the run. Record name/case counts without double-counting parameterized cases.
-- [ ] **8. Commit the scoped driver gate.** Stage only owning source/tests/planning files; use normal local hooks and a concrete message such as `fix: preserve Sparkle no-update reasons`. Do not push/publish an incomplete About projection.
+- [x] **8. Commit the scoped driver gate.** Stage only owning source/tests/planning files; use normal local hooks and a concrete message such as `fix: preserve Sparkle no-update reasons`. Do not push/publish an incomplete About projection.
 
 ## Task 2: exact About guidance, full production rendering and delivery bookkeeping
 
@@ -127,11 +127,11 @@ This is a driver gate, not release eligibility; Task2 must replace its generic c
 **Consumes:** Task1 models/classifier and existing injected updater/client/owned-host interfaces.
 **Produces:** complete accepted reason UI, production-injected full About rendering seam, actionable AX tests and scoped release readiness.
 
-- [ ] **1. Write About behavioral RED tests.** `noUpdateGuidanceHasExactCopyAndActions` invokes genuine native errors through the driver for each reason and asserts the matrix below, no invalid install/skip/relaunch/Dismiss controls and both named actions.
+- [x] **1. Write About behavioral RED tests.** `noUpdateGuidanceHasExactCopyAndActions` invokes genuine native errors through the driver for each reason and asserts the matrix below, no invalid install/skip/relaunch/Dismiss controls and both named actions.
   `latestCopyReportsCheckOutcome` asserts `No newer update was found` and absence of the old “latest version” headline.
   `guidanceEligibilityRefreshesAndPressRevalidates` performs real owned AX presses with false→true eligibility and live eligibility loss before notification; expect zero rejected calls, one accepted call and `.checking`.
   Run About RED command; Task1's generic presentation/latest wording must fail the specific copy assertions.
-- [ ] **2. Implement the reason projection in `AboutUpdateSection`.** Use existing `statusText`, `checkButton`, `releasesLink`, AppDesign padding/spacing; primary headline, secondary centered wrapping detail/recovery; no new non-latest icon.
+- [x] **2. Implement the reason projection in `AboutUpdateSection`.** Use existing `statusText`, `checkButton`, `releasesLink`, AppDesign padding/spacing; primary headline, secondary centered wrapping detail/recovery; no new non-latest icon.
 
 | Reason | Headline | Optional detail | Recovery |
 | --- | --- | --- | --- |
@@ -143,16 +143,16 @@ This is a driver gate, not release eligibility; Task2 must replace its generic c
 | unknown | `No installable update was found.` | None | `Check again or view Glimpse releases on GitHub.` |
 
   Non-latest action labels: `Check for updates`, `View Glimpse releases on GitHub`; visible titles `Check for Updates`, `View Releases`. Disabled Check adds exactly `Checking is temporarily unavailable.` Link remains enabled and targets only the fixed official URL.
-- [ ] **3. Add the legitimate full-view seam.** Change private `AboutView` to internal and give it `init(updater: SparkleUpdater = .shared)` initializing the existing State from that instance. Production `AboutWindow.show()` continues to construct `AboutView()`; injected tests must never evaluate/use `.shared`.
+- [x] **3. Add the legitimate full-view seam.** Change private `AboutView` to internal and give it `init(updater: SparkleUpdater = .shared)` initializing the existing State from that instance. Production `AboutWindow.show()` continues to construct `AboutView()`; injected tests must never evaluate/use `.shared`.
   Extend current `AboutUpdateHost` with initializer parameter `fullAbout: Bool = false` and optional `appearance: NSAppearance? = nil`; its content factory uses the actual `AboutView(updater: fixture.updater)` for full mode, the existing section otherwise.
   Keep offscreen/non-key/non-main ownership and injected `openURL`. Settle and close each host; do not invoke `AboutWindow.show`, activate the app or duplicate the product layout.
-- [ ] **4. Verify reopen, link and genuine full About rendering.** `guidanceReopenAndReleaseLinkPreserveDriverOwnership` reconstructs the same host, asserts no new start/check/ack, presses link, verifies sole official receipt and unchanged state/UUIDs/backend counts.
+- [x] **4. Verify reopen, link and genuine full About rendering.** `guidanceReopenAndReleaseLinkPreserveDriverOwnership` reconstructs the same host, asserts no new start/check/ack, presses link, verifies sole official receipt and unchanged state/UUIDs/backend counts.
   Add `fullAboutGuidanceFitsAndRemainsAccessible` in the same host suite; serialize owned AppKit cases to avoid competing run-loop/layout work.
   Parameterize light/dark, five guidance reasons, with/without valid OS detail and disabled footnote; include the longest valid32-character detail. Exercise full production About content at its300-point width and actual fitting height, with app header, diagnostics/footer still present.
   Assert readable text, correct action roles/enabled sets, finite fitting/content bounds and no clipped/overlapping controls; retain full-view image renders outside source and inspect them visually. Make geometry/image access a small extension of the existing host, not a duplicate renderer/window manager.
   If production fit fails, fix its actual sizing/wrapping; do not mask it by inflating only the fixture or claim section-only renders satisfy design acceptance9. A remaining signed native fit check stays explicit.
-- [ ] **5. Run About GREEN command, then the driver command only if Task2 changed driver/fixture behavior.** Record exact copy/action/geometry and visual acceptance separately from physical keyboard/VoiceOver. Existing initialization/error/choice paths still pass.
-- [ ] **6. Finalize candidate version and readiness in this owning task.** Fresh-check source/version; if still1.4.11/build18, set all four marketing values to1.4.12, all four build values to19 and README badge to1.4.12. If main advanced, reconcile monotonically rather than overwrite blindly.
+- [x] **5. Run About GREEN command, then the driver command only if Task2 changed driver/fixture behavior.** Record exact copy/action/geometry and visual acceptance separately from physical keyboard/VoiceOver. Existing initialization/error/choice paths still pass.
+- [x] **6. Finalize candidate version and readiness in this owning task.** Fresh-check source/version; if still1.4.11/build18, set all four marketing values to1.4.12, all four build values to19 and README badge to1.4.12. If main advanced, reconcile monotonically rather than overwrite blindly.
   Populate the scoped acceptance document plus inventory/roadmap with implementation, measured tests/rendering, SDK adapter evidence and native gaps. Keep tracked plan status honest and provenance links valid.
   Check `python3 tools/scripts/release-control.py version --root .` and `python3 tools/scripts/check-dependency-pins.py --root .`; these must pass with the same lock hashes.
 - [ ] **7. Run the ordinary whole-source quality gate before success claims/commit.**
