@@ -190,10 +190,14 @@ For local validation or release preparation:
 ```bash
 ./tools/scripts/quality-gate.sh
 ./tools/scripts/preflight.sh
-./tools/scripts/release-upload.sh
+GLIMPSE_SIGNING_KEYCHAIN="/absolute/path/existing signing.keychain-db" ./tools/scripts/release-upload.sh
 ```
 
-The local release script requires clean committed source, completed readiness, the previous-release gate, all quality checks, existing Developer ID/Sparkle credentials, and notarization. It prepares verified artifacts for inspection; publication goes through the GitHub workflow. Use `GLIMPSE_BUILD_ROOT` or worktree configuration `glimpse.buildRoot` to put build outputs on suitable storage. The GitHub Actions variable `GLIMPSE_BUILD_ROOT` configures the trusted runner's storage.
+The local release script requires clean committed source, completed readiness, the previous-release gate, all quality checks, existing Developer ID/Sparkle credentials, and the `AC_PASSWORD` notarization profile. Set `GLIMPSE_SIGNING_KEYCHAIN` to an absolute existing keychain file containing exactly one valid Developer ID Application identity for the team in `.github/release-policy.json`. That keychain and its private key must already be usable and available to Xcode's normal export search. The helper selects the exact certificate SHA for archive, export, and DMG signing; it does not import certificates, unlock keychains, or change their search list or access controls.
+
+Local packaging uses the styled Finder layout by default. Set `GLIMPSE_HEADLESS_DMG=1` to skip cosmetic Finder automation with `create-dmg --skip-jenkins`; both modes retain the app and Applications link. The setting accepts only `0` or `1`.
+
+Verified artifacts remain in a unique `local-release.*` directory for inspection; publication goes through the GitHub workflow. Use `GLIMPSE_BUILD_ROOT` or worktree configuration `glimpse.buildRoot` to put that directory on suitable storage. The GitHub Actions variable `GLIMPSE_BUILD_ROOT` configures the trusted runner's storage.
 
 Required GitHub secrets are `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD`, `SPARKLE_PRIVATE_KEY`, `APPLE_ID`, `APPLE_ID_PASSWORD`, and `TEAM_ID`. Restore existing signing credentials from their secure backup when setting up another release machine. Do not replace the Sparkle key used by installed clients.
 

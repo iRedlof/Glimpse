@@ -5,13 +5,43 @@ changes to proceed through staged-source tests, hosted CI and signed-artifact
 verification. It does not close the broader reliability goal or certify the
 unperformed native scenarios below.
 
+Current public artifact acceptance passed for **v1.4.5 / build 12**, exact
+source `6ffae9e5396f3e5274d000bcae8e7a2947abb3f0`, Release `41379941334`
+attempt 1. Whole-workflow success includes merged-source quality (57 app,
+62 core, 129 tooling and 27 monitoring tests), final verification and metrics.
+Root and independent QA separately downloaded the actual public DMG, manifest
+and exact/latest feeds through certificate-checked HTTPS. Both DMG and app
+strict signatures, Developer ID/team identity, tickets, direct Gatekeeper
+assessment, hardened app runtime, source/version/build and Sparkle Ed25519
+verification passed. Asset hashes/tag/run/attempt/feed match; all four signed
+entitlements match exact source. Read-only mounts were detached; no app was
+installed or launched. Native UI, SavePanel/Powerbox, login/reboot, sleep/wake
+and soak scenarios remain open, as does the other Mac's crash cause.
+
+Durable independent receipt in the original checkout's validation storage:
+`build/validation/qa-public/v1.4.5-run41379941334-dmxid4cd/qa-receipt.json`.
+Root receipt: `build/validation/public-v145-root.jtah4nry/root-receipt.json`.
+Delivery receipt: `build/validation/release-6ff-audit.abc_zw4s/audit.json`.
+The subsequent chronological notes preserve the earlier validation states.
+
+The final internal helper correction passed 13 focused tests covering 41
+executions of a byte-identical script copy, plus all 142 tooling and 27
+monitoring tests. Expected baseline failures preceded the fix. Independent
+A1–A8 review found no actionable blocker and separately passed the 13 helper,
+14 signing and three downloaded-DMG contracts plus scoped static checks.
+The helper's external signing/notary/Sparkle commands and final verifier
+callback are fakes in these tests; its native cryptographic flow was not run.
+Existing selector/verifier suites retain their failure contracts. The diff is
+internal-only; app/Core, pins, version/build and readiness are unchanged.
+Normal staged, hosted source/merge and whole final verification remain required.
+
 The final app log, `/tmp/glimpse-app-final.log`, records **57 passing tests in
 nine suites**, `TEST SUCCEEDED`, exit 0, after version 1.4.4/build 11 and the
 chosen-file diagnostics correction. Results:
 `/Volumes/xHome/Github/Glimpse/build/validation/app-validation-final-4.xcresult`.
 Core verification records **62 passing tests in five suites**, exit 0, in
 `/tmp/glimpse-core-green.log`; core source was unchanged afterward.
-Release tooling has **129 passing contracts** and monitoring has **27 passing
+Release tooling has **142 passing contracts** and monitoring has **27 passing
 fixtures**. Independent review also ran the contracts in a nongit staged-archive
 environment. A subsequent real-hook attempt exposed Git repository variables
 leaking into temporary fixture repositories. The commit was rejected; clearing

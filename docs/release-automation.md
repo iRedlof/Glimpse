@@ -1,5 +1,25 @@
 # Release and commit gates
 
+Current public distribution is **v1.4.5 / build 12**, source
+`6ffae9e5396f3e5274d000bcae8e7a2947abb3f0`, Release `41379941334` attempt 1.
+The whole workflow succeeded. Root and independent QA separately downloaded
+the public artifacts and verified both DMG and app signatures, policy team,
+notarization tickets, direct Gatekeeper acceptance, Sparkle signature,
+source/version/build, asset hashes and exact latest feed. QA also confirmed all
+four signed entitlements match source. Native UI, restart and endurance
+acceptance remain open. The earlier failure descriptions below are history.
+
+Local artifact preparation uses an explicitly configured absolute existing
+`GLIMPSE_SIGNING_KEYCHAIN`. The strict selector binds the policy team and
+certificate SHA for manual archive/export and post-icon DMG signing. The
+keychain/private key must already be usable and discoverable by Xcode export;
+the helper does not import/unlock credentials or alter search lists/ACLs.
+`GLIMPSE_HEADLESS_DMG=1` opts into supported headless packaging; `0` preserves
+the styled local default. Both retain the app and Applications shortcut.
+The final verifier remains mandatory, and outputs stay local for inspection.
+Offline full-script fixtures cover dispatch and failures; they do not establish
+native helper cryptographic success. Publication remains in the gated workflow.
+
 Every pushed branch runs tooling contracts, app tests, and core tests for every
 introduced commit, using immutable Git archives. Pull requests also test the
 merge result. Main pushes run the same quality workflow and the serialized
@@ -156,9 +176,9 @@ returned ID and creator ID. Every gate rechecks all evidence and the newest
 matching status, so revocation, a newer run or changed publication closes it.
 This status does not change the failed workflow conclusion or replace its tests.
 The first modern Release may consume this predecessor only during an active main
-push whose commit has that failed revision as its sole parent. Remove
-`legacy_recovery` after the first normal Release completes successful public
-verification. Subsequent failures require the automated Recovery workflow.
+push whose commit has that failed revision as its sole parent. Following actual
+v1.4.5 public artifact acceptance, `legacy_recovery` has been removed from the
+policy. Subsequent failures require the automated Recovery workflow.
 
 The recorded first-install status is `57802094024`, created by administrator
 `891898` at `2026-11-02T00:55:30Z`. The original Release run remains failed.

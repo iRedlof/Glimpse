@@ -1,5 +1,16 @@
 # Release automation implementation plan
 
+Current delivery milestone: **v1.4.5 / build 12** is public at exact source
+`6ffae9e5396f3e5274d000bcae8e7a2947abb3f0`. Release `41379941334` attempt 1
+passed completely, including final verification and metrics
+(`release_verified=true`, 254.28 seconds). Its merged-source quality passed
+57 app, 62 core, 129 tooling and 27 monitoring tests. Root and independent QA
+also passed actual downloaded DMG/app signature, team, ticket and Gatekeeper
+checks, Sparkle verification, all four signed entitlements, exact source/tag,
+asset hashes and latest-feed identity. First-install recovery retirement is
+therefore permitted; later failures use automated Recovery. The following
+chronological notes record earlier states. Native runtime acceptance is open.
+
 Goal: test each pushed source revision, publish only a reviewed and verified
 main revision, and block local commits and pushes while the previous remote
 release is unverified.

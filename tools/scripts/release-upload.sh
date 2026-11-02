@@ -3,11 +3,13 @@ set -euo pipefail
 
 # Glimpse Local Release Script
 # Builds, signs, creates DMG, generates Sparkle appcast.
-# The DMG + appcast are output to build/release/ for verified local inspection.
+# The DMG + appcast are output to a unique local-release.* directory under
+# GLIMPSE_BUILD_ROOT (or the configured/default build root) for local inspection.
 # Publication uses the gated GitHub workflow.
 #
 # Usage:
-#   ./tools/scripts/release-upload.sh
+#   GLIMPSE_SIGNING_KEYCHAIN="/absolute/path/signing.keychain-db" ./tools/scripts/release-upload.sh
+# Optional: GLIMPSE_HEADLESS_DMG=1 skips cosmetic Finder automation.
 #
 # Developer ID and notarization are required for release artifacts.
 
@@ -19,6 +21,18 @@ python3 "$SCRIPT_DIR/release-control.py" readiness
 test -z "$(git status --porcelain)" || { echo "Release artifacts require a clean committed source"; exit 1; }
 SOURCE_SHA="$(git rev-parse HEAD)"
 BUILD_NUMBER="$(python3 "$SCRIPT_DIR/release-control.py" version | python3 -c 'import json,sys; print(json.load(sys.stdin)["build"])')"
+HEADLESS_DMG="${GLIMPSE_HEADLESS_DMG-0}"
+case "$HEADLESS_DMG" in
+  0|1) ;;
+  *) echo "GLIMPSE_HEADLESS_DMG must be 0 or 1"; exit 1 ;;
+esac
+SIGNING_KEYCHAIN="${GLIMPSE_SIGNING_KEYCHAIN:-}"
+if [[ "$SIGNING_KEYCHAIN" != /* || ! -f "$SIGNING_KEYCHAIN" ]]; then
+  echo "GLIMPSE_SIGNING_KEYCHAIN must name an absolute existing signing keychain file"
+  exit 1
+fi
+TEAM_ID="$(python3 -c 'import json; print(json.load(open(".github/release-policy.json"))["team_id"])')"
+SIGNING_IDENTITY="$(python3 "$SCRIPT_DIR/select-signing-identity.py" --keychain "$SIGNING_KEYCHAIN" --team-id "$TEAM_ID")"
 
 VERSION=$(grep 'MARKETING_VERSION' Glimpse.xcodeproj/project.pbxproj | head -1 | sed 's/[^0-9.]//g')
 SPARKLE_BIN=$(find ~/Library/Developer/Xcode/DerivedData -path "*/artifacts/sparkle/Sparkle/bin" -maxdepth 6 2>/dev/null | head -1)
@@ -38,32 +52,36 @@ DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/download/v${VERSI
 # Resolve paths (script may be called from project root)
 RESOURCES_DIR="$SCRIPT_DIR/../resources"
 
-# Detect capabilities
-HAS_DEVELOPER_ID=false
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application"; then
-  HAS_DEVELOPER_ID=true
-fi
-
+# Check the existing notarization profile without changing local credentials.
 HAS_NOTARIZATION=false
 if xcrun notarytool history --keychain-profile "AC_PASSWORD" &>/dev/null 2>&1; then
   HAS_NOTARIZATION=true
 fi
 
-if ! $HAS_DEVELOPER_ID || ! $HAS_NOTARIZATION; then
-  echo "Developer ID signing and notarization are required; release preparation stopped"
+if ! $HAS_NOTARIZATION; then
+  echo "Notarization profile AC_PASSWORD is required; release preparation stopped"
   exit 1
 fi
 GLIMPSE_BUILD_ROOT="$BUILD_ROOT" "$SCRIPT_DIR/quality-gate.sh"
 
 echo "=== Glimpse Release v${VERSION} ==="
 echo ""
-echo "  Developer ID:  $($HAS_DEVELOPER_ID && echo '✅ Available' || echo '⚠️  Not found — skipping notarization')"
-echo "  Notarization:  $($HAS_NOTARIZATION && echo '✅ Available' || echo '⚠️  Not configured — skipping notarization')"
+echo "  Developer ID:  ✅ Selected for policy team"
+echo "  Notarization:  ✅ Available"
 echo ""
 
 # Clean build directory
 cp Glimpse/Info.plist "$BUILD_DIR/ReleaseInfo.plist"
-/usr/libexec/PlistBuddy -c "Add :GlimpseSourceSHA string $SOURCE_SHA" "$BUILD_DIR/ReleaseInfo.plist"
+python3 - "$BUILD_DIR/ReleaseInfo.plist" "$SOURCE_SHA" <<'PY'
+import plistlib
+import sys
+
+with open(sys.argv[1], "rb") as source:
+    info = plistlib.load(source)
+info["GlimpseSourceSHA"] = sys.argv[2]
+with open(sys.argv[1], "wb") as target:
+    plistlib.dump(info, target)
+PY
 
 if ! command -v create-dmg &>/dev/null; then
   echo "❌ create-dmg not found — install with: brew install create-dmg"
@@ -83,14 +101,28 @@ xcodebuild -project Glimpse.xcodeproj -scheme Glimpse -configuration Release \
   -skipMacroValidation \
   -disableAutomaticPackageResolution \
   -derivedDataPath "$BUILD_DIR/DerivedData" \
+  CODE_SIGN_STYLE=Manual \
+  CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
+  DEVELOPMENT_TEAM="$TEAM_ID" \
+  OTHER_CODE_SIGN_FLAGS="--keychain \"$SIGNING_KEYCHAIN\"" \
   INFOPLIST_FILE="$BUILD_DIR/ReleaseInfo.plist" \
   archive -archivePath "$BUILD_DIR/archive.xcarchive" \
   -quiet
 
 # Step 2: Export
 echo "📤 Exporting..."
-/usr/libexec/PlistBuddy -c "Add :method string ${EXPORT_METHOD}" "$BUILD_DIR/ExportOptions.plist"
-/usr/libexec/PlistBuddy -c "Add :signingStyle string automatic" "$BUILD_DIR/ExportOptions.plist"
+python3 - "$BUILD_DIR/ExportOptions.plist" "$EXPORT_METHOD" "$SIGNING_IDENTITY" "$TEAM_ID" <<'PY'
+import plistlib
+import sys
+
+with open(sys.argv[1], "wb") as target:
+    plistlib.dump({
+        "method": sys.argv[2],
+        "signingStyle": "manual",
+        "signingCertificate": sys.argv[3],
+        "teamID": sys.argv[4],
+    }, target)
+PY
 
 xcodebuild -exportArchive \
   -archivePath "$BUILD_DIR/archive.xcarchive" \
@@ -136,6 +168,9 @@ DMG_ARGS=(
   --hide-extension "Glimpse.app"
   --no-internet-enable
 )
+if [ "$HEADLESS_DMG" = 1 ]; then
+  DMG_ARGS+=(--skip-jenkins)
+fi
 
 # Add optional resources if they exist
 if [ -f "$RESOURCES_DIR/AppIcon.icns" ]; then
@@ -152,6 +187,11 @@ if [ -f "$RESOURCES_DIR/AppIcon.icns" ]; then
   SetFile -a C "$BUILD_DIR/$DMG_NAME" 2>/dev/null
   rm -f "$ICON_RSRC"
 fi
+
+echo "🔏 Signing DMG..."
+codesign --force --sign "$SIGNING_IDENTITY" --keychain "$SIGNING_KEYCHAIN" \
+  --timestamp "$BUILD_DIR/$DMG_NAME"
+codesign --verify --strict --verbose=2 "$BUILD_DIR/$DMG_NAME"
 
 echo "🔏 Notarizing DMG..."
 xcrun notarytool submit "$BUILD_DIR/$DMG_NAME" \
