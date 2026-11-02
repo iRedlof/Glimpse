@@ -14,6 +14,7 @@ struct AccessibilityTestNode {
     var help: String? { object.accessibilityHelp?() }
     var frame: NSRect { object.accessibilityFrame?() ?? .zero }
     var enabled: Bool { object.isAccessibilityEnabled?() ?? false }
+    var selected: Bool { object.isAccessibilitySelected?() ?? false }
     var children: [Any] { object.accessibilityChildren?() ?? [] }
     var contents: [Any] { object.accessibilityContents?() ?? [] }
     var visibleChildren: [Any] { object.accessibilityVisibleChildren?() ?? [] }

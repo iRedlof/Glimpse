@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DE00000000000000000001 /* CalendarDateAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE00000000000000000002 /* CalendarDateAccessibilityTests.swift */; };
 		DD0000000000000000008A /* AccessibilityViewportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000008B /* AccessibilityViewportTests.swift */; };
 		DD00000000000000000088 /* CalendarControlAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000089 /* CalendarControlAccessibilityTests.swift */; };
 		DD00000000000000000086 /* PreferencesAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000087 /* PreferencesAccessibilityTests.swift */; };
@@ -67,6 +68,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		DE00000000000000000002 /* CalendarDateAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarDateAccessibilityTests.swift; sourceTree = "<group>"; };
 		DD0000000000000000008B /* AccessibilityViewportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityViewportTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000089 /* CalendarControlAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarControlAccessibilityTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000087 /* PreferencesAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesAccessibilityTests.swift; sourceTree = "<group>"; };
@@ -194,6 +196,7 @@
 		BB00000000000000000008 /* GlimpseTests */ = {
 			isa = PBXGroup;
 			children = (
+				DE00000000000000000002 /* CalendarDateAccessibilityTests.swift */,
 				DD0000000000000000008B /* AccessibilityViewportTests.swift */,
 				DD00000000000000000089 /* CalendarControlAccessibilityTests.swift */,
 				DD00000000000000000087 /* PreferencesAccessibilityTests.swift */,
@@ -339,6 +342,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DE00000000000000000001 /* CalendarDateAccessibilityTests.swift in Sources */,
 				DD0000000000000000008A /* AccessibilityViewportTests.swift in Sources */,
 				DD00000000000000000088 /* CalendarControlAccessibilityTests.swift in Sources */,
 				DD00000000000000000086 /* PreferencesAccessibilityTests.swift in Sources */,
@@ -434,7 +438,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 20;
+				CURRENT_PROJECT_VERSION = 21;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -442,7 +446,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.13;
+				MARKETING_VERSION = 1.4.14;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -459,7 +463,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 20;
+				CURRENT_PROJECT_VERSION = 21;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -467,7 +471,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.13;
+				MARKETING_VERSION = 1.4.14;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -482,9 +486,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 20;
+				CURRENT_PROJECT_VERSION = 21;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.13;
+				MARKETING_VERSION = 1.4.14;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -499,9 +503,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 20;
+				CURRENT_PROJECT_VERSION = 21;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.13;
+				MARKETING_VERSION = 1.4.14;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
