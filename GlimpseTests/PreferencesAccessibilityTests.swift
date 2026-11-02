@@ -171,9 +171,11 @@ struct PreferencesAccessibilityTests {
 
 /// Observes only the menu armed immediately before this owned popup's native press.
 @MainActor
-private final class NativePickerSelection: NSObject {
+final class NativePickerSelection: NSObject {
     private let expectedTitles: [String]
     private let selectedTitle: String
+    private let onAction: (@MainActor () -> Void)?
+    private let trackingCompleted = AIDateIntegrationSignal<Void>("owned native picker tracking ended")
     private let deadline = ContinuousClock.now.advanced(by: .seconds(1))
     private var menu: NSMenu?
     private var timer: Timer?
@@ -187,9 +189,13 @@ private final class NativePickerSelection: NSObject {
         "titles=\(observedTitles); action=\(actionAttempted); ended=\(trackingEnded); timeout=\(timedOut)"
     }
 
-    init(expectedTitles: [String], selectedTitle: String) {
+    init(
+        expectedTitles: [String], selectedTitle: String,
+        onAction: (@MainActor () -> Void)? = nil
+    ) {
         self.expectedTitles = expectedTitles
         self.selectedTitle = selectedTitle
+        self.onAction = onAction
         super.init()
         NotificationCenter.default.addObserver(
             self, selector: #selector(didBeginTracking(_:)),
@@ -222,6 +228,7 @@ private final class NativePickerSelection: NSObject {
     @objc private func didEndTracking(_ notification: Notification) {
         guard let root = notification.object as? NSMenu, root === menu else { return }
         trackingEnded = true
+        trackingCompleted.resolve(.success(()))
         close()
     }
 
@@ -231,6 +238,9 @@ private final class NativePickerSelection: NSObject {
             if let menu {
                 menu.cancelTrackingWithoutAnimation()
             } else {
+                trackingCompleted.resolve(.failure(
+                    AIDateIntegrationFixtureFailure.watchdog("owned native picker never began tracking")
+                ))
                 close()
             }
             return
@@ -245,7 +255,20 @@ private final class NativePickerSelection: NSObject {
         }
         actionAttempted = true
         menu.performActionForItem(at: match.offset)
+        // The real native setter has returned; inspect ownership before yielding
+        // or dismissing the menu. SwiftUI can defer presentation after AXPress.
+        onAction?()
         menu.cancelTrackingWithoutAnimation()
+    }
+
+    func waitUntilTrackingEnds() async throws {
+        do {
+            try await trackingCompleted.wait()
+        } catch {
+            await trackingCompleted.drainWatchdogs()
+            throw error
+        }
+        await trackingCompleted.drainWatchdogs()
     }
 
     private func removeBeginObserver() {

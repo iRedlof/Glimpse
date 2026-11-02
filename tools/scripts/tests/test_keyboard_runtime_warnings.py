@@ -139,17 +139,54 @@ class KeyboardRuntimeWarningContracts(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         self.checker.validate(self.expected, self.summary, tests)
 
-    def test_warning_below_argument_or_suite_remains_invalid(self):
-        for placement in ("argument", "suite"):
-            with self.subTest(placement=placement):
+    def test_warning_below_passed_argument_is_retained_with_parameter_identity(self):
+        tests = copy.deepcopy(self.tests)
+        warning = copy.deepcopy(self.editor(tests)["children"][0])
+        node = next(node for node in cases(tests)
+                    if self.expected["methods"][node["nodeIdentifier"]] == 2)
+        argument = node["children"][0]
+        argument["children"] = [warning]
+        result, receipt, _ = self.run_checker(tests=tests)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(receipt["methods"], self.expected["methods"])
+        self.assertEqual(receipt["executed_cases"], 16)
+        self.assertCountEqual(receipt["runtime_warnings"], [
+            {"method": EDITOR, **self.editor(tests)["children"][0]},
+            {"method": node["nodeIdentifier"],
+             "parameter": {"name": argument["name"], "nodeIdentifierURL": argument["nodeIdentifierURL"]},
+             **warning},
+        ])
+
+    def test_warning_at_suite_level_remains_invalid(self):
+        tests = copy.deepcopy(self.tests)
+        cases(tests).append(copy.deepcopy(self.editor(tests)["children"][0]))
+        with self.assertRaises(ValueError):
+            self.checker.validate(self.expected, self.summary, tests)
+
+    def test_argument_warning_cannot_admit_invalid_leaves_or_nonpassing_duplicate_missing_cases(self):
+        for scenario in ("malformed-warning", "unknown-child", "nested-warning", "failed", "skipped",
+                         "missing", "duplicate-url", "duplicate-name"):
+            with self.subTest(scenario=scenario):
                 tests = copy.deepcopy(self.tests)
+                node = next(node for node in cases(tests)
+                            if self.expected["methods"][node["nodeIdentifier"]] == 2)
+                argument = node["children"][0]
                 warning = copy.deepcopy(self.editor(tests)["children"][0])
-                if placement == "argument":
-                    node = next(node for node in cases(tests)
-                                if self.expected["methods"][node["nodeIdentifier"]] == 2)
-                    node["children"][0]["children"] = [warning]
-                else:
-                    cases(tests).append(warning)
+                argument["children"] = [warning]
+                if scenario == "malformed-warning":
+                    warning["name"] = ""
+                elif scenario == "unknown-child":
+                    warning["nodeType"] = "Unknown"
+                elif scenario == "nested-warning":
+                    warning["children"] = [copy.deepcopy(warning)]
+                elif scenario in ("failed", "skipped"):
+                    argument["result"] = scenario.title()
+                elif scenario == "missing":
+                    node["children"].pop()
+                elif scenario == "duplicate-url":
+                    node["children"][1]["nodeIdentifierURL"] = argument["nodeIdentifierURL"]
+                elif scenario == "duplicate-name":
+                    node["children"][1]["name"] = argument["name"]
                 with self.assertRaises(ValueError):
                     self.checker.validate(self.expected, self.summary, tests)
 

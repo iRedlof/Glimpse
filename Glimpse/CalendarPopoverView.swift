@@ -10,7 +10,8 @@ struct CalendarPopoverView: View {
     let keyboardObservation: ((CalendarKeyboardInvocation) -> Void)?
     let preferencesHotkeyModel: HotkeyPreferencesModel?
     let editorPresentation: ((@escaping @MainActor () -> Void) -> Void)?
-    let querySubmission: ((String) -> Void)?
+    let querySubmissionObservation: (@MainActor (String, Task<Void, Never>) -> Void)?
+    let loadAISettings: @MainActor () -> (enabled: Bool, preference: AIProvider)
 
     @State private var scrollRouter = CalendarScrollRouter()
     @State private var scrollMonitor: Any?
@@ -18,11 +19,7 @@ struct CalendarPopoverView: View {
     @State private var hoveredDate: Date?
     @State private var keyMonitor: Any?
     @State private var isRecordingHotkey = false
-    @State private var aiTask: Task<Void, Never>?
-    @State private var aiQueryText: String = ""
-    @State private var aiProcessing: Bool = false
-    @State private var aiErrorMessage: String?
-    @State private var aiFieldActive: Bool = false
+    @State private var aiQueryModel: AIDateQueryModel
     @FocusState private var aiFieldFocused: Bool
     @FocusState private var controlFocus: CalendarKeyboardOwner?
     @State private var logicalDate: Date?
@@ -39,14 +36,25 @@ struct CalendarPopoverView: View {
          keyboardObservation: ((CalendarKeyboardInvocation) -> Void)? = nil,
          preferencesHotkeyModel: HotkeyPreferencesModel? = nil,
          editorPresentation: ((@escaping @MainActor () -> Void) -> Void)? = nil,
-         querySubmission: ((String) -> Void)? = nil) {
+         aiQueryModel: AIDateQueryModel? = nil,
+         loadAISettings: @escaping @MainActor () -> (enabled: Bool, preference: AIProvider) = {
+             let preferences = PreferencesClient.liveValue
+             return (preferences.loadShowAISearch(), preferences.loadAIProvider())
+         },
+         querySubmissionObservation: (@MainActor (String, Task<Void, Never>) -> Void)? = nil) {
         self.store = store
         self.panel = panel
         self.layout = layout ?? panel?.layoutState ?? PanelLayoutState()
         self.keyboardObservation = keyboardObservation
         self.preferencesHotkeyModel = preferencesHotkeyModel
         self.editorPresentation = editorPresentation
-        self.querySubmission = querySubmission
+        self.loadAISettings = loadAISettings
+        self.querySubmissionObservation = querySubmissionObservation
+        let settings = loadAISettings()
+        self._aiQueryModel = State(initialValue: aiQueryModel ?? AIDateQueryModel(
+            client: .live, enabled: settings.enabled, preference: settings.preference,
+            onDate: { store.send(.aiDateResult($0)) }
+        ))
         self._preferencesStore = State(initialValue: preferencesStore ?? Store(
             initialState: PreferencesFeature.State.live()
         ) { PreferencesFeature() })
@@ -59,7 +67,10 @@ struct CalendarPopoverView: View {
                 PanelViewport(layout: layout) {
                     VStack(spacing: 12) {
                         if store.showingPreferences {
-                            PreferencesView(store: preferencesStore, hotkeyPreferences: preferencesHotkeyModel)
+                            PreferencesView(
+                                store: preferencesStore, hotkeyPreferences: preferencesHotkeyModel,
+                                onAISettingsChange: synchronizeAISettings
+                            )
                         }
                         headerView.id("panel-header")
                         if store.showAISearch {
@@ -99,11 +110,15 @@ struct CalendarPopoverView: View {
             .frame(width: PanelGeometry.panelWidth)
             .onAppear {
                 store.send(.onAppear)
+                let settings = loadAISettings()
+                synchronizeAISettings(settings.enabled, settings.preference)
+                aiQueryModel.setPanelVisible(panel?.isVisible == true)
                 reconcileLogicalDate()
                 setupKeyMonitor()
                 setupScrollMonitor()
             }
             .onDisappear {
+                aiQueryModel.setPanelVisible(false)
                 removeMonitors()
                 store.send(.onDisappear)
             }
@@ -114,7 +129,7 @@ struct CalendarPopoverView: View {
             .onChange(of: layout.isOverflowing) { _, _ in
                 scrollRouter.suspendNavigation()
             }
-            .onChange(of: aiFieldActive) { _, active in
+            .onChange(of: aiQueryModel.isEditorOpen) { _, active in
                 panel?.isTextInputActive = active
                 if active { reader.scrollTo("panel-ai-input", anchor: .center) }
             }
@@ -142,22 +157,19 @@ struct CalendarPopoverView: View {
             ))
             .onReceive(NotificationCenter.default.publisher(for: .calendarPreferencesDidChange)) { _ in
                 store.send(.reloadPreferences)
+                let settings = loadAISettings()
+                synchronizeAISettings(settings.enabled, settings.preference)
                 showQuitConfirm = false
             }
             .onReceive(NotificationCenter.default.publisher(for: .calendarPanelWillHide)) { notification in
                 guard notification.object as? CalendarPanel === panel else { return }
                 removeMonitors()
-                aiTask?.cancel()
-                aiTask = nil
-                aiProcessing = false
-                aiFieldActive = false
+                aiQueryModel.setPanelVisible(false)
                 aiFieldFocused = false
                 controlFocus = nil
                 logicalDate = nil
                 gridHasFocus = false
                 keyboardOwnerRelay.reset()
-                aiQueryText = ""
-                aiErrorMessage = nil
                 isRecordingHotkey = false
                 showQuitConfirm = false
                 isMouseOverCalendar = false
@@ -166,6 +178,8 @@ struct CalendarPopoverView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .calendarPanelDidShow)) { notification in
                 guard notification.object as? CalendarPanel === panel else { return }
+                // Preparation is hidden. Only actual native visibility is authoritative.
+                aiQueryModel.setPanelVisible(panel?.isVisible == true)
                 controlFocus = nil
                 aiFieldFocused = false
                 keyboardOwnerRelay.reset()
@@ -178,6 +192,7 @@ struct CalendarPopoverView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .calendarPanelDidCompleteReopen)) { notification in
                 guard notification.object as? CalendarPanel === panel else { return }
+                aiQueryModel.setPanelVisible(panel?.isVisible == true)
                 // Re-observe the real hierarchy after the native post-key reset.
                 // Session changes never manufacture an ownerless observation.
                 keyboardSession += 1
@@ -219,16 +234,14 @@ struct CalendarPopoverView: View {
             let editingText = panel.firstResponder is NSTextView || store.showingPreferences
             // Cmd+G — activate inline AI input (if enabled)
             if event.keyCode == 5 && modifiers == .command && store.showAISearch {
-                aiFieldActive = true
+                aiQueryModel.setEditorOpen(true)
                 return nil
             }
 
             switch event.keyCode {
             case 53:
-                if aiFieldActive {
-                    aiFieldActive = false
-                    aiQueryText = ""
-                    aiErrorMessage = nil
+                if aiQueryModel.isEditorOpen {
+                    aiQueryModel.discardEditor()
                     panel.deactivateTextInput()
                     return nil
                 }
@@ -386,16 +399,17 @@ struct CalendarPopoverView: View {
 
     private var aiQueryField: some View {
         CalendarDateSearchRow(
-            query: $aiQueryText, isActive: $aiFieldActive,
-            isProcessing: aiProcessing, error: $aiErrorMessage,
+            query: Binding(get: { aiQueryModel.draft }, set: { aiQueryModel.setDraft($0) }),
+            isActive: Binding(get: { aiQueryModel.isEditorOpen }, set: { aiQueryModel.setEditorOpen($0) }),
+            isProcessing: aiQueryModel.isProcessing, error: aiQueryModel.errorMessage,
             focused: $aiFieldFocused, onSubmit: {
                 // Invocation belongs to native onSubmit, never an open-row flag.
                 var context = keyboardContext()
                 context.editingText = false
                 guard context.allowsRouting else { return }
-                if let querySubmission { querySubmission(aiQueryText) }
-                else { submitAIQuery() }
+                submitAIQuery()
             },
+            onDismiss: { aiQueryModel.discardEditor() },
             onEditorAppear: {
                 if let editorPresentation {
                     editorPresentation { aiFieldFocused = true }
@@ -410,31 +424,18 @@ struct CalendarPopoverView: View {
         )
     }
 
+    private func synchronizeAISettings(_ enabled: Bool, _ preference: AIProvider) {
+        aiQueryModel.synchronizeSettings(enabled: enabled, preference: preference)
+        if store.showAISearch != enabled { store.send(.reloadPreferences) }
+    }
+
     private func submitAIQuery() {
-        let query = aiQueryText.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty, !aiProcessing else { return }
-        aiProcessing = true
-        aiErrorMessage = nil
-
-        guard AIDateHelper.activeProvider() != .none else {
-            aiProcessing = false
-            aiErrorMessage = "On-device AI is unavailable. Choose Cloud AI in Preferences."
-            return
-        }
-
-        aiTask?.cancel()
-        aiTask = Task { @MainActor in
-            let date = await AIDateHelper.parseNaturalLanguageDate(query)
-            guard !Task.isCancelled else { return }
-            aiProcessing = false
-            if let date {
-                aiQueryText = ""
-                aiFieldActive = false
-                store.send(.aiDateResult(date))
-            } else {
-                aiErrorMessage = "Couldn't parse that date. Try: \"next Friday\" or \"Jan 2028\""
-            }
-        }
+        aiQueryModel.setPanelVisible(panel?.isVisible == true)
+        let settings = loadAISettings()
+        synchronizeAISettings(settings.enabled, settings.preference)
+        let draft = aiQueryModel.draft
+        guard let task = aiQueryModel.submit() else { return }
+        querySubmissionObservation?(draft, task)
     }
 
     // MARK: - Calendar Section
@@ -1035,9 +1036,10 @@ struct CalendarDateSearchRow: View {
     @Binding var query: String
     @Binding var isActive: Bool
     let isProcessing: Bool
-    @Binding var error: String?
+    let error: String?
     let focused: FocusState<Bool>.Binding
     let onSubmit: () -> Void
+    let onDismiss: () -> Void
     let onEditorAppear: () -> Void
     var keyboardContext: () -> CalendarKeyboardContext = { .init(visible: false) }
     var keyboardObservation: ((CalendarKeyboardInvocation) -> Void)? = nil
@@ -1131,9 +1133,7 @@ struct CalendarDateSearchRow: View {
     private func openSearch() { isActive = true }
 
     private func dismissSearch() {
-        isActive = false
-        query = ""
-        error = nil
+        onDismiss()
         // Keep the reused panel's existing text activation/restoration lifecycle.
     }
 }

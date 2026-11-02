@@ -320,9 +320,14 @@ struct DateSearchFixtureRow: View {
     var body: some View {
         CalendarDateSearchRow(
             query: $fixture.query, isActive: $fixture.isActive,
-            isProcessing: fixture.isProcessing, error: $fixture.error,
+            isProcessing: fixture.isProcessing, error: fixture.error,
             focused: $focused,
             onSubmit: { fixture.submissions += 1 },
+            onDismiss: {
+                fixture.isActive = false
+                fixture.query = ""
+                fixture.error = nil
+            },
             onEditorAppear: { fixture.editorAppearances += 1 }
         )
     }

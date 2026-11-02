@@ -16,6 +16,8 @@ mkdir -p "$WORK_ROOT"
 WORK_DIR="$(mktemp -d "$WORK_ROOT/glimpse-quality.XXXXXX")"
 trap 'if [[ -e "$WORK_DIR/retain-keyboard-artifacts" ]]; then
   printf "Keyboard artifact staging retained: %s\n" "$WORK_DIR" >&2
+elif [[ -e "$WORK_DIR/retain-ai-date-search-integration-artifacts" ]]; then
+  printf "AI date search artifact staging retained: %s\n" "$WORK_DIR" >&2
 else
   rm -rf -- "$WORK_DIR"
 fi' EXIT
@@ -97,6 +99,64 @@ else
     --summary-exit "$summary_exit" --tests-exit "$tests_exit" \
     --log-exit "$keyboard_log_exit" || checker_exit=$?
   for phase_exit in "$keyboard_exit" "$keyboard_log_exit" "$summary_exit" "$tests_exit" "$checker_exit" "$artifact_exit"; do
+    if [[ "$phase_exit" != 0 ]]; then exit "$phase_exit"; fi
+  done
+fi
+AI_RECEIPT="$RESULT_DIR/ai-date-search-integration-acceptance.json"
+AI_SUITE="GlimpseTests/AIDateSearchIntegrationTests.swift"
+AI_MANIFEST="$ROOT/tools/scripts/ai-date-search-integration-methods.json"
+if [[ ! -e "$AI_SUITE" && ! -L "$AI_SUITE" && ! -e "$AI_MANIFEST" && ! -L "$AI_MANIFEST" ]]; then
+  printf '%s\n' '{"status":"NotApplicable","reason":"Legacy archive: both AI integration suite and method manifest absent"}' > "$AI_RECEIPT"
+elif [[ ! -f "$AI_SUITE" || -L "$AI_SUITE" || ! -f "$AI_MANIFEST" || -L "$AI_MANIFEST" ]]; then
+  printf '%s\n' '{"status":"Failed","reason":"AI integration suite and method manifest must both be regular files"}' > "$AI_RECEIPT"
+  exit 1
+else
+  HOST_ARCH="$(uname -m)"
+  mkdir -p "$WORK_DIR/ai-date-search-integration-artifacts"
+  # This suite owns a key panel: execute after keyboard acceptance in its own host.
+  if GLIMPSE_CALENDAR_KEYBOARD_ACCEPTANCE=1 TEST_RUNNER_GLIMPSE_CALENDAR_KEYBOARD_ACCEPTANCE=1 \
+    GLIMPSE_KEYBOARD_ARTIFACT_DIR="$WORK_DIR/ai-date-search-integration-artifacts" \
+    TEST_RUNNER_GLIMPSE_KEYBOARD_ARTIFACT_DIR="$WORK_DIR/ai-date-search-integration-artifacts" \
+    xcodebuild -project Glimpse.xcodeproj -scheme Glimpse -configuration Debug \
+      -destination "platform=macOS,arch=$HOST_ARCH" -derivedDataPath "$WORK_DIR/DerivedData" \
+      -skipMacroValidation -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile \
+      -parallel-testing-enabled NO -test-timeouts-enabled YES \
+      -default-test-execution-time-allowance 30 -maximum-test-execution-time-allowance 30 \
+      -only-testing:GlimpseTests/AIDateSearchIntegrationTests \
+      -resultBundlePath "$RESULT_DIR/AIDateSearchIntegrationTests.xcresult" \
+      "ARCHS=$HOST_ARCH" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO test \
+      2>&1 | tee "$RESULT_DIR/ai-date-search-integration-tests.log"; then
+    ai_pipeline=("${PIPESTATUS[@]}")
+  else
+    ai_pipeline=("${PIPESTATUS[@]}")
+  fi
+  ai_exit="${ai_pipeline[0]}"
+  ai_log_exit="${ai_pipeline[1]}"
+  # The unchanged collector accepts empty AI staging and proves owned-host absence.
+  touch "$WORK_DIR/retain-ai-date-search-integration-artifacts"
+  ai_artifact_exit=0
+  python3 "$SCRIPT_DIR/collect-keyboard-artifacts.py" \
+    --staging "$WORK_DIR/ai-date-search-integration-artifacts" \
+    --destination "$RESULT_DIR/ai-date-search-integration-artifacts" \
+    --host-executable "$WORK_DIR/DerivedData/Build/Products/Debug/Glimpse.app/Contents/MacOS/Glimpse" \
+    --manifest "$AI_MANIFEST" \
+    --native-exit "$ai_exit" --retain-marker "$WORK_DIR/retain-ai-date-search-integration-artifacts" \
+    --receipt "$RESULT_DIR/ai-date-search-integration-artifact-collection.json" \
+    > "$RESULT_DIR/ai-date-search-integration-artifact-collection.log" 2>&1 || ai_artifact_exit=$?
+  ai_summary_exit=0
+  xcrun xcresulttool get test-results summary --path "$RESULT_DIR/AIDateSearchIntegrationTests.xcresult" \
+    > "$RESULT_DIR/ai-date-search-integration-summary.json" 2> "$RESULT_DIR/ai-date-search-integration-xcresult.log" || ai_summary_exit=$?
+  ai_tests_exit=0
+  xcrun xcresulttool get test-results tests --path "$RESULT_DIR/AIDateSearchIntegrationTests.xcresult" \
+    > "$RESULT_DIR/ai-date-search-integration-tests.json" 2>> "$RESULT_DIR/ai-date-search-integration-xcresult.log" || ai_tests_exit=$?
+  ai_checker_exit=0
+  python3 "$SCRIPT_DIR/check-keyboard-xcresult.py" --suite AIDateSearchIntegrationTests \
+    --manifest "$AI_MANIFEST" \
+    --summary "$RESULT_DIR/ai-date-search-integration-summary.json" --tests "$RESULT_DIR/ai-date-search-integration-tests.json" \
+    --receipt "$AI_RECEIPT" --xcodebuild-exit "$ai_exit" \
+    --summary-exit "$ai_summary_exit" --tests-exit "$ai_tests_exit" \
+    --log-exit "$ai_log_exit" || ai_checker_exit=$?
+  for phase_exit in "$ai_exit" "$ai_log_exit" "$ai_summary_exit" "$ai_tests_exit" "$ai_checker_exit" "$ai_artifact_exit"; do
     if [[ "$phase_exit" != 0 ]]; then exit "$phase_exit"; fi
   done
 fi
