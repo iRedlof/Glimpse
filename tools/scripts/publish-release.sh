@@ -45,32 +45,18 @@ result = subprocess.run(["gh", "api", f"repos/{repo}/releases/generate-notes",
 notes = json.loads(result.stdout)["body"]
 pathlib.Path(output).write_text(notes + f"\n\n<!-- glimpse-run:{run} sha:{sha} -->\n")
 PY
-gh api "repos/$REPO/releases?per_page=100" > "$ARTIFACT_DIR/existing-releases.json"
-EXISTING_ID="$(python3 - "$ARTIFACT_DIR/existing-releases.json" "$VERSION" "$SOURCE_SHA" "$RUN_ID" <<'PY'
-import json, sys
-path, version, sha, run = sys.argv[1:]
-matches = [r for r in json.load(open(path)) if r["tag_name"] == "v" + version]
-if matches:
-    release = matches[0]
-    marker = f"<!-- glimpse-run:{run} sha:{sha} -->"
-    if not release["draft"] or marker not in (release.get("body") or ""):
-        raise SystemExit("Existing release is public or owned by a different workflow")
-    print(release["id"])
-PY
-)"
-if [[ -n "$EXISTING_ID" ]]; then
-  RELEASE_ID="$EXISTING_ID"
-  gh release edit "v$VERSION" --repo "$REPO" --draft --notes-file "$ARTIFACT_DIR/release-notes.md"
-else
-  gh release create "v$VERSION" --repo "$REPO" --target "$SOURCE_SHA" \
-    --draft --title "v$VERSION" --notes-file "$ARTIFACT_DIR/release-notes.md"
-  RELEASE_ID="$(gh api "repos/$REPO/releases/tags/v$VERSION" --jq '.id')"
+RELEASE_ID="$(python3 "$SCRIPT_DIR/release-control.py" draft --tag "v$VERSION" \
+  --notes-file "$ARTIFACT_DIR/release-notes.md")"
+if [[ ! "$RELEASE_ID" =~ ^[1-9][0-9]*$ ]]; then
+  RELEASE_ID=""
+  echo "Draft creation did not return a validated numeric release ID" >&2
+  exit 1
 fi
 printf 'release_id=%s\n' "$RELEASE_ID" >> "$GITHUB_OUTPUT"
 gh release upload "v$VERSION" --repo "$REPO" --clobber \
   "$ARTIFACT_DIR/Glimpse-$VERSION.dmg" "$ARTIFACT_DIR/appcast.xml" \
   "$ARTIFACT_DIR/release-manifest.json"
-python3 "$SCRIPT_DIR/release-control.py" verify --tag "v$VERSION" \
+python3 "$SCRIPT_DIR/release-control.py" verify --release-id "$RELEASE_ID" --tag "v$VERSION" \
   --directory "$ARTIFACT_DIR/draft-download"
 assert_current_source
 gh release edit "v$VERSION" --repo "$REPO" --draft=false --latest

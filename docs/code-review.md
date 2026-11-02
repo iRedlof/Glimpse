@@ -305,6 +305,35 @@ extracted app/DMG shell syntax and ShellCheck, actionlint and whitespace checks.
 No A4/A7/A8 code blocker remains; exact staged and hosted/public checks are
 independent requirements.
 
+The follow-up's normal hook and push/PR checks passed before PR #7 merged with
+the approved tree as `d0914230771993ee039ca4e5dfbe91f1d4504be0`.
+Release `41376023212` passed both app and DMG notarization, Sparkle signing
+and local signed-artifact verification. It then exposed a publication fixture
+gap: the offline model allowed a draft lookup by tag before publication, while
+GitHub returned 404 for the unpublished tag. Creation left empty private draft
+`431002599`; the lookup's JSON was incorrectly captured as `RELEASE_ID`.
+Automatic Recovery `41376385603` verified the exact failed source and unchanged
+v1.4.3 distribution. The next correction must use validated structured numeric
+draft IDs and prove recovery/ownership before handing a never-public tagless
+draft to an internal-only descendant workflow. No public release is accepted.
+
+The frozen correction uses structured REST creation/update receipts and explicit
+numeric IDs for private verification. Receipt validation is pure, so a later
+read failure retains the ID for withdrawal. Same-run retries require
+never-public/tagless state; different-run handoff additionally requires an empty
+draft, freshly verified distribution, exact failed run and source-scoped newest
+Recovery proof, internal ancestry and pre-mutation source/candidate checks.
+Ordinary admission retains its global newest-Recovery rule. Expected RED
+fixtures now model tag lookup returning 404 before publication and subsequent
+request failure. The developer reports 28 focused, 123 tooling and 27 monitoring
+tests passing with shell/whitespace checks; independent acceptance is pending.
+
+Independent frozen-diff A4/A7/A8 review found no scoped blocker and reran all
+123 tooling contracts and 27 monitoring fixtures successfully. Publisher
+Bash/ShellCheck, all-workflow actionlint, Python syntax and whitespace checks
+passed. These fixtures do not replace real GitHub handoff/publication or
+signed artifact acceptance.
+
 ## Enforcement and native limits
 
 The applied canonical main protection was independently read through GitHub API:

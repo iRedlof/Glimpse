@@ -154,3 +154,26 @@ each commit archive. Real harmless headless DMG packaging/mounting passed;
 signed publication remains open. The first-install exception stays until that
 publication succeeds. Native restart, interaction, signed Powerbox and soak
 acceptance remain unperformed; the crash reported on the other Mac is unknown.
+
+PR #7's headless/provenance correction passed its staged hook (57 app, 62 core,
+100 tooling and 27 monitoring tests), exact-source push checks and source/merge
+PR checks, then merged as `d0914230771993ee039ca4e5dfbe91f1d4504be0`.
+Release `41376023212` passed both notarizations, Sparkle and local artifact
+verification, then failed looking up a newly created draft by its unpublished
+tag. Automatic Recovery `41376385603` succeeded and verified public v1.4.3;
+empty private draft `431002599` is retained, with no v1.4.4 tag or publication.
+The next correction tracks drafts by validated numeric IDs and requires exact
+recovery/ownership proof for retained-draft handoff. First signed public
+publication remains an open deliverable.
+
+The frozen publisher correction uses structured numeric draft IDs and verifies
+private drafts by ID while retaining public tag/latest verification. Recovered
+handoff is limited to empty never-public tagless drafts, exact failed-run and
+Recovery proof, fresh healthy distribution and internal-only descendants.
+Its RED/GREEN fixtures cover the original failure and receipt-retention cleanup;
+28 focused, 123 tooling and 27 monitoring tests pass. Independent review,
+staged/hosted checks and first signed public verification remain pending.
+
+Independent frozen-diff QA passed all 123 tooling and 27 monitoring tests
+with static checks and no A4/A7/A8 blocker. Root refreshed the exact-main
+Recovery gate successfully. Staged/hosted and public gates remain open.

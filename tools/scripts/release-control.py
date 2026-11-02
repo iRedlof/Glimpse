@@ -180,9 +180,10 @@ def verify_healthy_release(github, repo, policy):
     return {**manifest, "tag": release["tag_name"], "release_id": release["id"]}
 
 
-def internal_only(github, repo, base, head):
+def internal_only(github, repo, base, head, require_descendant=False):
     comparison = github.api(f"repos/{repo}/compare/{base}...{head}")
-    require(comparison["status"] in ("ahead", "identical"), "Source is not descended from healthy release")
+    statuses = ("ahead",) if require_descendant else ("ahead", "identical")
+    require(comparison["status"] in statuses, "Source is not descended from the verified source")
     require(comparison.get("total_commits", 0) <= 250 and len(comparison.get("files", [])) < 300,
             "Source comparison is truncated; refusing internal-only classification")
     files = comparison.get("files", [])
@@ -200,10 +201,21 @@ def load_run_record(github, run, prefix, filename):
         return read_json(directory / filename)
 
 
-def verify_recovery(github, repo, failed_run, healthy, expected_sha):
+def verify_recovery(github, repo, failed_run, healthy, expected_sha, source_scoped=False):
     runs = github.api(f"repos/{repo}/actions/workflows/recovery.yml/runs?per_page=20")["workflow_runs"]
+    if source_scoped:
+        require(isinstance(runs, list) and len(runs) < 20,
+                "Recovery listing is truncated; refusing draft handoff")
+        require(all(isinstance(run, dict) and isinstance(run.get("head_sha"), str) and
+                    re.fullmatch(r"[0-9a-f]{40}", run["head_sha"])
+                    for run in runs), "Recovery listing identity is malformed")
+        runs = [run for run in runs if run["head_sha"] == expected_sha]
     require(runs, "Failed release has no verified recovery workflow")
     recovery = runs[0]
+    if source_scoped:
+        require(type(recovery.get("id")) is int and recovery["id"] > 0 and
+                type(recovery.get("run_attempt")) is int and recovery["run_attempt"] > 0 and
+                recovery.get("head_branch") == "main", "Recovery workflow identity is malformed")
     require_successful_run(recovery, expected_sha)
     require(recovery.get("path") == ".github/workflows/recovery.yml",
             "Recovery workflow identity mismatch")
@@ -217,6 +229,103 @@ def verify_recovery(github, repo, failed_run, healthy, expected_sha):
             record.get("recovery_run_id") == recovery["id"] and
             record.get("recovery_run_attempt") == recovery["run_attempt"] and
             record.get("rollback_verified") is True, "Recovery record identity mismatch")
+
+
+def release_identity(value):
+    require(type(value) is int and value > 0, "Release ID must be a positive integer")
+    return value
+
+
+def draft_owner(body):
+    require(isinstance(body, str) and body.count("<!-- glimpse-run:") == 1,
+            "Draft must have exactly one workflow ownership marker")
+    matches = re.findall(r"<!-- glimpse-run:([1-9][0-9]*) sha:([0-9a-f]{40}) -->", body)
+    require(len(matches) == 1, "Draft workflow ownership marker is malformed")
+    run, source = matches[0]
+    return int(run), source
+
+
+def require_tagless(github, repo, tag):
+    refs = github.api(f"repos/{repo}/git/matching-refs/tags/{urllib.parse.quote(tag, safe='')}")
+    require(isinstance(refs, list) and len(refs) < 100 and
+            all(isinstance(ref, dict) and isinstance(ref.get("ref"), str) for ref in refs),
+            "Tag reference listing is malformed or truncated")
+    require(not any(ref["ref"] == "refs/tags/" + tag for ref in refs),
+            "Release tag already exists; a previously published version cannot be reused")
+
+
+def private_draft_owner(release, tag, expected_id=None):
+    require(isinstance(release, dict), "Draft release response is malformed")
+    identity = release_identity(release.get("id"))
+    require(expected_id is None or identity == expected_id, "Draft release ID changed")
+    require(release.get("tag_name") == tag, "Draft release tag mismatch")
+    require(release.get("draft") is True and release.get("prerelease") is False,
+            "Release must remain a private stable draft")
+    require("published_at" in release and release["published_at"] is None,
+            "Previously published releases cannot be reused")
+    owner = draft_owner(release.get("body"))
+    require(release.get("target_commitish") == owner[1], "Draft release source mismatch")
+    return owner
+
+
+def prove_draft_handoff(github, repo, policy, release, owner, source):
+    run_id, old_source = owner
+    failed = github.api(f"repos/{repo}/actions/runs/{run_id}")
+    require(isinstance(failed, dict) and type(failed.get("id")) is int and
+            failed.get("id") == run_id and failed.get("head_sha") == old_source and
+            failed.get("status") == "completed" and
+            failed.get("conclusion") in ("failure", "cancelled", "timed_out") and
+            failed.get("head_branch") == "main" and failed.get("event") == "push" and
+            failed.get("path") == ".github/workflows/release.yml" and
+            type(failed.get("run_attempt")) is int and failed["run_attempt"] > 0,
+            "Draft owner is not the exact failed completed main Release run")
+    healthy = verify_healthy_release(github, repo, policy)
+    verify_recovery(github, repo, failed, healthy, old_source, source_scoped=True)
+    require(old_source != source and internal_only(github, repo, old_source, source, require_descendant=True),
+            "Draft handoff requires an internal-only descendant")
+    require(release.get("assets") == [], "Recovered draft handoff requires an empty draft")
+
+
+def prepare_draft(github, repo, policy, tag, source, run_id, notes):
+    """Create or transfer only a proven private draft; never touch tags or assets."""
+    require(re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag), "Invalid release tag")
+    require(re.fullmatch(r"[0-9a-f]{40}", source), "Invalid source SHA")
+    require(type(run_id) is int and run_id > 0, "Invalid workflow run ID")
+    require(draft_owner(notes) == (run_id, source), "New draft ownership marker mismatch")
+    releases = github.api(f"repos/{repo}/releases?per_page=100")
+    require(isinstance(releases, list) and len(releases) < 100 and
+            all(isinstance(release, dict) for release in releases),
+            "Release listing is malformed or truncated")
+    matches = [release for release in releases if release.get("tag_name") == tag]
+    require(len(matches) <= 1, "Ambiguous releases for the requested tag")
+    identity = None
+    if matches:
+        listed = matches[0]
+        identity = release_identity(listed.get("id"))
+        owner = private_draft_owner(listed, tag, identity)
+        release = github.api(f"repos/{repo}/releases/{identity}")
+        require(private_draft_owner(release, tag, identity) == owner and
+                release.get("body") == listed.get("body"), "Draft changed during ownership inspection")
+        if owner[0] == run_id:
+            require(owner[1] == source, "Same-run draft source mismatch")
+        else:
+            prove_draft_handoff(github, repo, policy, release, owner, source)
+        current = github.api(f"repos/{repo}/releases/{identity}")
+        require(private_draft_owner(current, tag, identity) == owner and
+                current.get("body") == release.get("body") and current.get("assets") == release.get("assets"),
+                "Draft changed before its ownership update")
+    require_tagless(github, repo, tag)
+    require(github.api(f"repos/{repo}/branches/main")["commit"]["sha"] == source,
+            "Main advanced during draft preparation")
+    fields = {"tag_name": tag, "target_commitish": source, "name": tag,
+              "body": notes, "draft": True, "prerelease": False}
+    endpoint = f"repos/{repo}/releases" + (f"/{identity}" if identity is not None else "")
+    response = github.api(endpoint, "PATCH" if identity is not None else "POST", fields)
+    receipt = release_identity(response.get("id") if isinstance(response, dict) else None)
+    require(private_draft_owner(response, tag, identity) == (run_id, source),
+            "Draft response ownership mismatch")
+    return receipt
+
 
 def prepare_bootstrap_recovery(github, repo, policy, failed=None, healthy=None, inspector_id=None):
     """Read-only proof for one audited failure predating installation of Recovery."""
@@ -367,6 +476,7 @@ def recover_release(github, repo, policy, failed_run_id):
 
 def withdraw(github, repo, release_id, source_sha, run_id, previous_tag):
     """Only hide this run's release. Never delete tags, assets, or rewrite source."""
+    release_identity(release_id)
     release = github.api(f"repos/{repo}/releases/{release_id}")
     marker = f"<!-- glimpse-run:{run_id} sha:{source_sha} -->"
     require(marker in (release.get("body") or ""), "Release is not owned by this workflow")
@@ -447,8 +557,18 @@ def download_public(url, destination):
     require(destination.is_file(), "Public release download produced no file")
 
 
-def verify_release(github, repo, policy, tag, directory, public=False, metadata_only=False):
-    release = github.api(f"repos/{repo}/releases/tags/{tag}")
+def verify_release(github, repo, policy, tag, directory, public=False, metadata_only=False, release_id=None):
+    if public:
+        require(release_id is None, "Public verification requires the actual release tag")
+        release = github.api(f"repos/{repo}/releases/tags/{tag}")
+    else:
+        release_identity(release_id)
+        release = github.api(f"repos/{repo}/releases/{release_id}")
+        owner = private_draft_owner(release, tag, release_id)
+        require(owner == (int(os.environ["GITHUB_RUN_ID"]), os.environ["GITHUB_SHA"]),
+                "Draft release ownership/source mismatch")
+        require_tagless(github, repo, tag)
+    require(release.get("tag_name") == tag, "Release tag mismatch")
     directory.mkdir(parents=True, exist_ok=True)
     names = [f"Glimpse-{tag.removeprefix('v')}.dmg", "appcast.xml", "release-manifest.json"]
     if public:
@@ -484,13 +604,14 @@ def verify_release(github, repo, policy, tag, directory, public=False, metadata_
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("gate", "version", "readiness", "manifest", "verify", "withdraw", "recover", "bootstrap-record", "classify"))
+    parser.add_argument("command", choices=("gate", "version", "readiness", "manifest", "draft", "verify", "withdraw", "recover", "bootstrap-record", "classify"))
     parser.add_argument("--policy", default=str(ROOT / ".github/release-policy.json"))
     parser.add_argument("--expected-sha")
     parser.add_argument("--ignore-run-id", type=int)
     parser.add_argument("--output")
     parser.add_argument("--directory", default="build/release")
     parser.add_argument("--tag")
+    parser.add_argument("--notes-file")
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--metadata-only", action="store_true")
     parser.add_argument("--release-id", type=int)
@@ -515,9 +636,12 @@ def main():
         print(json.dumps({"version": version, "build": build}))
     elif args.command == "manifest":
         create_manifest(args, repo)
+    elif args.command == "draft":
+        print(prepare_draft(github, repo, policy, args.tag, os.environ["GITHUB_SHA"],
+                            int(os.environ["GITHUB_RUN_ID"]), pathlib.Path(args.notes_file).read_text()))
     elif args.command == "verify":
         verify_release(github, repo, policy, args.tag, pathlib.Path(args.directory),
-                       args.public, args.metadata_only)
+                       args.public, args.metadata_only, args.release_id)
     elif args.command == "withdraw":
         withdraw(github, repo, args.release_id, os.environ["GITHUB_SHA"],
                  int(os.environ["GITHUB_RUN_ID"]), args.previous_tag)
