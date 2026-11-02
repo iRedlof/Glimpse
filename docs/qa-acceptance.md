@@ -35,13 +35,23 @@ Existing selector/verifier suites retain their failure contracts. The diff is
 internal-only; app/Core, pins, version/build and readiness are unchanged.
 Normal staged, hosted source/merge and whole final verification remain required.
 
+Hosted review then found that machine preflight could report readiness using
+an optional default-keychain identity despite the helper's mandatory explicit
+keychain contract. The correction reuses the policy-team selector and makes
+notarization, executable Sparkle tools, packaging and authenticated GitHub CLI
+mandatory. Twelve new contracts cover 29 byte-identical script executions;
+the baseline produced 27 expected assertion failures, then all 154 tooling
+and 27 monitoring tests passed. Credential commands are simulated; native
+preflight and private-key access were not exercised. Receipt:
+`build/validation/preflight-consistency.t0wbxl1n/receipt.json`.
+
 The final app log, `/tmp/glimpse-app-final.log`, records **57 passing tests in
 nine suites**, `TEST SUCCEEDED`, exit 0, after version 1.4.4/build 11 and the
 chosen-file diagnostics correction. Results:
 `/Volumes/xHome/Github/Glimpse/build/validation/app-validation-final-4.xcresult`.
 Core verification records **62 passing tests in five suites**, exit 0, in
 `/tmp/glimpse-core-green.log`; core source was unchanged afterward.
-Release tooling has **142 passing contracts** and monitoring has **27 passing
+Release tooling has **154 passing contracts** and monitoring has **27 passing
 fixtures**. Independent review also ran the contracts in a nongit staged-archive
 environment. A subsequent real-hook attempt exposed Git repository variables
 leaking into temporary fixture repositories. The commit was rejected; clearing

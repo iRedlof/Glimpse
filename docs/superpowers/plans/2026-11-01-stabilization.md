@@ -224,5 +224,13 @@ Normal staged and hosted source/merge checks and whole final verification
 remain mandatory. The offline helper commands and verifier callback are fakes;
 no native helper cryptographic validation is claimed.
 
+Hosted review caught a remaining preflight/helper prerequisite mismatch.
+The correction requires the same explicit policy-team keychain, notarization
+and tools, checks Sparkle metadata without reading its private key, and uses
+project-relative paths regardless of caller directory. Twelve new contracts
+cover 29 script executions; expected baseline failures preceded 154 tooling
+and 27 monitoring passes. Independent review and normal integration gates
+remain required; no native preflight credential validation was performed.
+
 Native UI, SavePanel/Powerbox, login/reboot, sleep/wake and sustained runtime
 acceptance remain open. The reported other Mac's crash cause is still unknown.

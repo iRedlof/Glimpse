@@ -189,11 +189,13 @@ For local validation or release preparation:
 
 ```bash
 ./tools/scripts/quality-gate.sh
-./tools/scripts/preflight.sh
+GLIMPSE_SIGNING_KEYCHAIN="/absolute/path/existing signing.keychain-db" ./tools/scripts/preflight.sh
 GLIMPSE_SIGNING_KEYCHAIN="/absolute/path/existing signing.keychain-db" ./tools/scripts/release-upload.sh
 ```
 
 The local release script requires clean committed source, completed readiness, the previous-release gate, all quality checks, existing Developer ID/Sparkle credentials, and the `AC_PASSWORD` notarization profile. Set `GLIMPSE_SIGNING_KEYCHAIN` to an absolute existing keychain file containing exactly one valid Developer ID Application identity for the team in `.github/release-policy.json`. That keychain and its private key must already be usable and available to Xcode's normal export search. The helper selects the exact certificate SHA for archive, export, and DMG signing; it does not import certificates, unlock keychains, or change their search list or access controls.
+
+Preflight uses the same keychain and policy-team identity selector. Missing notarization, executable Sparkle tools, `create-dmg`, or authenticated GitHub CLI access fails the check. Its Sparkle check reads key-entry metadata; the release helper verifies the final signature and enforces source admission, readiness and quality. Rerun preflight after any interactive `--setup` changes.
 
 Local packaging uses the styled Finder layout by default. Set `GLIMPSE_HEADLESS_DMG=1` to skip cosmetic Finder automation with `create-dmg --skip-jenkins`; both modes retain the app and Applications link. The setting accepts only `0` or `1`.
 

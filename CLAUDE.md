@@ -122,7 +122,7 @@ Uses shared Auris proxy at `proxy.auris.workers.dev/refine`. App secret is XOR-o
 - Secrets: `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD`, `SPARKLE_PRIVATE_KEY`, `APPLE_ID`, `APPLE_ID_PASSWORD`, `TEAM_ID`
 
 **Local (backup):**
-- `./tools/scripts/preflight.sh` — Checks all prerequisites (`--setup` for interactive guided setup)
+- `GLIMPSE_SIGNING_KEYCHAIN="/absolute/path/signing.keychain-db" ./tools/scripts/preflight.sh` — Checks mandatory machine prerequisites with the same policy-team identity selector; Sparkle metadata only (`--setup` for interactive guided setup, then rerun)
 - `./tools/scripts/release-upload.sh` — Builds, signs, creates DMG, generates appcast locally
 - Requires an absolute existing `GLIMPSE_SIGNING_KEYCHAIN` containing exactly one valid Developer ID Application identity for the policy team, usable private-key access, the existing `AC_PASSWORD` notarization profile, and the existing Sparkle key.
 - Archive and export use the selected certificate SHA with manual signing. Xcode export must already find the selected keychain through its normal search; the helper must not import/unlock credentials or alter keychain search lists/ACLs.
