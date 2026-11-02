@@ -1,22 +1,22 @@
 {
-  "version": "1.4.7",
-  "build": "14",
+  "version": "1.4.8",
+  "build": "15",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-01-event-query-cancellation-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-01-sandbox-diagnostics-acceptance.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-01-event-query-cancellation-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-01-sandbox-diagnostics-acceptance.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-01-event-query-cancellation-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-01-sandbox-diagnostics-acceptance.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-01-event-query-cancellation-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-01-sandbox-diagnostics-acceptance.md"
     }
   }
 }
