@@ -503,6 +503,7 @@ final class AboutUpdateHost: CustomTestStringConvertible {
     }
 
     func close() {
+        window.contentView = nil
         window.close()
     }
 

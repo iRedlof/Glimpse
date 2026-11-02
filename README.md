@@ -1,6 +1,6 @@
 # Glimpse
 
-[![Version](https://img.shields.io/badge/version-1.4.15-green)](https://github.com/iRedlof/Glimpse/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.4.16-green)](https://github.com/iRedlof/Glimpse/releases/latest)
 [![Download](https://img.shields.io/badge/download-DMG-brightgreen)](https://github.com/iRedlof/Glimpse/releases/latest)
 
 [![Release](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml/badge.svg)](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml)
@@ -14,6 +14,7 @@ A lightweight macOS menu bar calendar app. Click the date icon to see the curren
 
 - **Menu bar popover** with month grid, week numbers, and contoured month border
 - **Date selection** — click any day to see full date info and week number
+- **Keyboard date navigation** — Tab to the calendar grid, move between dates with arrow keys, and select with Return or Space; the focused date stays visible
 - **AI date search** — press ⌘G and type "next Friday" or "Christmas"
 - **Selected-day events** — EventKit integration shows events for the chosen day, with loading and retry states
 - **Global hotkey** — configurable shortcut (default ⌘⇧C) to toggle from anywhere
@@ -80,9 +81,9 @@ tools/scripts/quality-gate.sh
 cd GlimpseCore && swift test --force-resolved-versions
 ```
 
-The Swift suites currently run 57 app tests and 62 core tests. They use Swift Testing
-(`@Test`, `#expect`). Python fixture tests exercise release verification, recovery,
-and runtime monitoring. Both Swift dependency lockfiles are checked in and must stay aligned.
+App and core suites use Swift Testing (`@Test`, `#expect`). The quality gate also
+runs the isolated native keyboard suite and Python fixture tests for release
+verification, recovery, artifact collection, and runtime monitoring. Both Swift dependency lockfiles are checked in and must stay aligned.
 
 See [runtime monitoring](docs/monitoring.md), [QA baseline](docs/qa-baseline.md),
 and [stability roadmap](docs/stability-roadmap.md) for observation scope and acceptance criteria.
@@ -179,7 +180,7 @@ Install the local commit/push gates in each checkout:
 ./tools/scripts/install-release-hooks.sh
 ```
 
-The hooks query GitHub on every operation and block while the preceding remote release is pending or unverified. Pre-commit requires all source changes staged, tests an archive of the exact index, and rejects changes made while tests run. Hooks apply only to configured checkouts and can be bypassed with Git options or configuration. Hosted enforcement requires strict up-to-date pull requests, the required GitHub Actions checks `Previous release verified`, `Release tooling checks`, and `App and core tests`, and removal of direct-push/admin bypass. The admission controller comes from trusted main; first installation uses an exact administrator-pinned audited implementation commit. See [release automation](docs/release-automation.md) for setup and bootstrap details.
+Pre-commit requires all source changes staged, tests an archive of the exact index, and rejects source or index changes after testing. Local hooks make no release-health queries; pre-push is a no-op. Release admission runs at protected PR integration. Hooks apply only to configured checkouts and can be bypassed with Git options or configuration. Hosted enforcement requires strict up-to-date pull requests, the required GitHub Actions checks `Previous release verified`, `Release tooling checks`, and `App and core tests`, and removal of direct-push/admin bypass. The admission controller comes from trusted main; first installation uses an exact administrator-pinned audited implementation commit. See [release automation](docs/release-automation.md) for setup and bootstrap details.
 
 Coordinate manual Release dispatches/reruns while merges are paused. A run at unchanged main cannot invalidate an already-green pull request through static branch checks; an absolute hosted lock during those manual operations needs a dynamic merge coordinator or administrator-managed lock.
 

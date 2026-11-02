@@ -1,0 +1,271 @@
+{
+  "provenance": {
+    "scope": "Saved public xcresult metadata from the owned isolated keyboard fixture; no new native execution.",
+    "summary_sha256": "3bd4dd1d610511588d8c87f456450d82f1b01f00d307232df50b9a38c86566d3",
+    "tests_sha256": "c731605844f65c9a90f612a37b6a031f29e675dcd80fb179c6264d1fe3a0ec79"
+  },
+  "summary": {
+    "devicesAndConfigurations": [
+      {
+        "device": {
+          "architecture": "arm64",
+          "deviceId": "fixture-device",
+          "deviceName": "Owned fixture",
+          "modelName": "Mac Mini",
+          "osBuildNumber": "26A434",
+          "osVersion": "27.0.1",
+          "platform": "macOS"
+        },
+        "expectedFailures": 0,
+        "failedTests": 0,
+        "passedTests": 16,
+        "skippedTests": 0,
+        "testPlanConfiguration": {
+          "configurationId": "1",
+          "configurationName": "Test Scheme Action"
+        }
+      }
+    ],
+    "environmentDescription": "Glimpse \u00b7 Built with macOS 27.0.1",
+    "expectedFailures": 0,
+    "failedTests": 0,
+    "finishTime": 1793652667.049,
+    "passedTests": 14,
+    "result": "Passed",
+    "runtimeWarnings": [
+      {
+        "issueType": "Runtime Warning",
+        "message": "[Internal] Thread running at User-interactive quality-of-service class waiting on a lower QoS thread running at Default quality-of-service class. Investigate ways to avoid priority inversions",
+        "sourceURL": "file:///fixture/GlimpseTests/CalendarKeyboardOwnershipTests.swift"
+      }
+    ],
+    "skippedTests": 0,
+    "startTime": 1793652649.268,
+    "statistics": [
+      {
+        "subtitle": "4 test runs",
+        "title": "2 tests ran with dynamic parameters"
+      }
+    ],
+    "testFailures": [],
+    "title": "Test - Glimpse",
+    "topInsights": [],
+    "totalTestCount": 14
+  },
+  "tests": {
+    "devices": [
+      {
+        "architecture": "arm64",
+        "deviceId": "fixture-device",
+        "deviceName": "Owned fixture",
+        "modelName": "Mac Mini",
+        "osBuildNumber": "26A434",
+        "osVersion": "27.0.1",
+        "platform": "macOS"
+      }
+    ],
+    "testNodes": [
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "duration": "0.18s",
+                    "durationInSeconds": 0.17852997779846191,
+                    "name": "normalOpenRetainsBrowseMonthYearAndToday()",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/normalOpenRetainsBrowseMonthYearAndToday()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/normalOpenRetainsBrowseMonthYearAndToday()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.081s",
+                    "durationInSeconds": 0.0810699462890625,
+                    "name": "queuedTabAndImmediateArrowSpaceActivateNewLogicalDate()",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/queuedTabAndImmediateArrowSpaceActivateNewLogicalDate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/queuedTabAndImmediateArrowSpaceActivateNewLogicalDate()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.064s",
+                    "durationInSeconds": 0.06354999542236328,
+                    "name": "firstHeaderReturnUsesFocusedActionRatherThanToday()",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/firstHeaderReturnUsesFocusedActionRatherThanToday()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/firstHeaderReturnUsesFocusedActionRatherThanToday()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.16s",
+                    "durationInSeconds": 0.15792202949523926,
+                    "name": "heldHeaderSpaceActivatesOnceAndConsumesRepeat()",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/heldHeaderSpaceActivatesOnceAndConsumesRepeat()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/heldHeaderSpaceActivatesOnceAndConsumesRepeat()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.17s",
+                    "durationInSeconds": 0.1736619472503662,
+                    "name": "todayBecomingDisabledHasNoExtraTodayAction()",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/todayBecomingDisabledHasNoExtraTodayAction()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/todayBecomingDisabledHasNoExtraTodayAction()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.076s",
+                    "durationInSeconds": 0.07637405395507812,
+                    "name": "reverseTabReturnsToHeaderWithoutCustomTraversal()",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/reverseTabReturnsToHeaderWithoutCustomTraversal()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/reverseTabReturnsToHeaderWithoutCustomTraversal()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.13s",
+                    "durationInSeconds": 0.1281750202178955,
+                    "name": "gridExitAndReopenWithdrawOwnerBeforeBrowse()",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/gridExitAndReopenWithdrawOwnerBeforeBrowse()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/gridExitAndReopenWithdrawOwnerBeforeBrowse()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.094s",
+                    "durationInSeconds": 0.09400010108947754,
+                    "name": "settledTraversalCharacterizesGridBeforeImmediateArrowSpace()",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/settledTraversalCharacterizesGridBeforeImmediateArrowSpace()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/settledTraversalCharacterizesGridBeforeImmediateArrowSpace()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "children": [
+                      {
+                        "duration": "0.071s",
+                        "durationInSeconds": 0.07126188278198242,
+                        "name": ".keypadEnter",
+                        "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/gridReturnKeypadRepeatAndModifierOwnership(key:)?args=5d7a697a767b14338cb5d9e4fc0f3d390a54cdd9756dc8dd2faf6ff57dab7753",
+                        "nodeType": "Arguments",
+                        "result": "Passed"
+                      },
+                      {
+                        "duration": "0.089s",
+                        "durationInSeconds": 0.08852577209472656,
+                        "name": ".returnKey",
+                        "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/gridReturnKeypadRepeatAndModifierOwnership(key:)?args=16d732d4166997529d47c5f778de4e7f3739423b944ca025e937edcef7955514",
+                        "nodeType": "Arguments",
+                        "result": "Passed"
+                      }
+                    ],
+                    "duration": "0.08s",
+                    "durationInSeconds": 0.07989382743835449,
+                    "name": "gridReturnKeypadRepeatAndModifierOwnership(key:)",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/gridReturnKeypadRepeatAndModifierOwnership(key:)",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/gridReturnKeypadRepeatAndModifierOwnership(key:)",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.3s",
+                    "durationInSeconds": 0.2999000549316406,
+                    "name": "recorderPreferencesAndOwnedPeerKeepCalendarKeys()",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/recorderPreferencesAndOwnedPeerKeepCalendarKeys()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/recorderPreferencesAndOwnedPeerKeepCalendarKeys()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.08s",
+                    "durationInSeconds": 0.08022904396057129,
+                    "name": "repeatedVisibleShowRetainsGridFocusAndAnchor()",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/repeatedVisibleShowRetainsGridFocusAndAnchor()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/repeatedVisibleShowRetainsGridFocusAndAnchor()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "children": [
+                      {
+                        "name": "[Internal] Thread running at User-interactive quality-of-service class waiting on a lower QoS thread running at Default quality-of-service class. Investigate ways to avoid priority inversions",
+                        "nodeType": "Runtime Warning",
+                        "sourceLocation": {
+                          "filePath": "/fixture/GlimpseTests/CalendarKeyboardOwnershipTests.swift",
+                          "lineNumber": 958
+                        }
+                      }
+                    ],
+                    "duration": "0.43s",
+                    "durationInSeconds": 0.4331512451171875,
+                    "name": "nativeEditorSubmitEscapeAndHiddenReopen()",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/nativeEditorSubmitEscapeAndHiddenReopen()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/nativeEditorSubmitEscapeAndHiddenReopen()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "children": [
+                      {
+                        "duration": "0.23s",
+                        "durationInSeconds": 0.2348480224609375,
+                        "name": "312.0",
+                        "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/focusedLogicalDateStaysVisibleInCappedViewport(maximumHeight:)?args=865736a1c30a82dc67aba820360a01b1d9d0da5643234cd07c4d60b06eb530c5",
+                        "nodeType": "Arguments",
+                        "result": "Passed"
+                      },
+                      {
+                        "duration": "0.23s",
+                        "durationInSeconds": 0.22797822952270508,
+                        "name": "812.0",
+                        "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/focusedLogicalDateStaysVisibleInCappedViewport(maximumHeight:)?args=313c938e0103b56b43632b702e3e63447fab1f90a4fe890ca5abb7a6cf8830ee",
+                        "nodeType": "Arguments",
+                        "result": "Passed"
+                      }
+                    ],
+                    "duration": "0.23s",
+                    "durationInSeconds": 0.2314131259918213,
+                    "name": "focusedLogicalDateStaysVisibleInCappedViewport(maximumHeight:)",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/focusedLogicalDateStaysVisibleInCappedViewport(maximumHeight:)",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/focusedLogicalDateStaysVisibleInCappedViewport(maximumHeight:)",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.1s",
+                    "durationInSeconds": 0.10219287872314453,
+                    "name": "completionGuardsDoNotResetUnpreparedHiddenOrNonkeyPanels()",
+                    "nodeIdentifier": "CalendarKeyboardOwnershipTests/completionGuardsDoNotResetUnpreparedHiddenOrNonkeyPanels()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests/completionGuardsDoNotResetUnpreparedHiddenOrNonkeyPanels()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "CalendarKeyboardOwnershipTests",
+                "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/CalendarKeyboardOwnershipTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              }
+            ],
+            "name": "GlimpseTests",
+            "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests",
+            "nodeType": "Unit test bundle",
+            "result": "Passed"
+          }
+        ],
+        "name": "Glimpse",
+        "nodeType": "Test Plan",
+        "result": "Passed"
+      }
+    ],
+    "testPlanConfigurations": [
+      {
+        "configurationId": "1",
+        "configurationName": "Test Scheme Action"
+      }
+    ]
+  }
+}

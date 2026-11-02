@@ -14,9 +14,16 @@ if [[ -n "${GITHUB_OUTPUT:-}" ]]; then printf 'results_dir=%s\n' "$RESULT_DIR" >
 WORK_ROOT="${RUNNER_TEMP:-/tmp}"
 mkdir -p "$WORK_ROOT"
 WORK_DIR="$(mktemp -d "$WORK_ROOT/glimpse-quality.XXXXXX")"
-trap 'rm -rf -- "$WORK_DIR"' EXIT
+trap 'if [[ -e "$WORK_DIR/retain-keyboard-artifacts" ]]; then
+  printf "Keyboard artifact staging retained: %s\n" "$WORK_DIR" >&2
+else
+  rm -rf -- "$WORK_DIR"
+fi' EXIT
 mkdir -p "$WORK_DIR/tmp"
 export TMPDIR="$WORK_DIR/tmp"
+# Ordinary concurrent app tests must never inherit native keyboard research opt-ins.
+export GLIMPSE_CALENDAR_KEYBOARD_ACCEPTANCE=0 TEST_RUNNER_GLIMPSE_CALENDAR_KEYBOARD_ACCEPTANCE=0
+export GLIMPSE_KEYBOARD_MECHANISM_PROBE=0 TEST_RUNNER_GLIMPSE_KEYBOARD_MECHANISM_PROBE=0
 # Current orchestration owns cleanup; tooling under test belongs to the source archive.
 python3 -m unittest discover -s "$ROOT/tools/scripts/tests" -v
 python3 -m unittest discover -s "$ROOT/tools/monitoring" -p 'test_*.py' -v
@@ -34,6 +41,65 @@ xcodebuild -project Glimpse.xcodeproj -scheme Glimpse -destination 'platform=mac
   -skipMacroValidation -disableAutomaticPackageResolution \
   -resultBundlePath "$RESULT_DIR/AppTests.xcresult" CODE_SIGNING_ALLOWED=NO test \
   2>&1 | tee "$RESULT_DIR/app-tests.log"
+KEYBOARD_RECEIPT="$RESULT_DIR/keyboard-ownership-acceptance.json"
+if [[ ! -e Glimpse/CalendarKeyboardFocus.swift && ! -L Glimpse/CalendarKeyboardFocus.swift \
+   && ! -e GlimpseTests/CalendarKeyboardOwnershipTests.swift && ! -L GlimpseTests/CalendarKeyboardOwnershipTests.swift ]]; then
+  printf '%s\n' '{"status":"NotApplicable","reason":"Legacy archive: both keyboard focus and ownership suite absent"}' > "$KEYBOARD_RECEIPT"
+elif [[ ! -f Glimpse/CalendarKeyboardFocus.swift || ! -f GlimpseTests/CalendarKeyboardOwnershipTests.swift ]]; then
+  printf '%s\n' '{"status":"Failed","reason":"Keyboard focus and ownership suite must both exist"}' > "$KEYBOARD_RECEIPT"
+  exit 1
+else
+  HOST_ARCH="$(uname -m)"
+  mkdir -p "$WORK_DIR/keyboard-ownership-artifacts"
+  if GLIMPSE_CALENDAR_KEYBOARD_ACCEPTANCE=1 TEST_RUNNER_GLIMPSE_CALENDAR_KEYBOARD_ACCEPTANCE=1 \
+    GLIMPSE_KEYBOARD_ARTIFACT_DIR="$WORK_DIR/keyboard-ownership-artifacts" \
+    TEST_RUNNER_GLIMPSE_KEYBOARD_ARTIFACT_DIR="$WORK_DIR/keyboard-ownership-artifacts" \
+    xcodebuild -project Glimpse.xcodeproj -scheme Glimpse -configuration Debug \
+      -destination "platform=macOS,arch=$HOST_ARCH" -derivedDataPath "$WORK_DIR/DerivedData" \
+      -skipMacroValidation -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile \
+      -parallel-testing-enabled NO -test-timeouts-enabled YES \
+      -default-test-execution-time-allowance 30 -maximum-test-execution-time-allowance 30 \
+      -only-testing:GlimpseTests/CalendarKeyboardOwnershipTests \
+      -resultBundlePath "$RESULT_DIR/KeyboardOwnershipTests.xcresult" \
+      "ARCHS=$HOST_ARCH" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO test \
+      2>&1 | tee "$RESULT_DIR/keyboard-ownership-tests.log"; then
+    keyboard_pipeline=("${PIPESTATUS[@]}")
+  else
+    keyboard_pipeline=("${PIPESTATUS[@]}")
+  fi
+  keyboard_exit="${keyboard_pipeline[0]}"
+  keyboard_log_exit="${keyboard_pipeline[1]}"
+  # Native writes stay private; collect only after terminal execution and owned-host absence.
+  # Keep staging if collection cannot complete or the collector itself fails.
+  touch "$WORK_DIR/retain-keyboard-artifacts"
+  artifact_exit=0
+  python3 "$SCRIPT_DIR/collect-keyboard-artifacts.py" \
+    --staging "$WORK_DIR/keyboard-ownership-artifacts" \
+    --destination "$RESULT_DIR/keyboard-ownership-artifacts" \
+    --host-executable "$WORK_DIR/DerivedData/Build/Products/Debug/Glimpse.app/Contents/MacOS/Glimpse" \
+    --manifest "$ROOT/tools/scripts/keyboard-ownership-methods.json" \
+    --native-exit "$keyboard_exit" --retain-marker "$WORK_DIR/retain-keyboard-artifacts" \
+    --receipt "$RESULT_DIR/keyboard-ownership-artifact-collection.json" \
+    > "$RESULT_DIR/keyboard-ownership-artifact-collection.log" 2>&1 || artifact_exit=$?
+  # Retain raw metadata and a checker receipt even when build/extraction fails.
+  summary_exit=0
+  xcrun xcresulttool get test-results summary --path "$RESULT_DIR/KeyboardOwnershipTests.xcresult" \
+    > "$RESULT_DIR/keyboard-ownership-summary.json" 2> "$RESULT_DIR/keyboard-ownership-xcresult.log" || summary_exit=$?
+  tests_exit=0
+  xcrun xcresulttool get test-results tests --path "$RESULT_DIR/KeyboardOwnershipTests.xcresult" \
+    > "$RESULT_DIR/keyboard-ownership-tests.json" 2>> "$RESULT_DIR/keyboard-ownership-xcresult.log" || tests_exit=$?
+  checker_exit=0
+  # Current controller owns validation; the required methods belong to the exact source archive.
+  python3 "$SCRIPT_DIR/check-keyboard-xcresult.py" \
+    --manifest "$ROOT/tools/scripts/keyboard-ownership-methods.json" \
+    --summary "$RESULT_DIR/keyboard-ownership-summary.json" --tests "$RESULT_DIR/keyboard-ownership-tests.json" \
+    --receipt "$KEYBOARD_RECEIPT" --xcodebuild-exit "$keyboard_exit" \
+    --summary-exit "$summary_exit" --tests-exit "$tests_exit" \
+    --log-exit "$keyboard_log_exit" || checker_exit=$?
+  for phase_exit in "$keyboard_exit" "$keyboard_log_exit" "$summary_exit" "$tests_exit" "$checker_exit" "$artifact_exit"; do
+    if [[ "$phase_exit" != 0 ]]; then exit "$phase_exit"; fi
+  done
+fi
 (
   cd GlimpseCore
   swift test --scratch-path "$WORK_DIR/core" --cache-path "$BUILD_ROOT/swiftpm-cache" \

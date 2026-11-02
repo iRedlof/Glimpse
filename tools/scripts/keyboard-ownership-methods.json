@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "methods": {
+    "CalendarKeyboardOwnershipTests/normalOpenRetainsBrowseMonthYearAndToday()": 1,
+    "CalendarKeyboardOwnershipTests/queuedTabAndImmediateArrowSpaceActivateNewLogicalDate()": 1,
+    "CalendarKeyboardOwnershipTests/firstHeaderReturnUsesFocusedActionRatherThanToday()": 1,
+    "CalendarKeyboardOwnershipTests/reverseTabReturnsToHeaderWithoutCustomTraversal()": 1,
+    "CalendarKeyboardOwnershipTests/gridExitAndReopenWithdrawOwnerBeforeBrowse()": 1,
+    "CalendarKeyboardOwnershipTests/settledTraversalCharacterizesGridBeforeImmediateArrowSpace()": 1,
+    "CalendarKeyboardOwnershipTests/gridReturnKeypadRepeatAndModifierOwnership(key:)": 2,
+    "CalendarKeyboardOwnershipTests/recorderPreferencesAndOwnedPeerKeepCalendarKeys()": 1,
+    "CalendarKeyboardOwnershipTests/repeatedVisibleShowRetainsGridFocusAndAnchor()": 1,
+    "CalendarKeyboardOwnershipTests/nativeEditorSubmitEscapeAndHiddenReopen()": 1,
+    "CalendarKeyboardOwnershipTests/focusedLogicalDateStaysVisibleInCappedViewport(maximumHeight:)": 2,
+    "CalendarKeyboardOwnershipTests/completionGuardsDoNotResetUnpreparedHiddenOrNonkeyPanels()": 1,
+    "CalendarKeyboardOwnershipTests/heldHeaderSpaceActivatesOnceAndConsumesRepeat()": 1,
+    "CalendarKeyboardOwnershipTests/todayBecomingDisabledHasNoExtraTodayAction()": 1
+  }
+}
