@@ -71,6 +71,7 @@ enum DiagnosticsExport {
 
     static func export(
         to fileURL: URL,
+        hotkey: HotkeyDiagnosticSnapshot? = nil,
         collect: @Sendable () async throws -> LogResult = {
             try await collectLogs(
                 executableURL: URL(fileURLWithPath: "/usr/bin/log"),
@@ -100,10 +101,17 @@ enum DiagnosticsExport {
         lines.append("Display options: \(prefs.loadDisplayOptions())")
         lines.append("AI search enabled: \(prefs.loadShowAISearch())")
         lines.append("AI provider: \(prefs.loadAIProvider().rawValue)")
-        let hotkeyEnabled = UserDefaults.standard.object(forKey: "hotkeyEnabled") == nil
-            || UserDefaults.standard.bool(forKey: "hotkeyEnabled")
-        lines.append("Hotkey enabled: \(hotkeyEnabled)")
-        lines.append("Hotkey combo: \(HotkeyCombo.load().displayString)")
+        let hotkeySnapshot: HotkeyDiagnosticSnapshot
+        if let hotkey {
+            hotkeySnapshot = hotkey
+        } else {
+            hotkeySnapshot = await MainActor.run { GlobalHotkey.shared.snapshot() }
+        }
+        lines.append("Hotkey requested: \(hotkeySnapshot.requested)")
+        lines.append("Hotkey registered: \(hotkeySnapshot.registered)")
+        lines.append("Hotkey saved combo: \(hotkeySnapshot.savedCombo.displayString)")
+        lines.append("Hotkey active combo: \(hotkeySnapshot.activeCombo?.displayString ?? "(none)")")
+        lines.append("Hotkey registration error: \(hotkeySnapshot.error.map { String(describing: $0) } ?? "(none)")")
         lines.append("")
 
         // AI Provider

@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 import GlimpseCore
 import ServiceManagement
 import SwiftUI
@@ -339,171 +338,121 @@ struct PreferencesView: View {
     }
 
     // MARK: - Hotkey
-    // TODO: Extract hotkey recording into a dedicated HotkeyRecorderView
-    // to separate concerns (SRP). The recording state, NSEvent monitor lifecycle,
-    // and reserved shortcut validation are a self-contained subsystem.
 
-    @State private var hotkeyEnabled: Bool = {
-        UserDefaults.standard.object(forKey: "hotkeyEnabled") != nil
-            ? UserDefaults.standard.bool(forKey: "hotkeyEnabled")
-            : true
-    }()
-    @State private var isRecordingHotkey = false
-    @State private var hotkeyMonitor: Any?
-    @State private var hotkeyConflict: String?
-
-    /// System shortcuts that must not be overridden.
-    private static let reservedShortcuts: Set<HotkeyCombo> = {
-        let cmd = UInt32(cmdKey)
-        let cmdShift = UInt32(cmdKey | shiftKey)
-        return [
-            HotkeyCombo(keyCode: 12, modifiers: cmd),      // ⌘Q (Quit)
-            HotkeyCombo(keyCode: 13, modifiers: cmd),      // ⌘W (Close)
-            HotkeyCombo(keyCode: 4, modifiers: cmd),       // ⌘H (Hide)
-            HotkeyCombo(keyCode: 46, modifiers: cmd),      // ⌘M (Minimize)
-            HotkeyCombo(keyCode: 0, modifiers: cmd),       // ⌘A (Select All)
-            HotkeyCombo(keyCode: 8, modifiers: cmd),       // ⌘C (Copy)
-            HotkeyCombo(keyCode: 9, modifiers: cmd),       // ⌘V (Paste)
-            HotkeyCombo(keyCode: 7, modifiers: cmd),       // ⌘X (Cut)
-            HotkeyCombo(keyCode: 6, modifiers: cmd),       // ⌘Z (Undo)
-            HotkeyCombo(keyCode: 49, modifiers: cmd),      // ⌘Space (Spotlight)
-            HotkeyCombo(keyCode: 35, modifiers: cmd),      // ⌘P (Print)
-            HotkeyCombo(keyCode: 1, modifiers: cmd),       // ⌘S (Save)
-            HotkeyCombo(keyCode: 3, modifiers: cmd),       // ⌘F (Find)
-            HotkeyCombo(keyCode: 17, modifiers: cmd),      // ⌘T (New Tab)
-            HotkeyCombo(keyCode: 45, modifiers: cmd),      // ⌘N (New)
-            HotkeyCombo(keyCode: 31, modifiers: cmd),      // ⌘O (Open)
-            HotkeyCombo(keyCode: 4, modifiers: cmdShift),  // ⌘⇧H (Hide Others variant)
-        ]
-    }()
+    @State private var hotkeyPreferences = HotkeyPreferencesModel()
 
     private var hotkeyRow: some View {
-        VStack(spacing: AppDesign.Spacing.sm) {
+        VStack(alignment: .leading, spacing: AppDesign.Spacing.sm) {
             settingsRow {
                 Text("Global shortcut")
                 Spacer()
-                Toggle("", isOn: $hotkeyEnabled)
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .labelsHidden()
-                    .onChange(of: hotkeyEnabled) { _, enabled in
-                        if enabled {
-                            let combo = HotkeyCombo.load()
-                            GlobalHotkey.register(combo: combo) {
-                                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                                    appDelegate.calendarStatusItem.statusItemClicked()
-                                }
-                            }
-                        } else {
-                            GlobalHotkey.unregister()
-                        }
-                        UserDefaults.standard.set(enabled, forKey: "hotkeyEnabled")
-                    }
+                Toggle("Global shortcut", isOn: Binding(
+                    get: { hotkeyPreferences.isEnabled },
+                    set: { hotkeyPreferences.setEnabled($0) }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .labelsHidden()
+                .accessibilityLabel("Global shortcut")
+                .accessibilityValue(hotkeyPreferences.isEnabled ? "On" : "Off")
             }
 
-            if hotkeyEnabled {
-                Button {
-                    if isRecordingHotkey {
-                        stopRecording()
-                    } else {
-                        startRecording()
-                    }
-                } label: {
-                    Text(isRecordingHotkey ? "Press shortcut..." : GlobalHotkey.currentCombo.displayString)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .tracking(1.5)
-                        .foregroundStyle(
-                            isRecordingHotkey
-                                ? Color.accentColor
-                                : Color.primary
-                        )
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppDesign.Spacing.sm)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
-                                .fill(isRecordingHotkey
-                                    ? Color.accentColor.opacity(0.1)
-                                    : Color.secondary.opacity(0.12)
-                                )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
-                                .strokeBorder(
-                                    isRecordingHotkey ? Color.accentColor : Color.clear,
-                                    lineWidth: 1
-                                )
-                        )
+            Button {
+                if hotkeyPreferences.isRecording {
+                    hotkeyPreferences.cancelRecording()
+                } else {
+                    startRecording()
                 }
+            } label: {
+                Text(hotkeyRecorderLabel)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .tracking(hotkeyPreferences.isEnabled ? 1.5 : 0)
+                    .foregroundStyle(hotkeyPreferences.isRecording ? Color.accentColor : Color.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppDesign.Spacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
+                            .fill(hotkeyPreferences.isRecording
+                                ? Color.accentColor.opacity(0.1)
+                                : Color.secondary.opacity(0.12))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
+                            .strokeBorder(
+                                hotkeyPreferences.isRecording ? Color.accentColor : Color.clear,
+                                lineWidth: 1
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .contentShape(Rectangle())
+            .accessibilityLabel(hotkeyPreferences.isRecording
+                ? "Cancel shortcut recording"
+                : (hotkeyPreferences.isEnabled ? "Change global shortcut" : "Set and enable shortcut"))
+            .accessibilityValue(hotkeyPreferences.displayedCombo.displayString)
+            .accessibilityHint(hotkeyRecorderHint)
+
+            Text(hotkeyStatusText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if !hotkeyPreferences.isEnabled && hotkeyPreferences.isRequested {
+                Button("Keep shortcut off") {
+                    hotkeyPreferences.setEnabled(false)
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.accentColor)
+                .padding(.vertical, AppDesign.Spacing.xs)
+                .contentShape(Rectangle())
                 .buttonStyle(.plain)
                 .focusable(false)
+                .accessibilityLabel("Keep global shortcut off")
+            }
 
-                if let conflict = hotkeyConflict {
-                    Text(conflict)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
+            if let error = hotkeyPreferences.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
             }
         }
-        .onDisappear { stopRecording() }
+        .onDisappear { hotkeyPreferences.cancelRecording() }
         .onReceive(NotificationCenter.default.publisher(for: .calendarPanelWillHide)) { _ in
-            stopRecording()
+            hotkeyPreferences.cancelRecording()
         }
+    }
+
+    private var hotkeyRecorderLabel: String {
+        if hotkeyPreferences.isRecording { return "Press shortcut…" }
+        return hotkeyPreferences.isEnabled
+            ? hotkeyPreferences.displayedCombo.displayString : "Set and enable shortcut"
+    }
+
+    private var hotkeyRecorderHint: String {
+        if hotkeyPreferences.isRecording {
+            return "Press a key with a modifier. Press Escape or activate this button again to cancel."
+        }
+        return hotkeyPreferences.isEnabled
+            ? "Record another combination to replace the current global shortcut."
+            : "Record a combination to set and enable the global shortcut."
+    }
+
+    private var hotkeyStatusText: String {
+        if hotkeyPreferences.isRecording {
+            return "Include a modifier key. Press Escape to cancel."
+        }
+        if hotkeyPreferences.isEnabled {
+            return "On. \(hotkeyPreferences.displayedCombo.displayString) opens the calendar."
+        }
+        let saved = "Off. Saved shortcut: \(hotkeyPreferences.displayedCombo.displayString)."
+        return hotkeyPreferences.isRequested ? saved + " Glimpse will try it again next launch." : saved
     }
 
     private func startRecording() {
-        guard !isRecordingHotkey,
+        guard !hotkeyPreferences.isRecording,
               let panel = NSApplication.shared.keyWindow as? NSPanel,
               panel.isVisible else { return }
-        isRecordingHotkey = true
-        hotkeyConflict = nil
-        NotificationCenter.default.post(name: .hotkeyRecordingDidChange, object: true)
-        hotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak panel] event in
-            guard let panel, panel.isVisible,
-                  NSApplication.shared.keyWindow === panel,
-                  event.window === panel else { return event }
-            if event.keyCode == 53 {
-                stopRecording()
-                return nil
-            }
-            let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
-            guard !modifiers.isEmpty else { return event }
-
-            var carbonMods: UInt32 = 0
-            if modifiers.contains(.command) { carbonMods |= UInt32(cmdKey) }
-            if modifiers.contains(.shift) { carbonMods |= UInt32(shiftKey) }
-            if modifiers.contains(.option) { carbonMods |= UInt32(optionKey) }
-            if modifiers.contains(.control) { carbonMods |= UInt32(controlKey) }
-
-            let combo = HotkeyCombo(keyCode: UInt32(event.keyCode), modifiers: carbonMods)
-
-            if Self.reservedShortcuts.contains(combo) {
-                hotkeyConflict = "\(combo.displayString) is a system shortcut"
-                return nil
-            }
-            hotkeyConflict = nil
-            combo.save()
-
-            GlobalHotkey.register(combo: combo) {
-                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.calendarStatusItem.statusItemClicked()
-                }
-            }
-
-            stopRecording()
-            return nil
-        }
-    }
-
-    private func stopRecording() {
-        let wasRecording = isRecordingHotkey
-        isRecordingHotkey = false
-        if let monitor = hotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            hotkeyMonitor = nil
-        }
-        if wasRecording {
-            NotificationCenter.default.post(name: .hotkeyRecordingDidChange, object: false)
-        }
+        hotkeyPreferences.beginRecording(using: .live(panel: panel))
     }
 
     // MARK: - Branded Divider
