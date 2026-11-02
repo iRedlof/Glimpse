@@ -15,8 +15,19 @@ extension Notification.Name {
 
 @MainActor
 final class CalendarStatusItem {
+    struct PanelAnchor {
+        let statusItemFrame: NSRect
+        let visibleFrame: NSRect
+    }
+
     private var statusItem: NSStatusItem?
     private var panel: CalendarPanel?
+    private let anchorProvider: (@MainActor () -> PanelAnchor?)?
+    private let panelFactory: @MainActor (NSRect, CGFloat) -> CalendarPanel
+    private let toggleVisibility: (@MainActor (CalendarPanel) -> Bool)?
+    private let sameScreen: (@MainActor (CalendarPanel) -> Bool)?
+    private let crossScreenScheduler: (@MainActor (@escaping @MainActor () -> Void) -> Void)?
+    private var pendingCrossScreenShow: UUID?
     private var midnightTimer: Timer?
     private var displayChangeObserver: Any?
     private var wakeObserver: Any?
@@ -33,6 +44,22 @@ final class CalendarStatusItem {
     // into testable static methods instead of injecting clients here.
     private let preferencesClient = PreferencesClient.liveValue
     private let calendarClient = CalendarClient.liveValue
+
+    init(
+        anchorProvider: (@MainActor () -> PanelAnchor?)? = nil,
+        panelFactory: @escaping @MainActor (NSRect, CGFloat) -> CalendarPanel = {
+            CalendarPanel(contentRect: $0, caretOffset: $1)
+        },
+        toggleVisibility: (@MainActor (CalendarPanel) -> Bool)? = nil,
+        sameScreen: (@MainActor (CalendarPanel) -> Bool)? = nil,
+        crossScreenScheduler: (@MainActor (@escaping @MainActor () -> Void) -> Void)? = nil
+    ) {
+        self.anchorProvider = anchorProvider
+        self.panelFactory = panelFactory
+        self.toggleVisibility = toggleVisibility
+        self.sameScreen = sameScreen
+        self.crossScreenScheduler = crossScreenScheduler
+    }
 
     deinit {
         if let screenParametersObserver {
@@ -193,18 +220,33 @@ final class CalendarStatusItem {
     }
 
     @objc func statusItemClicked() {
+        pendingCrossScreenShow = nil
         guard let panel else {
             showPanel()
             return
         }
 
-        let isVisible = panel.occlusionState.contains(.visible) && panel.isVisible
+        let isVisible = toggleVisibility?(panel)
+            ?? (panel.occlusionState.contains(.visible) && panel.isVisible)
 
         if isVisible {
-            if !isOnSameScreen(panel) {
+            if !(sameScreen?(panel) ?? isOnSameScreen(panel)) {
+                let requestID = UUID()
+                pendingCrossScreenShow = requestID
                 panel.orderOut(nil)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                    self?.showPanel()
+                let completion: @MainActor () -> Void = { [weak self] in
+                    guard let self, self.pendingCrossScreenShow == requestID else { return }
+                    self.pendingCrossScreenShow = nil
+                    do {
+                        try self.showCalendar()
+                    } catch {
+                        AppLogger.statusItem.error("Cannot show calendar: \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+                if let crossScreenScheduler {
+                    crossScreenScheduler(completion)
+                } else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { completion() }
                 }
                 return
             }
@@ -215,6 +257,21 @@ final class CalendarStatusItem {
         } else {
             showPanel()
         }
+    }
+
+    /// Explicit Show preserves an ordered-in panel even when another window occludes it.
+    func showCalendar() throws {
+        pendingCrossScreenShow = nil
+        if let panel, panel.isVisible {
+            if let anchor = currentPanelAnchor() {
+                panel.updatePlacement(
+                    statusItemFrame: anchor.statusItemFrame, visibleFrame: anchor.visibleFrame
+                )
+            }
+            panel.makeKeyAndOrderFront(nil)
+            return
+        }
+        try presentHiddenPanel()
     }
 
     private func isOnSameScreen(_ panel: CalendarPanel) -> Bool {
@@ -237,33 +294,48 @@ final class CalendarStatusItem {
         return NSScreen.screens.first { $0.frame.contains(testPoint) } ?? NSScreen.main
     }
 
-    private func showPanel() {
+    private func currentPanelAnchor() -> PanelAnchor? {
+        if let anchorProvider { return anchorProvider() }
         guard let button = statusItem?.button,
               let buttonWindow = button.window
-        else { return }
+        else { return nil }
 
         let statusItemRect = buttonWindow.convertToScreen(
             button.convert(button.bounds, to: nil)
         )
+        guard let screen = currentStatusItemScreen() ?? NSScreen.main else { return nil }
+        return PanelAnchor(statusItemFrame: statusItemRect, visibleFrame: screen.visibleFrame)
+    }
 
-        guard let screen = currentStatusItemScreen() ?? NSScreen.main else { return }
+    private func showPanel() {
+        do {
+            try presentHiddenPanel()
+        } catch {
+            AppLogger.statusItem.error("Cannot show calendar: \(error.localizedDescription, privacy: .public)")
+        }
+    }
 
+    private func presentHiddenPanel() throws {
+        guard let anchor = currentPanelAnchor() else { throw CalendarShowError.unavailableAnchor }
         guard let placement = PanelGeometry.placement(
-            statusItemFrame: statusItemRect, visibleFrame: screen.visibleFrame,
+            statusItemFrame: anchor.statusItemFrame, visibleFrame: anchor.visibleFrame,
             desiredHeight: panel?.layoutState.totalHeight
                 ?? CalendarPanel.panelHeight + CalendarPanel.caretHeight
         ) else {
-            AppLogger.statusItem.error("Cannot show panel with invalid screen geometry")
-            return
+            throw CalendarShowError.invalidGeometry
         }
-        if panel == nil {
-            panel = CalendarPanel(
-                contentRect: placement.frame, caretOffset: placement.caretXOffset
-            )
+        let calendarPanel: CalendarPanel
+        if let panel {
+            calendarPanel = panel
+        } else {
+            calendarPanel = panelFactory(placement.frame, placement.caretXOffset)
+            panel = calendarPanel
         }
-        panel?.prepareForReopen()
-        panel?.updatePlacement(statusItemFrame: statusItemRect, visibleFrame: screen.visibleFrame)
-        panel?.makeKeyAndOrderFront(nil)
+        calendarPanel.prepareForReopen()
+        calendarPanel.updatePlacement(
+            statusItemFrame: anchor.statusItemFrame, visibleFrame: anchor.visibleFrame
+        )
+        calendarPanel.makeKeyAndOrderFront(nil)
     }
 
     /// Refresh an already visible panel without sending the reopen/reset action.
