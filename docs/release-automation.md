@@ -60,6 +60,22 @@ AppleScript on a CI runner. The image still contains the app and an Applications
 shortcut; custom Finder icon positioning is omitted. App/DMG notarization,
 stapling, Sparkle signing and local/draft/public verification remain mandatory.
 
+GitHub can defer a new tag until publication. Drafts therefore use a validated
+positive numeric release ID from structured REST creation/update output;
+verification by ID still checks the expected tag, exact target source and
+workflow ownership. Public verification continues to use the actual tag and
+latest-release URLs.
+
+A retained draft may be reused only while it has never been public and has no
+exact tag. A different run additionally needs the old failed main Release's
+exact identity, an empty draft, and a successful Recovery job/attempt/record bound to that source
+and the freshly verified healthy distribution. Its new source must be an
+internal-only descendant. The handoff rechecks current main and the draft by ID
+before updating its target and ownership marker together. Ambiguous/truncated
+listings, unowned or public drafts, missing/mismatched recovery and app-source
+changes fail closed. A withdrawn release that reached public distribution
+requires a corrected higher build.
+
 The latest pre-existing v1.4.3 was independently audited on 2026-11-01:
 source/tag/main SHA `1eaae2643625f435c3a5b176b7f63b5de1ebcd21`,
 workflow run `30221537836`, version 1.4.3/build 10, matching GitHub digests,

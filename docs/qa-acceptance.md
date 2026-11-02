@@ -11,7 +11,7 @@ chosen-file diagnostics correction. Results:
 `/Volumes/xHome/Github/Glimpse/build/validation/app-validation-final-4.xcresult`.
 Core verification records **62 passing tests in five suites**, exit 0, in
 `/tmp/glimpse-core-green.log`; core source was unchanged afterward.
-Release tooling has **100 passing contracts** and monitoring has **27 passing
+Release tooling has **123 passing contracts** and monitoring has **27 passing
 fixtures**. Independent review also ran the contracts in a nongit staged-archive
 environment. A subsequent real-hook attempt exposed Git repository variables
 leaking into temporary fixture repositories. The commit was rejected; clearing
@@ -143,3 +143,42 @@ contact Apple's notarization service.
 Independent final A4/A7/A8 QA passed all 100 tooling contracts and 27 monitoring
 fixtures, scoped shell checks, actionlint and whitespace checks. It found no
 code blocker. Exact staged app/core and hosted/public checks remain mandatory.
+
+The headless/provenance follow-up passed its real staged hook (57 app, 62 core,
+100 tooling and 27 monitoring tests) and both hosted push/PR workflows.
+PR #7 merged as `d0914230771993ee039ca4e5dfbe91f1d4504be0`.
+Release `41376023212` attempt 1 passed app/DMG notarization, Sparkle signing
+and local artifact verification, then failed after creating empty private draft
+`431002599`: its unpublished tag-based REST lookup returned 404 and supplied
+invalid JSON as the release ID. Upload and publication were skipped.
+Automatic Recovery `41376385603` attempt 1 passed for the exact failed source.
+The draft remains private and empty; v1.4.3 remains latest and v1.4.4 has no tag.
+Publisher ID/retained-draft handling and actual signed public verification
+remain separate requirements.
+
+Root independently read the signed local exported candidate for source
+`d0914230771993ee039ca4e5dfbe91f1d4504be0`, version 1.4.4/build 11.
+Strict signature verification passed, and its embedded sandbox, network-client,
+user-selected read/write and calendar entitlements all match the source.
+Evidence: `build/validation/local-signed-entitlements-d091.json` in the original
+checkout's external validation storage. This does not exercise SavePanel,
+Powerbox or the app UI and does not verify a public download.
+
+The draft-identity correction reproduced the unpublished-tag 404 and invalid
+release-ID failure before changing production code. A second failing fixture
+exposed loss of a valid creation receipt when a later metadata request failed.
+The corrected publisher passes 28 focused, 123 full tooling and 27 monitoring
+tests, Bash syntax, ShellCheck and whitespace checks. Stateful offline fixtures
+now run successful anonymous publication/download verification as well as
+creation, upload, verification and publication failures. They enforce positive
+integer IDs, unique exact ownership markers, never-public/tagless retry state,
+and empty-draft handoff with matching failed-run/Recovery/healthy-release proof,
+internal ancestry and final source/candidate checks. Public download commands
+are stubbed in these fixtures; independent review, exact staged-source checks,
+hosted checks and real signed public verification remain required.
+
+Independent frozen-diff A4/A7/A8 QA passed all 123 tooling contracts and
+27 monitoring fixtures, publisher Bash/ShellCheck, all-workflow actionlint,
+Python syntax and whitespace checks. No scoped code blocker was found.
+Root's fresh exact-main gate independently verified Recovery before staging.
+Real GitHub draft handoff and signed public-artifact acceptance remain pending.

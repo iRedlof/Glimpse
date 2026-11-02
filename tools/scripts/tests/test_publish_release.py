@@ -27,6 +27,10 @@ def release():
     return r
 if a[0] == "api":
     endpoint = a[1]
+    method = a[a.index("--method")+1] if "--method" in a else "GET"
+    s.setdefault("requests", []).append({"endpoint": endpoint, "method": method,
+                                       "draft": s["release"]["draft"] if s["release"] else None})
+    save()
     if "/branches/main" in endpoint:
         if "--jq" in a: print(s["main"])
         else: output({"commit": {"sha": s["main"]}})
@@ -35,17 +39,45 @@ if a[0] == "api":
     elif endpoint.endswith("/releases?per_page=100"):
         output([release()] if s["release"] else [])
     elif endpoint.endswith("/releases/latest"):
-        output({"id": 7, "tag_name": "v1.4.3"})
+        output(release() if s["release"] and not s["release"]["draft"]
+               else {"id": 7, "tag_name": "v1.4.3"})
+    elif endpoint.endswith("/releases") and method == "POST":
+        if s["mode"] == "create-failure":
+            output({"message": "Create failed"})
+            sys.exit(1)
+        fields = json.load(sys.stdin)
+        s["release"] = {**fields, "id": 8, "published_at": None}
+        s["events"].append("create-draft")
+        save()
+        response = release()
+        malformed = {"create-id-string": "8", "create-id-bool": True,
+                     "create-id-zero": 0, "create-id-negative": -1}
+        if s["mode"] in malformed: response["id"] = malformed[s["mode"]]
+        if s["mode"] == "create-error-response": response = {"message": "Bad response"}
+        output(response)
     elif "/git/matching-refs/tags/" in endpoint:
-        output([] if s["release"]["draft"] else [{"ref": "refs/tags/v1.4.4"}])
+        if s["mode"] == "tag-probe-failure" and s["release"] and "tag-probe-failure" not in s["events"]:
+            s["events"].append("tag-probe-failure")
+            save()
+            output({"message": "Tag readback failed"})
+            sys.exit(1)
+        output([] if not s["release"] or s["release"]["draft"] else [{"ref": "refs/tags/v1.4.4"}])
     elif "/git/ref/tags/" in endpoint:
         output({"object": {"type": "commit", "sha": s["release"]["target_commitish"]}})
     elif "/releases/tags/" in endpoint or endpoint.endswith("/releases/8"):
-        if "--method" in a and a[a.index("--method")+1] == "PATCH":
+        if "/releases/tags/" in endpoint and s["release"]["draft"]:
+            output({"message": "Not Found", "status": "404"})
+            sys.exit(1)
+        if method == "GET" and s["mode"] == "readback-failure" and "readback-failure" not in s["events"]:
+            s["events"].append("readback-failure")
+            save()
+            output({"message": "Readback failed"})
+            sys.exit(1)
+        if method == "PATCH":
             if s["mode"] == "withdraw-failure": sys.exit(1)
             fields = json.load(sys.stdin)
             s["release"].update(fields)
-            s["events"].append("withdraw")
+            s["events"].append("withdraw" if fields.get("make_latest") == "false" else "update-draft")
             save()
         if "--jq" in a: print(s["release"]["id"])
         else: output(release())
@@ -53,6 +85,7 @@ if a[0] == "api":
 elif a[0:2] == ["release", "create"]:
     notes = pathlib.Path(a[a.index("--notes-file")+1]).read_text()
     s["release"] = {"id": 8, "tag_name": "v1.4.4", "draft": True,
+                    "prerelease": False, "published_at": None,
                     "target_commitish": a[a.index("--target")+1], "body": notes}
     s["events"].append("create-draft")
     save()
@@ -78,6 +111,7 @@ elif a[0:2] == ["release", "download"]:
 elif a[0:2] == ["release", "edit"]:
     if "--draft=false" in a:
         s["release"]["draft"] = False
+        s["release"]["published_at"] = "2026-11-02T01:00:00Z"
         s["events"].append("publish")
     save()
 else: sys.exit(3)
@@ -90,8 +124,25 @@ class PublicationFailureContracts(unittest.TestCase):
         self.root = pathlib.Path(self.temp.name)
         self.scripts = self.root / "tools/scripts"
         self.scripts.mkdir(parents=True)
-        for name in ("release-control.py", "publish-release.sh"):
-            shutil.copy(SCRIPTS / name, self.scripts / name)
+        shutil.copy(SCRIPTS / "publish-release.sh", self.scripts / "publish-release.sh")
+        shutil.copy(SCRIPTS / "release-control.py", self.scripts / "release-control-implementation.py")
+        # Keep real controller/CLI decisions; replace only anonymous network transport.
+        (self.scripts / "release-control.py").write_text("""import base64,importlib.util,json,os,pathlib,sys
+spec=importlib.util.spec_from_file_location('controller',pathlib.Path(__file__).with_name('release-control-implementation.py'))
+controller=importlib.util.module_from_spec(spec)
+spec.loader.exec_module(controller)
+def download(url,destination):
+    state=json.loads(pathlib.Path(os.environ['FAKE_GH_STATE']).read_text())
+    if state['mode'] in ('public-health-failure','withdraw-failure'):
+        raise controller.ReleaseError('Fixture public download failed')
+    destination.write_bytes(base64.b64decode(state['assets'][url.rsplit('/',1)[-1]]))
+controller.download_public=download
+try:
+    controller.main()
+except Exception as error:
+    print(f'Release gate blocked: {error}',file=sys.stderr)
+    sys.exit(1)
+""")
         # macOS artifact commands are exercised by live audit separately.
         verifier = self.scripts / "verify-dmg.sh"
         verifier.write_text("#!/bin/bash\nexit 0\n")
@@ -178,6 +229,54 @@ class PublicationFailureContracts(unittest.TestCase):
         self.assertIn("Main advanced", result.stderr)
         self.assertTrue(state["release"]["draft"])
         self.assertNotIn("publish", state["events"])
+
+    def test_tagless_draft_publishes_successfully_using_response_id(self):
+        result, state = self.run_release("success")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(state["release"]["draft"])
+        self.assertIn("publish", state["events"])
+        self.assertIn("release_id=8\n", (self.root / "output").read_text())
+        self.assertIn("release_verified=true\n", (self.root / "output").read_text())
+        self.assertTrue(any(request["endpoint"].endswith("/releases/8")
+                            for request in state["requests"]))
+        self.assertFalse(any("/releases/tags/" in request["endpoint"] and request["draft"]
+                             for request in state["requests"]))
+
+    def test_invalid_create_response_cannot_reach_output_upload_or_publication(self):
+        for mode in ("create-id-string", "create-id-bool", "create-id-zero",
+                     "create-id-negative", "create-error-response", "create-failure"):
+            with self.subTest(mode=mode):
+                (self.root / "output").unlink(missing_ok=True)
+                result, state = self.run_release(mode)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((self.root / "output").exists())
+                self.assertNotIn("upload", state["events"])
+                self.assertNotIn("publish", state["events"])
+                self.assertNotIn("invalid int value", result.stderr)
+                if state["release"]:
+                    self.assertTrue(state["release"]["draft"])
+
+    def test_readback_failure_withdraws_using_validated_numeric_id(self):
+        result, state = self.run_release("readback-failure")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue((self.root / "output").is_file(), result.stdout + result.stderr)
+        self.assertIn("release_id=8\n", (self.root / "output").read_text())
+        self.assertTrue(state["release"]["draft"])
+        self.assertNotIn("publish", state["events"])
+        self.assertNotIn("invalid int value", result.stderr)
+        self.assertGreaterEqual(len([request for request in state["requests"]
+                                     if request["endpoint"].endswith("/releases/8")]), 2)
+
+    def test_tag_probe_failure_after_receipt_keeps_validated_id_for_cleanup(self):
+        result, state = self.run_release("tag-probe-failure")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue((self.root / "output").is_file(), result.stdout + result.stderr)
+        self.assertIn("release_id=8\n", (self.root / "output").read_text())
+        self.assertTrue(state["release"]["draft"])
+        self.assertNotIn("publish", state["events"])
+        self.assertNotIn("invalid int value", result.stderr)
+        self.assertGreaterEqual(len([request for request in state["requests"]
+                                     if request["endpoint"].endswith("/releases/8")]), 2)
 
 
 if __name__ == "__main__":

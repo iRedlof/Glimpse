@@ -162,6 +162,45 @@ Independent final QA passed all 100 tooling contracts and 27 monitoring fixtures
 scoped shell checks, actionlint and whitespace checks, with no A4/A7/A8 blocker.
 Exact staged app/core and hosted/public verification remain required.
 
+The headless/provenance follow-up's normal staged hook passed 57 app, 62 core,
+100 tooling and 27 monitoring tests for `0254d13646eb485fd46dc902207b69b508bb508f`.
+Push Quality `41375591195` and PR Quality `41375608038` passed; downloaded
+artifacts record that source and merge `de287b3906bb369acb71d3ebbac199ad9929f12c`,
+matching requested/tested SHAs, immutable pins, retained results and removed
+scratch. PR #7 merged normally as `d0914230771993ee039ca4e5dfbe91f1d4504be0`
+with the approved tree.
+
+Release `41376023212` attempt 1 passed source quality, signing, app and DMG
+notarization, Sparkle signing and local artifact verification. It created draft
+`431002599`, then a tag-based REST lookup returned 404 because GitHub had not
+created the unpublished tag. The failed lookup's JSON entered `RELEASE_ID`;
+the EXIT trap could not parse it as an integer. No upload or publication ran.
+Automatic Recovery `41376385603` attempt 1 succeeded and bound the exact failed
+source/run/attempt to unchanged public v1.4.3. Root and the release specialist
+independently verified the record and refreshed the gate.
+
+The retained draft is private, empty, never published and targeted at the exact
+failed source, with its run/source ownership marker; no v1.4.4 tag exists.
+The publisher correction captures a validated numeric ID from structured
+creation/update output and uses that ID for draft verification. Reusing the
+retained empty draft requires exact failed-run and successful-Recovery proof,
+no public history/tag, a freshly verified healthy distribution and an
+internal-only descendant source. Same-run retries also require never-public,
+tagless drafts. Current main and the draft identity are rechecked before
+updating its target and ownership marker together. Arbitrary draft adoption
+is forbidden. Public verification continues to use actual tag/latest URLs.
+
+Expected failing fixtures reproduced the original 404/error-JSON failure and
+a subsequent receipt-retention cleanup gap. The frozen correction passes
+28 focused, 123 full tooling and 27 monitoring tests plus Bash syntax,
+ShellCheck and whitespace checks. Independent review, normal staged/hosted
+checks and signed public verification remain open.
+
+Independent frozen-diff A4/A7/A8 QA found no blocker and passed all 123 tooling
+contracts, 27 monitoring fixtures and scoped static checks. Root's refreshed
+exact-main Recovery gate passed before staging. Normal staged and hosted
+checks and signed public verification remain mandatory.
+
 Constraints: no signing-key generation, no installed-app mutation, no destructive
 source reverts. Product, UX, code,
 and QA readiness require explicit evidence. GitHub concurrency retains only
