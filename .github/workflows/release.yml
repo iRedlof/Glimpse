@@ -10,8 +10,8 @@ permissions:
   actions: read
   statuses: read
 
-# GitHub retains one running and one pending run; local hooks prevent normal
-# pushes from filling that queue before the previous release is verified.
+# Protected PR admission serializes ordinary main integration around verified
+# delivery; Release and Recovery share this non-cancelling concurrency group.
 concurrency:
   group: glimpse-release-main
   cancel-in-progress: false
