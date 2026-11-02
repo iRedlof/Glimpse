@@ -262,6 +262,49 @@ all 91 tooling contracts, 27 monitoring fixtures, Bash syntax, ShellCheck on
 all five changed workflow blocks and actionlint. Full staged-source checks and
 real signed publication remain independent gates.
 
+The signing correction's normal staged hook passed 57 app, 62 core, 91 tooling
+and 27 monitoring tests. Exact-source push and PR checks passed before PR #6
+merged with its reviewed tree as `b9017a70b1f09142755cd988af180884b4e3e321`.
+Release `41374516171` attempt 1 passed the private-key probe, Archive, Export
+and app notarization. Its later Finder packaging timeout is separate from
+signing; Automatic Recovery `41374986732` verified unchanged v1.4.3 and the
+exact failed run/attempt/source. No new public artifact was accepted.
+
+## A4/A7/A8 — archived tooling and headless packaging follow-up
+
+Root reproduced a historical-quality gap: app/core used exact archives, but
+tooling and validators came from the latest checkout. A broken intermediate
+signing helper could therefore be recorded as tested after its head was fixed.
+Four quoted paths now use archived `ROOT` for tooling tests, monitoring tests
+and version/pin validators. Current orchestration still owns private workspace
+creation and cleanup; archived runner scripts are not executed.
+
+Independent QA passed 95 tooling and 27 monitoring tests, shell checks and
+whitespace checks, with no A4/A7/A8 blocker. The regressions use actual Git
+history/archive operations and the real signing selector to reject the exact
+broken intermediate SHA before builds. Clean-history checks cover per-archive
+paths, requested/tested SHA records, private workspaces, ordinary-exit cleanup,
+retained logs/result bundles/hashes/cache and unrelated-file preservation.
+Validator/monitoring failures include synthetic fixtures; build commands are
+stubbed, so full staged and hosted app/core tests remain independent gates.
+
+The packaging failure occurred while Finder arranged the installer window,
+before DMG notarization. The supported create-dmg `--skip-jenkins` option
+avoids that cosmetic AppleScript and retains app contents and the Applications
+shortcut. Root verified this behavior with a real harmless DMG and read-only
+mount; its generated workspace was removed. Signed public verification remains
+required.
+
+Five extracted-workflow packaging regressions passed after four expected RED
+failures. They verify headless option/drop-link/app staging, unchanged app/DMG
+notarization and ticket checks, and failure propagation at packaging, notary,
+stapling and validation boundaries. Commands for those checks are fakes; root's
+real harmless DMG supplies separate packaging evidence.
+Independent final QA passed all 100 tooling contracts and 27 monitoring fixtures,
+extracted app/DMG shell syntax and ShellCheck, actionlint and whitespace checks.
+No A4/A7/A8 code blocker remains; exact staged and hosted/public checks are
+independent requirements.
+
 ## Enforcement and native limits
 
 The applied canonical main protection was independently read through GitHub API:

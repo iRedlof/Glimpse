@@ -252,7 +252,9 @@ jobs:
           mkdir -p ./build/dmg_staging
           cp -R ./build/export/Glimpse.app ./build/dmg_staging/
 
+          # Skip cosmetic Finder automation in CI; the Applications link is still created.
           DMG_ARGS=(
+            --skip-jenkins
             --volname "Glimpse"
             --window-pos 200 120 --window-size 600 400
             --icon-size 100 --icon "Glimpse.app" 150 190

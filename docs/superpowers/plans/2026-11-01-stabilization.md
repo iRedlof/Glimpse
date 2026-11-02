@@ -73,7 +73,7 @@ health sampling tool, release/QA documentation.
 - [ ] Verify the first new signed publication through the hosted release workflow.
 - [x] Install scoped commit/push hooks and establish quiet monitoring.
 - [x] Record independent review, suite and bounded live QA evidence.
-- [ ] Pass exact staged-tree quality checks and hosted checks before merging.
+- [x] Pass exact staged-tree quality checks and hosted checks before merging.
 - [x] Bump all version/build locations before any user-facing push.
 
 ## Delivery ledger
@@ -136,3 +136,21 @@ An hourly Codex heartbeat, `glimpse-stability-and-release-health`, is active.
 It observes the installed executable and GitHub outcomes, stays quiet on unchanged
 state, and reports meaningful availability, crash-report, release or observation
 changes. It does not relaunch the app, alter login settings or publish code.
+
+The initial stability source and scratch-cleanup follow-up passed normal staged
+hooks and exact-source push/PR checks before PR #5 merged as
+`75b68685b2de1690cb4b78f71150d654ed17e359`. Release `41373019433` failed
+archive signing; Automatic Recovery `41373225077` verified healthy v1.4.3.
+The signing follow-up passed its normal hook (57 app, 62 core, 91 tooling,
+27 monitoring tests) and push/PR checks before PR #6 merged as
+`b9017a70b1f09142755cd988af180884b4e3e321`.
+
+Release `41374516171` passed source quality, Archive, Export and app
+notarization, then failed in create-dmg's Finder AppleScript before DMG
+notarization/publication. Automatic Recovery `41374986732` verified the exact
+failed source/run/attempt and unchanged public v1.4.3. The next follow-up removes
+the Finder dependency using supported headless packaging and tests tooling from
+each commit archive. Real harmless headless DMG packaging/mounting passed;
+signed publication remains open. The first-install exception stays until that
+publication succeeds. Native restart, interaction, signed Powerbox and soak
+acceptance remain unperformed; the crash reported on the other Mac is unknown.

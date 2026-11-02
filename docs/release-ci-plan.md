@@ -58,7 +58,7 @@ status revocation, rerun, publication or changed main invalidates it.
 The first modern Release may inspect this predecessor only as an active push
 whose source is its direct child. Remove the exception after that release passes.
 
-The current suite passes 74 contracts and 27 monitoring fixtures, including ten
+That snapshot passed 74 contracts and 27 monitoring fixtures, including ten
 bootstrap contracts and three public-download regressions. Public downloads use
 system curl with certificate verification, HTTPS-only redirects and bounded
 timeouts; the live pinned DMG/tagged/latest feed audit also passed. Local hooks,
@@ -121,6 +121,46 @@ Independent QA found no new signing blocker under A4/A7/A8. All 91 tooling
 contracts and 27 monitoring fixtures passed, including fourteen signing and
 cleanup regressions, with workflow/shell checks clean. Exact staged-source
 integration and hosted signing remain separate requirements.
+
+The signing correction's normal staged hook passed 57 app, 62 core, 91 tooling
+and 27 monitoring tests for `ee60a1f1b1fa3e2be014f0be6a865a3adbe11fdb`.
+Push Quality `41374134552` and PR Quality `41374141578` passed; the PR artifact
+records that source and merge snapshot `3232ed225b4ceeb8488d48dffe62cbc3707e30c8`.
+PR #6 merged as `b9017a70b1f09142755cd988af180884b4e3e321` with the
+reviewed tree.
+
+Release `41374516171` attempt 1 passed source quality, exact identity/private-key
+validation, Archive, Export and app notarization. Packaging then failed because
+create-dmg's Finder customization AppleScript timed out (`-1712`, exit 64);
+DMG notarization and publication never ran. Automatic Recovery `41374986732`
+attempt 1 verified the unchanged v1.4.3 distribution and retained proof binding
+the exact failed run/attempt/source. Root and the release specialist independently
+verified the record and refreshed the remediation gate. No v1.4.4 publication
+or tag was created.
+
+The packaging follow-up uses create-dmg's supported `--skip-jenkins` option to
+avoid Finder customization in CI. A real harmless DMG fixture built successfully
+with this option; read-only mounting verified its app contents and `/Applications`
+shortcut, then removed only the generated fixture. This proves packaging, not
+signed publication. The first-install policy exception remains until a normal
+new release completes public verification; both admission bootstrap variables
+were already removed after the modern controller reached main.
+
+The same follow-up corrects tooling provenance in historical quality runs.
+Current orchestration continues to own private scratch cleanup, while tooling
+tests, monitoring tests and version/pin validators run from each exact archive.
+Real Git-history regressions reject a broken intermediate revision even when
+the head is fixed, and verify archive paths, retained results and workspace
+cleanup. Xcode/Swift build commands are stubbed in these path regressions;
+full staged and hosted app/core checks remain independent requirements.
+
+Five extracted-workflow packaging regressions passed after four expected RED
+failures, bringing the tooling suite to 100 contracts. They preserve mandatory
+notarization/stapling checks and reject packaging, notarization, exhausted staple
+retries and validation failures. The command fixtures do not contact Apple.
+Independent final QA passed all 100 tooling contracts and 27 monitoring fixtures,
+scoped shell checks, actionlint and whitespace checks, with no A4/A7/A8 blocker.
+Exact staged app/core and hosted/public verification remain required.
 
 Constraints: no signing-key generation, no installed-app mutation, no destructive
 source reverts. Product, UX, code,
