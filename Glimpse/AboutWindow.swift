@@ -30,9 +30,13 @@ enum AboutWindow {
     }
 }
 
-private struct AboutView: View {
-    @State private var updater = SparkleUpdater.shared
+struct AboutView: View {
+    @State private var updater: SparkleUpdater
     @State private var diagnosticState: DiagnosticState = .idle
+
+    init(updater: SparkleUpdater = .shared) {
+        _updater = State(initialValue: updater)
+    }
 
     enum DiagnosticState: Equatable {
         case idle, exporting, exported(String), failed(String)
@@ -197,9 +201,22 @@ struct AboutUpdateSection: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.green)
                     .accessibilityHidden(true)
-                Text("You're on the latest version")
+                Text("No newer update was found")
                     .font(.caption)
                     .foregroundStyle(.green)
+            }
+
+        case let .noUpdate(guidance):
+            VStack(spacing: AppDesign.Spacing.sm) {
+                guidanceText(guidance)
+                HStack(spacing: AppDesign.Spacing.sm) {
+                    checkButton("Check for Updates", accessibilityLabel: "Check for updates")
+                    releasesLink
+                }
+                if !updater.canCheckForUpdates {
+                    statusText("Checking is temporarily unavailable.")
+                        .foregroundStyle(.secondary)
+                }
             }
 
         case let .error(failure):
@@ -295,6 +312,40 @@ struct AboutUpdateSection: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Install update and relaunch Glimpse")
             .disabled(id == nil)
+        }
+    }
+
+    @ViewBuilder
+    private func guidanceText(_ guidance: UpdateNoUpdateGuidance) -> some View {
+        switch guidance.reason {
+        case .unknown:
+            statusText("No installable update was found.")
+            statusText("Check again or view Glimpse releases on GitHub.")
+                .foregroundStyle(.secondary)
+        case .newerThanFeed:
+            statusText("You’re running a newer version.")
+            statusText("Your installed version is newer than the version in the update feed. You can keep using this version.")
+                .foregroundStyle(.secondary)
+        case .systemTooOld:
+            statusText("This update needs a newer macOS version.")
+            if let version = guidance.requirementVersion {
+                statusText("Requires macOS \(version) or later.")
+                    .foregroundStyle(.secondary)
+            }
+            statusText("Check Software Update in System Settings, then check again.")
+                .foregroundStyle(.secondary)
+        case .systemTooNew:
+            statusText("Your macOS version is newer than this update supports.")
+            if let version = guidance.requirementVersion {
+                statusText("This update supports up to macOS \(version).")
+                    .foregroundStyle(.secondary)
+            }
+            statusText("View releases for compatibility details, or check again later.")
+                .foregroundStyle(.secondary)
+        case .requiresAppleSilicon:
+            statusText("This update requires Apple silicon.")
+            statusText("It can’t be installed on this Intel Mac. View releases for compatibility details.")
+                .foregroundStyle(.secondary)
         }
     }
 

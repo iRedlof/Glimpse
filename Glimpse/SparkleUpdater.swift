@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import CoreFoundation
 import Sparkle
 import SwiftUI
 
@@ -10,11 +11,25 @@ enum UpdateFailure: Equatable {
     case update
 }
 
+enum UpdateNoUpdateReason: Equatable {
+    case unknown
+    case newerThanFeed
+    case systemTooOld
+    case systemTooNew
+    case requiresAppleSilicon
+}
+
+struct UpdateNoUpdateGuidance: Equatable {
+    let reason: UpdateNoUpdateReason
+    let requirementVersion: String?
+}
+
 enum UpdateStatus: Equatable {
     case idle
     case initializationFailed
     case checking
     case latest
+    case noUpdate(UpdateNoUpdateGuidance)
     case error(UpdateFailure)
     case available(version: String)
     case downloading
@@ -65,7 +80,7 @@ final class SparkleUpdater {
               userDriver.updateChoiceID == nil, userDriver.installChoiceID == nil
         else { return false }
         switch userDriver.status {
-        case .idle, .error:
+        case .idle, .error, .noUpdate:
             return true
         default:
             return false
@@ -119,6 +134,7 @@ final class InlineUpdateDriver: NSObject, SPUUserDriver {
     private var dismissTask: Task<Void, Never>?
     private let delay: @MainActor (Duration) async throws -> Void
     private static let latestDismissDelay: Duration = .seconds(5)
+    private static let maximumRequirementVersionLength = 32
 
     init(delay: @escaping @MainActor (Duration) async throws -> Void = {
         try await Task.sleep(for: $0)
@@ -202,9 +218,66 @@ final class InlineUpdateDriver: NSObject, SPUUserDriver {
     func showUpdateReleaseNotesFailedToDownloadWithError(_ error: Error) {}
 
     func showUpdateNotFoundWithError(_ error: Error, acknowledgement: @escaping () -> Void) {
-        publish(.latest)
-        scheduleLatestDismissal()
+        let result = noUpdateStatus(for: error)
+        publish(result)
+        if result == .latest { scheduleLatestDismissal() }
         acknowledgement()
+    }
+
+    func noUpdateStatus(for error: Error) -> UpdateStatus {
+        let unknown = UpdateStatus.noUpdate(.init(reason: .unknown, requirementVersion: nil))
+        let error = error as NSError
+        guard error.domain == SUSparkleErrorDomain,
+              error.code == Int(SUError.noUpdateError.rawValue),
+              let number = error.userInfo[SPUNoUpdateFoundReasonKey] as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(),
+              number.doubleValue.isFinite,
+              number.doubleValue >= Double(Int32.min),
+              number.doubleValue <= Double(Int32.max)
+        else { return unknown }
+        let rawReason = number.int32Value
+        guard number.compare(NSNumber(value: rawReason)) == .orderedSame else { return unknown }
+        // NSNumber comparison can round a high-precision NSDecimalNumber through Double.
+        var preciseReason = number.decimalValue
+        var integralReason = Decimal(rawReason)
+        guard NSDecimalCompare(&preciseReason, &integralReason) == .orderedSame else { return unknown }
+
+        let item = error.userInfo[SPULatestAppcastItemFoundKey] as? SUAppcastItem
+        let reason: UpdateNoUpdateReason
+        let requirementVersion: String?
+        switch rawReason {
+        case SPUNoUpdateFoundReason.onLatestVersion.rawValue:
+            return .latest
+        case SPUNoUpdateFoundReason.onNewerThanLatestVersion.rawValue:
+            reason = .newerThanFeed
+            requirementVersion = nil
+        case SPUNoUpdateFoundReason.systemIsTooOld.rawValue:
+            reason = .systemTooOld
+            requirementVersion = Self.validatedRequirementVersion(item?.minimumSystemVersion)
+        case SPUNoUpdateFoundReason.systemIsTooNew.rawValue:
+            reason = .systemTooNew
+            requirementVersion = Self.validatedRequirementVersion(item?.maximumSystemVersion)
+        case SPUNoUpdateFoundReason.hardwareDoesNotSupportARM64.rawValue:
+            reason = .requiresAppleSilicon
+            requirementVersion = nil
+        default:
+            return unknown
+        }
+        return .noUpdate(.init(reason: reason, requirementVersion: requirementVersion))
+    }
+
+    private static func validatedRequirementVersion(_ value: String?) -> String? {
+        guard let candidate = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !candidate.isEmpty,
+              candidate.utf8.count <= maximumRequirementVersionLength
+        else { return nil }
+        let components = candidate.split(separator: ".", omittingEmptySubsequences: false)
+        guard (1...3).contains(components.count), components.allSatisfy({
+            !$0.isEmpty && $0.utf8.allSatisfy {
+                (UInt8(ascii: "0")...UInt8(ascii: "9")).contains($0)
+            }
+        }) else { return nil }
+        return candidate
     }
 
     func showUpdaterError(_ error: Error, acknowledgement: @escaping () -> Void) {
@@ -248,7 +321,7 @@ final class InlineUpdateDriver: NSObject, SPUUserDriver {
         updateChoiceID = nil
         installChoiceID = nil
         switch status {
-        case .initializationFailed, .error, .latest:
+        case .initializationFailed, .error, .latest, .noUpdate:
             break
         default:
             publish(.idle)
