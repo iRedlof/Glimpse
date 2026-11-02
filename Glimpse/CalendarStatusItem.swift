@@ -10,6 +10,7 @@ extension Notification.Name {
     static let calendarPreferencesDidChange = Notification.Name("calendarPreferencesDidChange")
     static let calendarPanelWillHide = Notification.Name("calendarPanelWillHide")
     static let calendarPanelDidShow = Notification.Name("calendarPanelDidShow")
+    static let calendarPanelDidCompleteReopen = Notification.Name("calendarPanelDidCompleteReopen")
     static let hotkeyRecordingDidChange = Notification.Name("hotkeyRecordingDidChange")
 }
 
@@ -336,6 +337,7 @@ final class CalendarStatusItem {
             statusItemFrame: anchor.statusItemFrame, visibleFrame: anchor.visibleFrame
         )
         calendarPanel.makeKeyAndOrderFront(nil)
+        calendarPanel.completeReopenPresentation()
     }
 
     /// Refresh an already visible panel without sending the reopen/reset action.

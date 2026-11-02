@@ -59,7 +59,10 @@ final class AccessibilityTestHost {
         window.orderBack(nil)
     }
 
-    func close() { window.close() }
+    func close() {
+        window.contentView = nil
+        window.close()
+    }
 
     func rect(_ screenRect: NSRect, in view: NSView) -> NSRect {
         view.convert(window.convertFromScreen(screenRect), from: nil)

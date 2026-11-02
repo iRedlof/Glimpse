@@ -29,6 +29,7 @@ final class CalendarPanel: NSPanel {
     private var hasShownOnce = false
     private var statusItemFrame: NSRect?
     private var visibleFrame: NSRect?
+    private var pendingReopenPresentation = false
 
     convenience init(contentRect: NSRect, caretOffset: CGFloat) {
         let store = Store(initialState: CalendarFeature.State()) {
@@ -142,12 +143,34 @@ final class CalendarPanel: NSPanel {
     /// TCA store: collapse preferences, return to the current month with today
     /// selected, and reload any preferences changed while hidden.
     func prepareForReopen() {
+        guard !isVisible else { return }
+        pendingReopenPresentation = true
+        // Owned SwiftUI bindings dismiss first, before native key presentation.
         calendarStore.send(.prepareForReopen)
         NotificationCenter.default.post(name: .calendarPanelDidShow, object: self)
     }
 
+    /// Finish only a prepared hidden session, after normal key presentation.
+    /// A refused or redirected native focus request remains a reported failure.
+    @discardableResult
+    func completeReopenPresentation() -> Bool {
+        guard pendingReopenPresentation, isVisible, isKeyWindow, NSApp.keyWindow === self else {
+            return false
+        }
+        let accepted = makeFirstResponder(nil)
+        guard accepted, firstResponder === self else {
+            AppLogger.general.error("Calendar reopen did not establish window-default focus")
+            return false
+        }
+        pendingReopenPresentation = false
+        NotificationCenter.default.post(name: .calendarPanelDidCompleteReopen, object: self)
+        return true
+    }
+
     override func orderOut(_ sender: Any?) {
         NotificationCenter.default.post(name: .calendarPanelWillHide, object: self)
+        makeFirstResponder(nil)
+        pendingReopenPresentation = false
         pendingResize?.cancel()
         isTextInputActive = false
         deactivateTextInput()

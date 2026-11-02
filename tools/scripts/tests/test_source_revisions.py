@@ -6,6 +6,8 @@ import subprocess
 import tempfile
 import unittest
 
+from keyboard_xcresult_fixture import cases, manifest, parameterized, summary, tree
+
 SCRIPTS = pathlib.Path(__file__).parents[1]
 
 RECORD_COMPONENT = """
@@ -89,7 +91,7 @@ test "$revision" != "${FAIL_REVISION:-}"
 
 
 class ArchivedToolingContracts(unittest.TestCase):
-    def write_contracts(self, root, revision, failing_component):
+    def write_contracts(self, root, revision, failing_component, keyboard_history=False):
         scripts = root / "tools/scripts"
         tests = scripts / "tests"
         monitoring = root / "tools/monitoring"
@@ -134,10 +136,27 @@ class SigningContract(unittest.TestCase):
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('{"pins":[]}\n')
+        # A historical helper must never replace the current controller's collector.
+        (scripts / "collect-keyboard-artifacts.py").write_text("raise SystemExit(91)\n")
+        if keyboard_history:
+            for name in ("Glimpse/CalendarKeyboardFocus.swift",
+                         "GlimpseTests/CalendarKeyboardOwnershipTests.swift"):
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("// archived fixture presence\n")
+            expected, result_summary, result_tests = (
+                parameterized() if revision == 2 else (manifest(), summary(), tree())
+            )
+            if revision == 1 and failing_component == "keyboard":
+                cases(result_tests)[0]["result"] = "Skipped"
+            for name, document in (("keyboard-ownership-methods.json", expected),
+                                   ("fixture-summary.json", result_summary),
+                                   ("fixture-tests.json", result_tests)):
+                (scripts / name).write_text(json.dumps(document))
 
     def write_build_stubs(self, bin_dir):
         bin_dir.mkdir()
-        for command in ("xcodebuild", "swift"):
+        for command in ("xcodebuild", "swift", "xcrun", "ps"):
             path = bin_dir / command
             path.write_text("""#!/usr/bin/env python3
 import json,os,pathlib,sys
@@ -147,7 +166,16 @@ source=next(path for path in (pathlib.Path.cwd(),*pathlib.Path.cwd().parents)
 with open(os.environ['FIXTURE_TRACE'],'a') as trace:
     trace.write(json.dumps({'component':pathlib.Path(sys.argv[0]).name,
                             'revision':(source/'revision.txt').read_text(),
-                            'cwd':str(pathlib.Path.cwd())})+'\\n')
+                            'cwd':str(pathlib.Path.cwd()),'args':args})+'\\n')
+if pathlib.Path(sys.argv[0]).name == 'ps':
+    assert args == ['-axww','-o','pid=,comm=']
+    print('301 /Applications/Glimpse.app/Contents/MacOS/Glimpse')
+    sys.exit(0)
+if pathlib.Path(sys.argv[0]).name == 'xcrun':
+    assert args[:3] == ['xcresulttool','get','test-results']
+    assert args[3] in ('summary','tests') and args[4] == '--path'
+    print((source/'tools/scripts'/('fixture-'+args[3]+'.json')).read_text(),flush=True)
+    sys.exit(0)
 for flag in ('-derivedDataPath','--scratch-path','--cache-path','-resultBundlePath'):
     if flag in args:
         output=pathlib.Path(args[args.index(flag)+1])
@@ -157,7 +185,7 @@ print('fixture build passed',flush=True)
 """)
             path.chmod(0o755)
 
-    def run_quality_history(self, failing_component=""):
+    def run_quality_history(self, failing_component="", keyboard_history=False):
         temporary = tempfile.TemporaryDirectory(prefix="glimpse history fixture ")
         self.addCleanup(temporary.cleanup)
         root = pathlib.Path(temporary.name).resolve()
@@ -172,12 +200,13 @@ print('fixture build passed',flush=True)
         git("config", "user.email", "fixture@example.invalid")
         commits = []
         for revision in range(3):
-            self.write_contracts(checkout, revision, failing_component)
+            self.write_contracts(checkout, revision, failing_component, keyboard_history)
             git("add", ".")
             git("commit", "-m", f"fixture {revision}")
             commits.append(git("rev-parse", "HEAD"))
         scripts = checkout / "tools/scripts"
-        for name in ("quality-gate.sh", "test-source-revisions.sh"):
+        for name in ("quality-gate.sh", "test-source-revisions.sh", "check-keyboard-xcresult.py",
+                     "collect-keyboard-artifacts.py"):
             shutil.copy(SCRIPTS / name, scripts / name)
         bin_dir = root / "bin"
         self.write_build_stubs(bin_dir)
@@ -269,6 +298,40 @@ print('fixture build passed',flush=True)
                              (evidence / "dependency-pins.after.sha256").read_text())
             self.assertFalse((results.parent / f"source-{revision}").exists())
         self.assertTrue((results.parent.parent / "swiftpm-cache/fixture.txt").is_file())
+        self.assert_cleanup(observed, runner_temp, inherited_temp)
+
+    def test_keyboard_gate_uses_each_exact_archives_method_manifest(self):
+        result, commits, results, observed, runner_temp, inherited_temp = (
+            self.run_quality_history(keyboard_history=True)
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((results / "tested-shas.txt").read_text().splitlines(), commits[1:])
+        for revision, case_count in ((commits[1], 6), (commits[2], 7)):
+            receipt_path = results / revision / "keyboard-ownership-acceptance.json"
+            self.assertTrue(receipt_path.is_file())
+            receipt = json.loads(receipt_path.read_text())
+            self.assertEqual(receipt["status"], "Passed")
+            self.assertEqual(receipt["executed_cases"], case_count)
+            artifacts = json.loads((results / revision / "keyboard-ownership-artifact-collection.json").read_text())
+            self.assertTrue(artifacts["owned_host_absence_confirmed"])
+            self.assertEqual(artifacts["copies"], [])
+            self.assertEqual(artifacts["errors"], [])
+            self.assertTrue((results / revision / "KeyboardOwnershipTests.xcresult/fixture.txt").is_file())
+        self.assertEqual([entry["revision"] for entry in observed if entry["component"] == "xcrun"],
+                         ["1", "1", "2", "2"])
+        self.assert_cleanup(observed, runner_temp, inherited_temp)
+
+    def test_skipped_keyboard_archive_blocks_fixed_head(self):
+        result, commits, results, observed, runner_temp, inherited_temp = (
+            self.run_quality_history(failing_component="keyboard", keyboard_history=True)
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((results / "failed-sha.txt").read_text().strip(), commits[1])
+        self.assertEqual((results / "tested-shas.txt").read_text(), "")
+        self.assertEqual({entry["revision"] for entry in observed}, {"1"})
+        self.assertFalse(any(entry["component"] == "swift" for entry in observed))
+        receipt = json.loads((results / commits[1] / "keyboard-ownership-acceptance.json").read_text())
+        self.assertEqual(receipt["status"], "Failed")
         self.assert_cleanup(observed, runner_temp, inherited_temp)
 
 

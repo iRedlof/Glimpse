@@ -7,6 +7,10 @@ struct CalendarPopoverView: View {
     weak var panel: CalendarPanel?
 
     let layout: PanelLayoutState
+    let keyboardObservation: ((CalendarKeyboardInvocation) -> Void)?
+    let preferencesHotkeyModel: HotkeyPreferencesModel?
+    let editorPresentation: ((@escaping @MainActor () -> Void) -> Void)?
+    let querySubmission: ((String) -> Void)?
 
     @State private var scrollRouter = CalendarScrollRouter()
     @State private var scrollMonitor: Any?
@@ -20,16 +24,29 @@ struct CalendarPopoverView: View {
     @State private var aiErrorMessage: String?
     @State private var aiFieldActive: Bool = false
     @FocusState private var aiFieldFocused: Bool
+    @FocusState private var controlFocus: CalendarKeyboardOwner?
+    @State private var logicalDate: Date?
+    @State private var gridHasFocus = false
+    @State private var keyboardSession = 0
+    @State private var keyboardOwnerRelay = CalendarKeyboardOwnerRelay()
     @State private var showQuitConfirm: Bool = false
     @State private var preferencesStore: StoreOf<PreferencesFeature>
     private let caretHeight = CalendarPanel.caretHeight
 
     init(store: StoreOf<CalendarFeature>, panel: CalendarPanel? = nil,
          layout: PanelLayoutState? = nil,
-         preferencesStore: StoreOf<PreferencesFeature>? = nil) {
+         preferencesStore: StoreOf<PreferencesFeature>? = nil,
+         keyboardObservation: ((CalendarKeyboardInvocation) -> Void)? = nil,
+         preferencesHotkeyModel: HotkeyPreferencesModel? = nil,
+         editorPresentation: ((@escaping @MainActor () -> Void) -> Void)? = nil,
+         querySubmission: ((String) -> Void)? = nil) {
         self.store = store
         self.panel = panel
         self.layout = layout ?? panel?.layoutState ?? PanelLayoutState()
+        self.keyboardObservation = keyboardObservation
+        self.preferencesHotkeyModel = preferencesHotkeyModel
+        self.editorPresentation = editorPresentation
+        self.querySubmission = querySubmission
         self._preferencesStore = State(initialValue: preferencesStore ?? Store(
             initialState: PreferencesFeature.State.live()
         ) { PreferencesFeature() })
@@ -42,15 +59,23 @@ struct CalendarPopoverView: View {
                 PanelViewport(layout: layout) {
                     VStack(spacing: 12) {
                         if store.showingPreferences {
-                            PreferencesView(store: preferencesStore)
+                            PreferencesView(store: preferencesStore, hotkeyPreferences: preferencesHotkeyModel)
                         }
-                        headerView
+                        headerView.id("panel-header")
                         if store.showAISearch {
                             aiQueryField
                                 .id("panel-ai-input")
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                         }
-                        calendarSection
+                        CalendarGridKeyboardContent(
+                            isEligible: !store.showingPreferences && store.days.count == 42,
+                            focus: $controlFocus,
+                            context: keyboardContext, move: moveLogicalDate,
+                            activate: activateLogicalDate, observe: keyboardObservation
+                        ) { focused in
+                            calendarSection(keyboardFocused: focused)
+                        }
+                            .onPreferenceChange(CalendarGridFocusPreference.self) { gridHasFocus = $0 }
                             .onHover { hovering in
                                 isMouseOverCalendar = hovering
                                 if !hovering {
@@ -74,6 +99,7 @@ struct CalendarPopoverView: View {
             .frame(width: PanelGeometry.panelWidth)
             .onAppear {
                 store.send(.onAppear)
+                reconcileLogicalDate()
                 setupKeyMonitor()
                 setupScrollMonitor()
             }
@@ -92,6 +118,28 @@ struct CalendarPopoverView: View {
                 panel?.isTextInputActive = active
                 if active { reader.scrollTo("panel-ai-input", anchor: .center) }
             }
+            .onChange(of: store.days.map(\.date)) { _, _ in reconcileLogicalDate() }
+            .onChange(of: logicalDate) { _, date in
+                if gridHasFocus, let date { reader.scrollTo(date, anchor: .center) }
+            }
+            .onChange(of: gridHasFocus) { _, focused in
+                if focused, let logicalDate { reader.scrollTo(logicalDate, anchor: .center) }
+            }
+            .onChange(of: layout.viewportHeight) { _, _ in
+                if gridHasFocus, let logicalDate { reader.scrollTo(logicalDate, anchor: .center) }
+            }
+            .background(CalendarKeyboardOwnerObserver(
+                relay: keyboardOwnerRelay, panel: panel, session: keyboardSession,
+                onOwnerChange: { owner in
+                    switch owner {
+                    case .previousMonth, .today, .nextMonth:
+                        reader.scrollTo("panel-header", anchor: .center)
+                    case .searchPrompt, .searchDismiss, .editor:
+                        reader.scrollTo("panel-ai-input", anchor: .center)
+                    default: break
+                    }
+                }
+            ))
             .onReceive(NotificationCenter.default.publisher(for: .calendarPreferencesDidChange)) { _ in
                 store.send(.reloadPreferences)
                 showQuitConfirm = false
@@ -103,6 +151,11 @@ struct CalendarPopoverView: View {
                 aiTask = nil
                 aiProcessing = false
                 aiFieldActive = false
+                aiFieldFocused = false
+                controlFocus = nil
+                logicalDate = nil
+                gridHasFocus = false
+                keyboardOwnerRelay.reset()
                 aiQueryText = ""
                 aiErrorMessage = nil
                 isRecordingHotkey = false
@@ -113,10 +166,21 @@ struct CalendarPopoverView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .calendarPanelDidShow)) { notification in
                 guard notification.object as? CalendarPanel === panel else { return }
+                controlFocus = nil
+                aiFieldFocused = false
+                keyboardOwnerRelay.reset()
                 scrollRouter.reset()
+                keyboardSession += 1
+                reconcileLogicalDate()
                 reader.scrollTo("panel-content-top", anchor: .top)
                 setupKeyMonitor()
                 setupScrollMonitor()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .calendarPanelDidCompleteReopen)) { notification in
+                guard notification.object as? CalendarPanel === panel else { return }
+                // Re-observe the real hierarchy after the native post-key reset.
+                // Session changes never manufacture an ownerless observation.
+                keyboardSession += 1
             }
             .onReceive(NotificationCenter.default.publisher(for: .hotkeyRecordingDidChange)) { notification in
                 isRecordingHotkey = notification.object as? Bool ?? false
@@ -149,7 +213,7 @@ struct CalendarPopoverView: View {
     private func setupKeyMonitor() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard let panel, panel.isVisible, event.window === panel,
+            guard let panel, panel.isVisible, NSApp.keyWindow === panel, event.window === panel,
                   !isRecordingHotkey else { return event }
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
             let editingText = panel.firstResponder is NSTextView || store.showingPreferences
@@ -159,36 +223,7 @@ struct CalendarPopoverView: View {
                 return nil
             }
 
-            if [123, 124, 125, 126].contains(event.keyCode),
-               !Self.shouldHandleNavigation(
-                    panelVisible: panel.isVisible, eventIsForPanel: event.window === panel,
-                    editingText: editingText, modified: !modifiers.isEmpty
-               ) {
-                return event
-            }
             switch event.keyCode {
-            case 123:
-                store.send(.goToPreviousMonth)
-                return nil
-            case 124:
-                store.send(.goToNextMonth)
-                return nil
-            case 125: // Down arrow
-                store.send(.goToNextYear)
-                return nil
-            case 126: // Up arrow
-                store.send(.goToPreviousYear)
-                return nil
-            case 36, 76: // Enter
-                guard modifiers.isEmpty else { return event }
-                if aiFieldActive {
-                    submitAIQuery()
-                } else if !editingText {
-                    store.send(.goToToday)
-                } else {
-                    return event
-                }
-                return nil
             case 53:
                 if aiFieldActive {
                     aiFieldActive = false
@@ -208,9 +243,71 @@ struct CalendarPopoverView: View {
                 }
                 return nil
             default:
-                return event
+                let route = CalendarKeyboardRouter.browse(
+                    CalendarKeyboardKey(nativeCode: event.keyCode),
+                    phase: event.isARepeat ? .repeatPress : .down,
+                    ownership: keyboardOwnerRelay.browseOwnership(in: panel),
+                    context: CalendarKeyboardContext(
+                        visible: panel.isVisible, key: NSApp.keyWindow === panel,
+                        eventForPanel: event.window === panel, recording: isRecordingHotkey,
+                        preferences: store.showingPreferences,
+                        modified: !modifiers.isEmpty, editingText: editingText
+                    )
+                )
+                switch route {
+                case let .browse(intent): sendBrowseIntent(intent); return nil
+                case .consume: return nil
+                default: return event
+                }
             }
         }
+    }
+
+    private func keyboardContext() -> CalendarKeyboardContext {
+        guard let panel, let event = NSApp.currentEvent, event.window === panel else {
+            return CalendarKeyboardContext(
+                visible: panel?.isVisible == true,
+                key: panel != nil && NSApp.keyWindow === panel,
+                eventForPanel: false
+            )
+        }
+        return CalendarKeyboardContext(
+            visible: panel.isVisible, key: NSApp.keyWindow === panel,
+            eventForPanel: true,
+            recording: isRecordingHotkey, preferences: store.showingPreferences,
+            modified: !event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
+            editingText: panel.firstResponder is NSTextView
+        )
+    }
+
+    private func sendBrowseIntent(_ intent: CalendarBrowseIntent) {
+        switch intent {
+        case .previousMonth: store.send(.goToPreviousMonth)
+        case .nextMonth: store.send(.goToNextMonth)
+        case .previousYear: store.send(.goToPreviousYear)
+        case .nextYear: store.send(.goToNextYear)
+        case .today: store.send(.goToToday)
+        }
+    }
+
+    private func reconcileLogicalDate() {
+        logicalDate = CalendarKeyboardRouter.reconcile(
+            logicalDate, days: store.days.map(\.date), selected: store.selectedDate,
+            today: .now, displayedMonth: store.displayedMonth, calendar: store.calendar
+        )
+    }
+
+    private func moveLogicalDate(_ delta: Int) {
+        logicalDate = CalendarKeyboardRouter.move(
+            logicalDate, by: delta, days: store.days.map(\.date), calendar: store.calendar
+        )
+    }
+
+    private func activateLogicalDate() {
+        guard let logicalDate, store.days.contains(where: {
+            store.calendar.isDate($0.date, inSameDayAs: logicalDate)
+        }) else { return }
+        store.send(.dateTapped(logicalDate))
     }
 
     private func setupScrollMonitor() {
@@ -279,7 +376,9 @@ struct CalendarPopoverView: View {
                 && store.selectedDate.map { store.calendar.isDateInToday($0) } == true,
             previous: { store.send(.goToPreviousMonth) },
             today: { store.send(.goToToday) },
-            next: { store.send(.goToNextMonth) }
+            next: { store.send(.goToNextMonth) },
+            keyboardContext: keyboardContext, keyboardObservation: keyboardObservation,
+            controlFocus: $controlFocus
         )
     }
 
@@ -289,13 +388,25 @@ struct CalendarPopoverView: View {
         CalendarDateSearchRow(
             query: $aiQueryText, isActive: $aiFieldActive,
             isProcessing: aiProcessing, error: $aiErrorMessage,
-            focused: $aiFieldFocused, onSubmit: submitAIQuery,
+            focused: $aiFieldFocused, onSubmit: {
+                // Invocation belongs to native onSubmit, never an open-row flag.
+                var context = keyboardContext()
+                context.editingText = false
+                guard context.allowsRouting else { return }
+                if let querySubmission { querySubmission(aiQueryText) }
+                else { submitAIQuery() }
+            },
             onEditorAppear: {
-                panel?.activateForTextInput()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    aiFieldFocused = true
+                if let editorPresentation {
+                    editorPresentation { aiFieldFocused = true }
+                } else {
+                    panel?.activateForTextInput()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        aiFieldFocused = true
+                    }
                 }
-            }
+            }, keyboardContext: keyboardContext, keyboardObservation: keyboardObservation,
+            controlFocus: $controlFocus
         )
     }
 
@@ -334,7 +445,7 @@ struct CalendarPopoverView: View {
     private static let fullWeekdaySymbols = Calendar.current.weekdaySymbols
     private static let veryShortWeekdaySymbols = Calendar.current.veryShortWeekdaySymbols
 
-    private var calendarSection: some View {
+    private func calendarSection(keyboardFocused: Bool) -> some View {
         let cal = store.calendar
         let days = store.days
         let orderedDays = orderedWeekdaySymbols(startOfWeekday: store.startOfWeekday)
@@ -384,7 +495,8 @@ struct CalendarPopoverView: View {
                                     let day = days[row * 7 + col]
                                     let weekday = orderedDays[col].index
                                     let isWorkday = store.workdays.contains(weekday)
-                                    dayCell(day, using: cal, isWorkdayColumn: isWorkday)
+                                    dayCell(day, using: cal, isWorkdayColumn: isWorkday,
+                                            keyboardFocused: keyboardFocused)
                                 }
                             }
                         }
@@ -412,7 +524,11 @@ struct CalendarPopoverView: View {
                 )
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Calendar grid for \(store.monthYearString)")
+        .accessibilityLabel(
+            "Calendar grid for \(store.monthYearString)" +
+            (keyboardFocused ? logicalDate.map { ", focused date: \($0.formatted(Self.accessibilityDateStyle))" } ?? "" : "")
+        )
+        .accessibilityHint("Arrow keys move the focused date. Return or Space selects it.")
     }
 
     private func orderedWeekdaySymbols(startOfWeekday: Int) -> [(index: Int, symbol: String)] {
@@ -426,7 +542,7 @@ struct CalendarPopoverView: View {
     private func dayCell(
         _ day: GlimpseCore.CalendarDay,
         using cal: Calendar,
-        isWorkdayColumn: Bool
+        isWorkdayColumn: Bool, keyboardFocused: Bool
     ) -> some View {
         let isToday = day.isCurrentMonth && cal.isDateInToday(day.date)
         let dayNumber = cal.component(.day, from: day.date)
@@ -434,6 +550,7 @@ struct CalendarPopoverView: View {
         let isHovered = hoveredDate.map { cal.isDate($0, inSameDayAs: day.date) } ?? false
 
         return Button {
+            if keyboardFocused { logicalDate = day.date }
             store.send(.dateTapped(day.date))
         } label: {
             Text("\(dayNumber)")
@@ -471,9 +588,21 @@ struct CalendarPopoverView: View {
                 }
                 .foregroundStyle(isToday ? .white : foregroundColor(for: day, isToday: false, isSelected: isSelected))
                 .contentShape(Rectangle())
+                .overlay {
+                    if keyboardFocused, logicalDate.map({
+                        cal.isDate($0, inSameDayAs: day.date)
+                    }) == true {
+                        RoundedRectangle(cornerRadius: AppDesign.Control.focusCornerRadius)
+                            .strokeBorder(Color.accentColor, lineWidth: AppDesign.Control.focusLineWidth)
+                            .padding(AppDesign.Control.focusInset)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
         }
             .buttonStyle(.plain)
             .focusable(false)
+            .id(day.date)
             .onHover { hovering in
                 hoveredDate = hovering ? day.date : nil
             }
@@ -739,6 +868,9 @@ struct CalendarHeaderControls: View {
     let previous: () -> Void
     let today: () -> Void
     let next: () -> Void
+    var keyboardContext: () -> CalendarKeyboardContext = { .init(visible: false) }
+    var keyboardObservation: ((CalendarKeyboardInvocation) -> Void)? = nil
+    var controlFocus: FocusState<CalendarKeyboardOwner?>.Binding? = nil
 
     var body: some View {
         HStack {
@@ -755,9 +887,13 @@ struct CalendarHeaderControls: View {
                         .frame(width: AppDesign.Control.iconTargetSize,
                                height: AppDesign.Control.iconTargetSize)
                         .contentShape(Rectangle())
+                        .overlay { CalendarKeyboardFocusOutline() }
                 }
                 .buttonStyle(.plain)
-                .focusable(false)
+                .modifier(CalendarControlReturn(
+                    owner: .previousMonth, context: keyboardContext, action: previous,
+                    observe: keyboardObservation, focus: controlFocus
+                ))
                 .accessibilityLabel("Previous month")
 
                 Button(action: today) {
@@ -771,10 +907,14 @@ struct CalendarHeaderControls: View {
                         .frame(width: AppDesign.Control.iconTargetSize,
                                height: AppDesign.Control.iconTargetSize)
                         .contentShape(Rectangle())
+                        .overlay { CalendarKeyboardFocusOutline() }
                 }
                 .buttonStyle(.plain)
-                .focusable(false)
                 .disabled(todayIsDisabled)
+                .modifier(CalendarControlReturn(
+                    owner: .today, context: keyboardContext, action: today,
+                    observe: keyboardObservation, focus: controlFocus, isEnabled: !todayIsDisabled
+                ))
                 .accessibilityLabel("Go to today")
 
                 Button(action: next) {
@@ -783,9 +923,13 @@ struct CalendarHeaderControls: View {
                         .frame(width: AppDesign.Control.iconTargetSize,
                                height: AppDesign.Control.iconTargetSize)
                         .contentShape(Rectangle())
+                        .overlay { CalendarKeyboardFocusOutline() }
                 }
                 .buttonStyle(.plain)
-                .focusable(false)
+                .modifier(CalendarControlReturn(
+                    owner: .nextMonth, context: keyboardContext, action: next,
+                    observe: keyboardObservation, focus: controlFocus
+                ))
                 .accessibilityLabel("Next month")
             }
         }
@@ -895,6 +1039,9 @@ struct CalendarDateSearchRow: View {
     let focused: FocusState<Bool>.Binding
     let onSubmit: () -> Void
     let onEditorAppear: () -> Void
+    var keyboardContext: () -> CalendarKeyboardContext = { .init(visible: false) }
+    var keyboardObservation: ((CalendarKeyboardInvocation) -> Void)? = nil
+    var controlFocus: FocusState<CalendarKeyboardOwner?>.Binding? = nil
 
     var body: some View {
         HStack(spacing: AppDesign.Spacing.sm) {
@@ -912,6 +1059,7 @@ struct CalendarDateSearchRow: View {
                     .font(.subheadline)
                     .accessibilityLabel("Go to date using AI")
                     .focused(focused)
+                    .focusedValue(\.calendarKeyboardOwner, .editor)
                     .onSubmit { onSubmit() }
                     .onAppear(perform: onEditorAppear)
 
@@ -920,35 +1068,36 @@ struct CalendarDateSearchRow: View {
                         .scaleEffect(0.5)
                         .frame(width: 16, height: 16)
                 } else {
-                    Button {
-                        isActive = false
-                        query = ""
-                        error = nil
-                        // Don't call deactivateTextInput — it closes the panel
-                    } label: {
+                    Button(action: dismissSearch) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .frame(width: AppDesign.Control.dismissTargetSize,
                                    height: AppDesign.Control.dismissTargetSize)
                             .contentShape(Rectangle())
+                            .overlay { CalendarKeyboardFocusOutline() }
                     }
                     .buttonStyle(.plain)
-                    .focusable(false)
+                    .modifier(CalendarControlReturn(
+                        owner: .searchDismiss, context: keyboardContext, action: dismissSearch,
+                        observe: keyboardObservation, focus: controlFocus
+                    ))
                     .accessibilityLabel("Close date search")
                     .accessibilityHint("Clears the query and closes date search.")
                 }
             } else {
-                Button {
-                    isActive = true
-                } label: {
+                Button(action: openSearch) {
                     Text("Go to date...  ⌘G")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay { CalendarKeyboardFocusOutline() }
                 }
                 .buttonStyle(.plain)
-                .focusable(false)
+                .modifier(CalendarControlReturn(
+                    owner: .searchPrompt, context: keyboardContext, action: openSearch,
+                    observe: keyboardObservation, focus: controlFocus
+                ))
                 .accessibilityLabel("Go to date using AI")
             }
         }
@@ -977,5 +1126,14 @@ struct CalendarDateSearchRow: View {
                 .font(.caption)
                 .foregroundStyle(.red)
         }
+    }
+
+    private func openSearch() { isActive = true }
+
+    private func dismissSearch() {
+        isActive = false
+        query = ""
+        error = nil
+        // Keep the reused panel's existing text activation/restoration lifecycle.
     }
 }
