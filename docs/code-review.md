@@ -195,6 +195,27 @@ The release specialist used the strict helper for the public DMG/tagged/latest
 feed audit and confirmed pinned hashes and identical feed bytes. These supplement,
 and do not replace, the final integrated staged app/core check.
 
+## Quality workspace follow-up
+
+The initial staged hook subsequently passed 57 app, 62 core, 74 tooling and 27
+monitoring tests for commit `1125158df09bf9dc6ab3f1e31465d6961d920938`.
+Push Quality passed; PR Quality attempts 1 and 2 stalled in dyld before app entry
+and did not test the merge revision. Attempt 3 used fresh internal scratch with
+unchanged source and passed the source and merge snapshots. This is evidence
+about loader path/state, not a demonstrated application failure.
+
+PR review correctly identified that `quality.*` directories retained whole
+DerivedData and core scratch trees. The follow-up separates durable result paths
+from a private `RUNNER_TEMP` or `/tmp` workspace and removes only that generated
+workspace on ordinary exit. The dependency cache and archived source stay outside
+cleanup. Root reviewed the bounded diff; independent QA passed 77 contracts and
+27 monitoring fixtures, scoped ShellCheck and shell syntax. Regression fixtures
+cover success and app failure with default/supplied results, private permissions,
+partial result retention, unrelated sibling files and inherited external temp
+settings. The full staged hook and updated hosted checks must still verify the
+actual split. No forced-kill guarantee is claimed for local `/tmp`; CI additionally
+uses runner-managed temp cleanup.
+
 ## Enforcement and native limits
 
 The applied canonical main protection was independently read through GitHub API:

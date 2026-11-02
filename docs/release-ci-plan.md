@@ -64,7 +64,36 @@ system curl with certificate verification, HTTPS-only redirects and bounded
 timeouts; the live pinned DMG/tagged/latest feed audit also passed. Local hooks,
 quality runs and release jobs place temporary files in their selected build
 storage. Actionlint, warning-level shellcheck, dependency and version checks pass.
-Final integrated staged-source verification and hosted publication remain open.
+The normal staged hook subsequently passed 57 app tests, 62 core tests, 74
+contracts and 27 monitoring fixtures for commit
+`1125158df09bf9dc6ab3f1e31465d6961d920938`. Push Quality run `41370154800`
+passed. PR Quality run `41370175946` attempts 1 and 2 failed before app entry:
+the test host stalled in dyld's dependency open and never connected to XCTest.
+Neither failed attempt tested the merge revision. Attempt 3 used fresh internal
+scratch storage with unchanged source and passed both that commit and merge
+revision `a781f5dcea1cd4dcb9e598e83403f9d8e500b6ac`; each passed 57 app and
+62 core tests with unchanged dependency hashes.
+
+The PR review also identified persistent `quality.*` build directories. Complete
+this follow-up before merge:
+
+- [x] Put each quality run's DerivedData, core scratch and temporary files in a
+  private workspace below the runner's internal `RUNNER_TEMP`, or local `/tmp`.
+- [x] Retain logs, result bundles and dependency hashes separately in selected
+  build storage; remove only the temporary workspace on ordinary exit.
+- [x] Exercise success and failure cleanup, supplied result paths and inherited
+  external temporary settings.
+- [ ] Verify the actual split with external archived source/results/cache and
+  internal build/temp, then rerun exact-source hosted checks.
+
+The temporary comparison's repository build-root override was restored after
+its evidence was preserved. Its pass narrows the loader issue to storage/path or
+per-file state; it does not establish that every external-volume build fails.
+Independent QA passed 77 tooling contracts and 27 monitoring fixtures after the
+cleanup change. Scoped ShellCheck and Bash syntax checks passed. The runner's
+internal temp directory provides job-boundary cleanup; local forced kills can
+leave `/tmp` workspaces. Actual split-path integration and hosted publication
+remain open.
 
 Constraints: no signing-key generation, no installed-app mutation, no destructive
 source reverts. Product, UX, code,

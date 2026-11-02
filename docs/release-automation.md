@@ -9,6 +9,15 @@ head identity, per-revision logs, and the first failed SHA. A failed intermediat
 commit blocks the batch even if its head would pass. The batch timeout is 120
 minutes; timeout fails the required check rather than dropping revisions.
 
+Quality builds use a private temporary workspace below `RUNNER_TEMP` in CI, or
+`/tmp` locally. This contains DerivedData, core build scratch and child-process
+temporary files; ordinary exit removes only that generated workspace. Logs,
+result bundles, dependency hashes and the SwiftPM download cache stay in selected
+build storage. The Glimpse runner's configured temp directory is on its internal
+disk. GitHub manages that directory at job boundaries; callers using local
+`/tmp` must account for leftovers after a forced kill that cannot run shell traps.
+Inherited external `TMPDIR` settings do not select the quality workspace.
+
 Each app release needs a higher marketing version and Sparkle build number,
 synchronized in all four project settings and the README badge. It also needs
 `.github/release-readiness.json` for that version/build, with passed product,
