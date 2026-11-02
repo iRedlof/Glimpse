@@ -10,39 +10,101 @@ import FoundationModels
 /// 2. Apple FoundationModels (macOS 26+) — on-device, free
 /// 3. Error if neither is available
 enum AIDateHelper {
-    enum Provider {
+    enum Provider: Equatable, Sendable {
         case proxy
         case foundationModels
         case none
     }
 
-    static func activeProvider() -> Provider {
-        let preference = PreferencesClient.liveValue.loadAIProvider()
+    struct Dependencies: Sendable {
+        var parseProxy: @Sendable (String) async throws -> Date?
+        var now: @Sendable () -> Date
+        var generateOnDevice: @Sendable (String) async throws -> String
 
+        static var live: Self {
+            Self(
+                parseProxy: {
+                    try await ProxyProvider.parseDate($0, dependencies: .live)
+                },
+                now: { Date() },
+                generateOnDevice: { prompt in
+                    #if canImport(FoundationModels)
+                    if #available(macOS 26, *) {
+                        let session = LanguageModelSession()
+                        return try await session.respond(to: prompt).content
+                    }
+                    #endif
+                    throw AIDateFailure.unavailable
+                }
+            )
+        }
+    }
+
+    static func provider(for preference: AIProvider, onDeviceSupported: Bool) -> Provider {
         switch preference {
         case .proxy:
             return .proxy
         case .onDevice:
-            return onDeviceAvailable() ? .foundationModels : .none
+            return onDeviceSupported ? .foundationModels : .none
         case .auto:
-            // Prefer proxy (always available), fall back to on-device
             return .proxy
         }
     }
 
-    static func parseNaturalLanguageDate(_ query: String) async -> Date? {
-        switch activeProvider() {
+    static func activeProvider() -> Provider {
+        provider(
+            for: PreferencesClient.liveValue.loadAIProvider(),
+            onDeviceSupported: onDeviceSupported()
+        )
+    }
+
+    static func parseNaturalLanguageDate(
+        _ query: String, provider: Provider, dependencies: Dependencies
+    ) async throws -> Date? {
+        try Task.checkCancellation()
+        switch provider {
         case .proxy:
-            return await ProxyProvider.parseDate(query)
-        case .foundationModels:
-            #if canImport(FoundationModels)
-            if #available(macOS 26, *) {
-                return await parseWithFoundationModels(query)
+            do {
+                let result = try await dependencies.parseProxy(query)
+                try Task.checkCancellation()
+                return result
+            } catch {
+                try Task.checkCancellation()
+                if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                    throw CancellationError()
+                }
+                if let failure = error as? AIDateFailure {
+                    throw failure
+                }
+                AppLogger.general.error("AI date failure: transport")
+                throw AIDateFailure.transport
             }
-            #endif
-            return nil
+        case .foundationModels:
+            do {
+                let today = ISO8601DateFormatter().string(from: dependencies.now())
+                let prompt = "Respond with ONLY a date in yyyy-MM-dd format, nothing else. If the query is relative, today is \(today). Query: \(query)"
+                try Task.checkCancellation()
+                let response = try await dependencies.generateOnDevice(prompt)
+                try Task.checkCancellation()
+                let date = DateParser.extractDate(from: response)
+                try Task.checkCancellation()
+                return date
+            } catch {
+                try Task.checkCancellation()
+                if error is CancellationError {
+                    throw CancellationError()
+                }
+                if (error as? AIDateFailure) == .unavailable {
+                    AppLogger.general.error("AI date failure: unavailable")
+                    throw AIDateFailure.unavailable
+                }
+                AppLogger.general.error("AI date failure: onDeviceRequest")
+                throw AIDateFailure.onDeviceRequest
+            }
         case .none:
-            return nil
+            try Task.checkCancellation()
+            AppLogger.general.error("AI date failure: unavailable")
+            throw AIDateFailure.unavailable
         }
     }
 
@@ -54,31 +116,13 @@ enum AIDateHelper {
         }
     }
 
-    // MARK: - Private
-
-    private static func onDeviceAvailable() -> Bool {
+    static func onDeviceSupported() -> Bool {
         #if canImport(FoundationModels)
         if #available(macOS 26, *) { return true }
         #endif
         return false
     }
 
-    #if canImport(FoundationModels)
-    @available(macOS 26, *)
-    private static func parseWithFoundationModels(_ query: String) async -> Date? {
-        do {
-            let session = LanguageModelSession()
-            let today = ISO8601DateFormatter().string(from: Date())
-            let prompt = "Respond with ONLY a date in yyyy-MM-dd format, nothing else. If the query is relative, today is \(today). Query: \(query)"
-
-            let response = try await session.respond(to: prompt)
-            return DateParser.extractDate(from: response.content)
-        } catch {
-            AppLogger.general.error("FoundationModels error: \(error.localizedDescription)")
-            return nil
-        }
-    }
-    #endif
 }
 
 // MARK: - Shared Date Parser

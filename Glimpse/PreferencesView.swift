@@ -7,15 +7,18 @@ struct PreferencesView: View {
     @Bindable var store: StoreOf<PreferencesFeature>
     @State private var hotkeyPreferences: HotkeyPreferencesModel
     private let notificationCenter: NotificationCenter
+    private let onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)?
 
     init(
         store: StoreOf<PreferencesFeature>,
         hotkeyPreferences: HotkeyPreferencesModel? = nil,
-        notificationCenter: NotificationCenter = .default
+        notificationCenter: NotificationCenter = .default,
+        onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)? = nil
     ) {
         self.store = store
         _hotkeyPreferences = State(initialValue: hotkeyPreferences ?? HotkeyPreferencesModel())
         self.notificationCenter = notificationCenter
+        self.onAISettingsChange = onAISettingsChange
     }
 
     private let allWeekdays = Array(1...7)
@@ -241,6 +244,7 @@ struct PreferencesView: View {
                     get: { store.showAISearch },
                     set: { newValue in
                         store.send(.setShowAISearch(newValue))
+                        onAISettingsChange?(store.showAISearch, store.aiProvider)
                     }
                 ))
                     .toggleStyle(.switch)
@@ -254,7 +258,13 @@ struct PreferencesView: View {
                 settingsRow {
                     Text("Provider")
                     Spacer()
-                    Picker("AI provider", selection: $store.aiProvider.sending(\.setAIProvider)) {
+                    Picker("AI provider", selection: Binding(
+                        get: { store.aiProvider },
+                        set: { provider in
+                            store.send(.setAIProvider(provider))
+                            onAISettingsChange?(store.showAISearch, store.aiProvider)
+                        }
+                    )) {
                         ForEach(GlimpseCore.AIProvider.allCases, id: \.self) { provider in
                             Text(provider.displayName).tag(provider)
                         }

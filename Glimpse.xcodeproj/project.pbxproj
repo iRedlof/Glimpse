@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DD0000000000000000000095 /* AIDateQueryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000096 /* AIDateQueryModel.swift */; };
+		DD0000000000000000000097 /* AIDateQueryModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000098 /* AIDateQueryModelTests.swift */; };
+		DD0000000000000000000091 /* AIDateQueryClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000092 /* AIDateQueryClient.swift */; };
+		DD0000000000000000000093 /* AIDateQueryClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000094 /* AIDateQueryClientTests.swift */; };
+		DD0000000000000000000099 /* AIDateSearchIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000000000000000000009A /* AIDateSearchIntegrationTests.swift */; };
+		DD000000000000000000009B /* AIDateSearchTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000000000000000000009C /* AIDateSearchTestSupport.swift */; };
 		E10000000000000000000001 /* FixtureHostingCleanupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000002 /* FixtureHostingCleanupTests.swift */; };
 		DF00000000000000000007 /* CalendarKeyboardFocus.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF00000000000000000008 /* CalendarKeyboardFocus.swift */; };
 		DF00000000000000000005 /* CalendarKeyboardRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF00000000000000000006 /* CalendarKeyboardRouter.swift */; };
@@ -73,6 +79,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		DD0000000000000000000096 /* AIDateQueryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryModel.swift; sourceTree = "<group>"; };
+		DD0000000000000000000098 /* AIDateQueryModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryModelTests.swift; sourceTree = "<group>"; };
+		DD0000000000000000000092 /* AIDateQueryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryClient.swift; sourceTree = "<group>"; };
+		DD0000000000000000000094 /* AIDateQueryClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryClientTests.swift; sourceTree = "<group>"; };
+		DD000000000000000000009A /* AIDateSearchIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateSearchIntegrationTests.swift; sourceTree = "<group>"; };
+		DD000000000000000000009C /* AIDateSearchTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateSearchTestSupport.swift; sourceTree = "<group>"; };
 		E10000000000000000000002 /* FixtureHostingCleanupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixtureHostingCleanupTests.swift; sourceTree = "<group>"; };
 		DF00000000000000000008 /* CalendarKeyboardFocus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarKeyboardFocus.swift; sourceTree = "<group>"; };
 		DF00000000000000000006 /* CalendarKeyboardRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarKeyboardRouter.swift; sourceTree = "<group>"; };
@@ -182,6 +194,8 @@
 				DD00000000000000000065 /* HotkeyPreferencesModel.swift */,
 				DD00000000000000000011 /* AppIntents.swift */,
 				DD00000000000000000012 /* AIDateHelper.swift */,
+				DD0000000000000000000092 /* AIDateQueryClient.swift */,
+				DD0000000000000000000096 /* AIDateQueryModel.swift */,
 				DD00000000000000000015 /* MonthBorderShape.swift */,
 				DD00000000000000000016 /* SparkleUpdater.swift */,
 				DD00000000000000000017 /* ProxyProvider.swift */,
@@ -210,6 +224,8 @@
 			children = (
 				E10000000000000000000002 /* FixtureHostingCleanupTests.swift */,
 				DF00000000000000000002 /* CalendarKeyboardOwnershipTests.swift */,
+				DD000000000000000000009A /* AIDateSearchIntegrationTests.swift */,
+				DD000000000000000000009C /* AIDateSearchTestSupport.swift */,
 				DF00000000000000000004 /* CalendarKeyboardRouterTests.swift */,
 				DE00000000000000000002 /* CalendarDateAccessibilityTests.swift */,
 				DD0000000000000000008B /* AccessibilityViewportTests.swift */,
@@ -227,6 +243,8 @@
 				BB00000000000000000014 /* AppDesignTests.swift */,
 				BB00000000000000000015 /* CalendarStatusItemTests.swift */,
 				BB00000000000000000016 /* DateParserTests.swift */,
+				DD0000000000000000000094 /* AIDateQueryClientTests.swift */,
+				DD0000000000000000000098 /* AIDateQueryModelTests.swift */,
 				BB00000000000000000017 /* HotkeyComboTests.swift */,
 				DD00000000000000000051 /* DiagnosticsExportTests.swift */,
 				DD00000000000000000053 /* CalendarInputTests.swift */,
@@ -346,6 +364,8 @@
 				DD00000000000000000064 /* HotkeyPreferencesModel.swift in Sources */,
 				DD00000000000000000002 /* AppIntents.swift in Sources */,
 				DD00000000000000000003 /* AIDateHelper.swift in Sources */,
+				DD0000000000000000000091 /* AIDateQueryClient.swift in Sources */,
+				DD0000000000000000000095 /* AIDateQueryModel.swift in Sources */,
 				DD00000000000000000006 /* MonthBorderShape.swift in Sources */,
 				DD00000000000000000007 /* SparkleUpdater.swift in Sources */,
 				DD00000000000000000008 /* ProxyProvider.swift in Sources */,
@@ -361,6 +381,8 @@
 			files = (
 				E10000000000000000000001 /* FixtureHostingCleanupTests.swift in Sources */,
 				DF00000000000000000001 /* CalendarKeyboardOwnershipTests.swift in Sources */,
+				DD0000000000000000000099 /* AIDateSearchIntegrationTests.swift in Sources */,
+				DD000000000000000000009B /* AIDateSearchTestSupport.swift in Sources */,
 				DF00000000000000000003 /* CalendarKeyboardRouterTests.swift in Sources */,
 				DE00000000000000000001 /* CalendarDateAccessibilityTests.swift in Sources */,
 				DD0000000000000000008A /* AccessibilityViewportTests.swift in Sources */,
@@ -378,6 +400,8 @@
 				BB00000000000000000024 /* AppDesignTests.swift in Sources */,
 				BB00000000000000000025 /* CalendarStatusItemTests.swift in Sources */,
 				BB00000000000000000026 /* DateParserTests.swift in Sources */,
+				DD0000000000000000000093 /* AIDateQueryClientTests.swift in Sources */,
+				DD0000000000000000000097 /* AIDateQueryModelTests.swift in Sources */,
 				BB00000000000000000027 /* HotkeyComboTests.swift in Sources */,
 				DD00000000000000000050 /* DiagnosticsExportTests.swift in Sources */,
 				DD00000000000000000052 /* CalendarInputTests.swift in Sources */,
@@ -458,7 +482,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -466,7 +490,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.16;
+				MARKETING_VERSION = 1.4.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -483,7 +507,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -491,7 +515,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.16;
+				MARKETING_VERSION = 1.4.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -506,9 +530,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.16;
+				MARKETING_VERSION = 1.4.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -523,9 +547,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.16;
+				MARKETING_VERSION = 1.4.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

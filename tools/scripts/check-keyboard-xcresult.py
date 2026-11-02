@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed on the isolated ownership suite's public xcresult summary/tree."""
+"""Fail closed on one explicitly selected isolated suite's public xcresult summary/tree."""
 
 import argparse
 import hashlib
@@ -13,14 +13,18 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def validate(manifest, summary, tests, *, runtime_warnings=None):
+SUPPORTED_SUITES = ("CalendarKeyboardOwnershipTests", "AIDateSearchIntegrationTests")
+
+
+def validate(manifest, summary, tests, *, runtime_warnings=None, suite=SUPPORTED_SUITES[0]):
+    require(suite in SUPPORTED_SUITES, "Unsupported test suite")
     require(isinstance(manifest, dict) and type(manifest.get("schema_version")) is int
             and manifest["schema_version"] == 1,
             "Invalid method manifest schema")
     expected = manifest.get("methods")
     require(isinstance(expected, dict) and bool(expected), "Empty or invalid method manifest")
     for identifier, count in expected.items():
-        require(re.fullmatch(r"CalendarKeyboardOwnershipTests/[A-Za-z_]\w*\([^/]*\)", identifier)
+        require(re.fullmatch(rf"{re.escape(suite)}/[A-Za-z_]\w*\([^/]*\)", identifier)
                 and type(count) is int and count > 0, "Invalid required method or case count")
     require(isinstance(summary, dict) and summary.get("result") == "Passed",
             "Summary did not pass")
@@ -43,6 +47,26 @@ def validate(manifest, summary, tests, *, runtime_warnings=None):
     methods = {}
     prefix = "test://com.apple.xcode/Glimpse/GlimpseTests/"
 
+    def retain_warning(warning, method, parameter=None):
+        require(isinstance(warning, dict) and warning.get("nodeType") == "Runtime Warning"
+                and set(warning) <= {"nodeType", "name", "sourceLocation", "children"}
+                and isinstance(warning.get("name"), str) and bool(warning["name"].strip())
+                and isinstance(warning.get("children", []), list)
+                and not warning.get("children", []), "Invalid runtime warning")
+        if "sourceLocation" in warning:
+            location = warning["sourceLocation"]
+            require(isinstance(location, dict)
+                    and set(location) == {"filePath", "lineNumber"}
+                    and isinstance(location["filePath"], str)
+                    and bool(location["filePath"].strip())
+                    and type(location["lineNumber"]) is int and location["lineNumber"] > 0,
+                    "Invalid runtime warning source location")
+        if runtime_warnings is not None:
+            entry = {"method": method, **warning}
+            if parameter is not None:
+                entry["parameter"] = parameter
+            runtime_warnings.append(entry)
+
     def visit(node):
         require(isinstance(node, dict) and node.get("result") == "Passed",
                 "A test tree node is not Passed")
@@ -58,25 +82,11 @@ def validate(manifest, summary, tests, *, runtime_warnings=None):
             urls, names = set(), set()
             for child in children:
                 if isinstance(child, dict) and child.get("nodeType") == "Runtime Warning":
-                    require(set(child) <= {"nodeType", "name", "sourceLocation", "children"}
-                            and isinstance(child.get("name"), str) and bool(child["name"].strip())
-                            and isinstance(child.get("children", []), list)
-                            and not child.get("children", []), "Invalid runtime warning")
-                    if "sourceLocation" in child:
-                        location = child["sourceLocation"]
-                        require(isinstance(location, dict)
-                                and set(location) == {"filePath", "lineNumber"}
-                                and isinstance(location["filePath"], str)
-                                and bool(location["filePath"].strip())
-                                and type(location["lineNumber"]) is int and location["lineNumber"] > 0,
-                                "Invalid runtime warning source location")
-                    if runtime_warnings is not None:
-                        runtime_warnings.append({"method": identifier, **child})
+                    retain_warning(child, identifier)
                     continue
                 require(isinstance(child, dict) and child.get("nodeType") == "Arguments"
                         and child.get("result") == "Passed"
-                        and isinstance(child.get("children", []), list)
-                        and not child.get("children", []),
+                        and isinstance(child.get("children", []), list),
                         "Invalid or non-Passed parameter case")
                 url, name = child.get("nodeIdentifierURL"), child.get("name")
                 require(isinstance(url, str) and url.startswith(prefix + identifier + "?args=")
@@ -84,6 +94,8 @@ def validate(manifest, summary, tests, *, runtime_warnings=None):
                         and url not in urls, "Missing or duplicate parameter identity")
                 require(isinstance(name, str) and bool(name) and name not in names,
                         "Missing or duplicate parameter name")
+                for warning in child.get("children", []):
+                    retain_warning(warning, identifier, {"name": name, "nodeIdentifierURL": url})
                 urls.add(url)
                 names.add(name)
             count = len(urls) if urls else 1
@@ -111,6 +123,7 @@ def unique_object(pairs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--suite", choices=SUPPORTED_SUITES, default=SUPPORTED_SUITES[0])
     for name in ("manifest", "summary", "tests", "receipt"):
         parser.add_argument("--" + name, type=pathlib.Path, required=True)
     for name in ("xcodebuild", "summary", "tests", "log"):
@@ -129,13 +142,14 @@ def main():
             documents[name] = json.loads(raw, object_pairs_hook=unique_object)
         require(all(code == 0 for code in receipt["command_exits"].values()),
                 "Build, log retention or xcresult extraction failed")
-        receipt["methods"] = validate(**documents, runtime_warnings=receipt["runtime_warnings"])
+        receipt["methods"] = validate(**documents, runtime_warnings=receipt["runtime_warnings"], suite=args.suite)
         receipt["executed_cases"] = sum(receipt["methods"].values())
         receipt["status"] = "Passed"
     except (ValueError, TypeError, OSError) as error:
         receipt["errors"].append(str(error))
     args.receipt.write_text(json.dumps(receipt, indent=2) + "\n")
-    print(f"Keyboard ownership: {receipt['status']} ({receipt['executed_cases']} cases)")
+    label = "Keyboard ownership" if args.suite == SUPPORTED_SUITES[0] else "AI date search integration"
+    print(f"{label}: {receipt['status']} ({receipt['executed_cases']} cases)")
     return 0 if receipt["status"] == "Passed" else 1
 
 

@@ -318,55 +318,56 @@ struct CalendarKeyboardOwnershipTests {
 
     @Test
     func nativeEditorSubmitEscapeAndHiddenReopen() async throws {
-        let fixture = try CalendarKeyboardRootFixture(showAI: true)
-        defer { fixture.close() }
-        try await fixture.openThroughShowOwner()
-        for _ in 0..<4 { try fixture.send(.tab) }
-        // The focused prompt locally handles Space; no AX action or panel-wide activation.
-        try fixture.send(.space)
-        fixture.trace("native-search-prompt-space")
-        await fixture.settleRendering()
-        try fixture.loadOwnedAccessibilityTree()
-        let field = try fixture.nativeEditorField()
-        let editor = try #require(field.currentEditor() as? NSTextView)
-        let editorIsResponder = fixture.panel.firstResponder === editor
-        #expect(editorIsResponder)
-        // Public mutation sets up only this synthetic draft; native Return is queued.
-        editor.insertText("synthetic next Friday", replacementRange: NSRange(location: NSNotFound, length: 0))
-        await fixture.settleRendering()
-        editor.setSelectedRange(NSRange(location: 3, length: 5))
-        let responder = fixture.panel.firstResponder
-        for _ in 0..<2 { try fixture.showOwner.showCalendar() }
-        let responderRetained = fixture.panel.firstResponder === responder
-        #expect(responderRetained)
-        #expect(editor.string == "synthetic next Friday")
-        #expect(editor.selectedRange() == NSRange(location: 3, length: 5))
-        try fixture.send(.left)
-        #expect(fixture.actions.value.isEmpty)
-        #expect(editor.selectedRange() != NSRange(location: 3, length: 5))
-        try fixture.send(.returnKey)
-        #expect(fixture.submissions == ["synthetic next Friday"])
-        #expect(fixture.submissionCurrentEvents == [true])
-        #expect(fixture.actions.value.isEmpty)
-        try fixture.send(.escape)
-        await fixture.settleRendering()
-        #expect(fixture.panel.isVisible)
-        #expect(fixture.nativeEditorFields.isEmpty)
-        #expect(fixture.submissions.count == 1)
-        try fixture.send(.searchShortcut)
-        await fixture.settleRendering()
-        #expect(fixture.nativeEditorFields.count == 1)
-        fixture.panel.orderOut(nil)
-        try await fixture.openThroughShowOwner()
-        #expect(fixture.nativeEditorFields.isEmpty)
-        let responderIsWindow = fixture.panel.firstResponder === fixture.panel
-        #expect(responderIsWindow)
-        #expect(fixture.lastPublishedOwner == nil)
-        try fixture.send(.right)
-        try fixture.send(.returnKey)
-        #expect(fixture.actions.value == ["nextMonth", "today"])
-        #expect(fixture.submissions.count == 1)
-        #expect(fixture.actionCurrentEvents.value == [true, true])
+        try await withAIDateKeyboardRootFixture { fixture in
+            try await fixture.openThroughShowOwner()
+            for _ in 0..<4 { try fixture.send(.tab) }
+            // The focused prompt locally handles Space; no AX action or panel-wide activation.
+            try fixture.send(.space)
+            fixture.trace("native-search-prompt-space")
+            await fixture.settleRendering()
+            try fixture.loadOwnedAccessibilityTree()
+            let field = try fixture.nativeEditorField()
+            let editor = try #require(field.currentEditor() as? NSTextView)
+            let editorIsResponder = fixture.panel.firstResponder === editor
+            #expect(editorIsResponder)
+            // Public mutation sets up only this synthetic draft; native Return is queued.
+            editor.insertText("synthetic next Friday", replacementRange: NSRange(location: NSNotFound, length: 0))
+            await fixture.settleRendering()
+            editor.setSelectedRange(NSRange(location: 3, length: 5))
+            let responder = fixture.panel.firstResponder
+            for _ in 0..<2 { try fixture.showOwner.showCalendar() }
+            let responderRetained = fixture.panel.firstResponder === responder
+            #expect(responderRetained)
+            #expect(editor.string == "synthetic next Friday")
+            #expect(editor.selectedRange() == NSRange(location: 3, length: 5))
+            try fixture.send(.left)
+            #expect(fixture.actions.value.isEmpty)
+            #expect(editor.selectedRange() != NSRange(location: 3, length: 5))
+            try fixture.send(.returnKey)
+            #expect(fixture.submissions == ["synthetic next Friday"])
+            #expect(fixture.submissionCurrentEvents == [true])
+            #expect(fixture.actions.value.isEmpty)
+            try await fixture.awaitAcceptedSubmissions()
+            try fixture.send(.escape)
+            await fixture.settleRendering()
+            #expect(fixture.panel.isVisible)
+            #expect(fixture.nativeEditorFields.isEmpty)
+            #expect(fixture.submissions.count == 1)
+            try fixture.send(.searchShortcut)
+            await fixture.settleRendering()
+            #expect(fixture.nativeEditorFields.count == 1)
+            fixture.panel.orderOut(nil)
+            try await fixture.openThroughShowOwner()
+            #expect(fixture.nativeEditorFields.isEmpty)
+            let responderIsWindow = fixture.panel.firstResponder === fixture.panel
+            #expect(responderIsWindow)
+            #expect(fixture.lastPublishedOwner == nil)
+            try fixture.send(.right)
+            try fixture.send(.returnKey)
+            #expect(fixture.actions.value == ["nextMonth", "today"])
+            #expect(fixture.submissions.count == 1)
+            #expect(fixture.actionCurrentEvents.value == [true, true])
+        }
     }
 
     @Test(arguments: [CGFloat(312), 812])
@@ -460,11 +461,17 @@ struct CalendarKeyboardOwnershipTests {
 }
 
 @MainActor
-private final class CalendarKeyboardRootFixture {
+final class CalendarKeyboardRootFixture {
     let today: Date
     let store: StoreOf<CalendarFeature>
     let panel: CalendarPanel
     let hosting: NSHostingView<AnyView>
+    let preferences: StoreOf<PreferencesFeature>
+    let aiModel: AIDateQueryModel
+    let aiSettings: LockIsolated<AIDateIntegrationSettings>
+    private let aiTaskReceipts: AIDateIntegrationTaskReceipts
+    var aiTasks: [AIDateIntegrationTrackedTask] { aiTaskReceipts.tasks }
+    let aiSettingSaves = LockIsolated<[AIDateIntegrationSettings]>([])
     let actions = LockIsolated<[String]>([])
     let actionCurrentEvents = LockIsolated<[Bool]>([])
     private let dispatch = CalendarKeyboardDispatchReceipt()
@@ -500,7 +507,11 @@ private final class CalendarKeyboardRootFixture {
     var monthNumber: Int { store.calendar.component(.month, from: store.displayedMonth) }
     var yearNumber: Int { store.calendar.component(.year, from: store.displayedMonth) }
 
-    init(showAI: Bool = false, maximumHeight: CGFloat = 550, initialToday: Date? = nil) throws {
+    init(
+        showAI: Bool = false, maximumHeight: CGFloat = 550, initialToday: Date? = nil,
+        aiClient: AIDateQueryClient = AIDateIntegrationClient.immediateNoDate,
+        allowAISettings: Bool = false
+    ) throws {
         self.maximumHeight = maximumHeight
         if let initialToday {
             today = initialToday
@@ -509,6 +520,9 @@ private final class CalendarKeyboardRootFixture {
                 year: 2030, month: 11, day: 15, hour: 12
             )))
         }
+        aiSettings = LockIsolated(AIDateIntegrationSettings(enabled: showAI, preference: .auto))
+        let aiSettings = aiSettings
+        let aiSettingSaves = aiSettingSaves
         let fixedToday = today
         let actions = actions
         let events = actionCurrentEvents
@@ -522,6 +536,7 @@ private final class CalendarKeyboardRootFixture {
                 case .goToPreviousYear: name = "previousYear"
                 case .goToNextYear: name = "nextYear"
                 case .goToToday: name = "today"
+                case .aiDateResult(.some(_)): name = "aiDate"
                 case let .dateTapped(date):
                     name = "date:\(state.calendar.component(.day, from: date))"
                 default: name = nil
@@ -546,7 +561,7 @@ private final class CalendarKeyboardRootFixture {
             $0.preferencesClient = .testValue
             $0.preferencesClient.loadStartOfWeekday = { 1 }
             $0.preferencesClient.loadWorkdays = { [2, 3, 4, 5, 6] }
-            $0.preferencesClient.loadShowAISearch = { showAI }
+            $0.preferencesClient.loadShowAISearch = { aiSettings.value.enabled }
             $0.eventKitClient = EventKitClient(
                 requestAccess: {
                     Issue.record("Keyboard fixture must not request calendar access")
@@ -559,11 +574,13 @@ private final class CalendarKeyboardRootFixture {
                 authorizationStatus: { .notDetermined }
             )
         }
-        let preferences = Store(initialState: PreferencesFeature.State()) {
+        preferences = Store(initialState: PreferencesFeature.State()) {
             Reduce<PreferencesFeature.State, PreferencesFeature.Action> { _, action in
                 switch action {
                 case .onAppear, .refreshLaunchAtLogin:
                     break // Existing view lifecycle reads only injected clients.
+                case .setShowAISearch, .setAIProvider, .delegate(.preferencesChanged):
+                    if !allowAISettings { Issue.record("Keyboard fixture must not change AI preferences") }
                 default:
                     Issue.record("Keyboard fixture must not change preferences")
                 }
@@ -575,11 +592,24 @@ private final class CalendarKeyboardRootFixture {
             $0.preferencesClient.loadStartOfWeekday = { 1 }
             $0.preferencesClient.loadWorkdays = { [2, 3, 4, 5, 6] }
             $0.preferencesClient.loadDisplayOptions = { .default }
-            $0.preferencesClient.loadShowAISearch = { showAI }
-            $0.preferencesClient.loadAIProvider = { .auto }
+            $0.preferencesClient.loadShowAISearch = { aiSettings.value.enabled }
+            $0.preferencesClient.loadAIProvider = { aiSettings.value.preference }
+            $0.preferencesClient.saveShowAISearch = { enabled in
+                aiSettings.withValue { $0.enabled = enabled }
+                aiSettingSaves.withValue { $0.append(aiSettings.value) }
+            }
+            $0.preferencesClient.saveAIProvider = { preference in
+                aiSettings.withValue { $0.preference = preference }
+                aiSettingSaves.withValue { $0.append(aiSettings.value) }
+            }
             $0.launchAtLoginClient = .testValue
             $0.launchAtLoginClient.status = { .notRegistered }
         }
+        let store = store
+        aiModel = AIDateQueryModel(
+            client: aiClient, enabled: showAI, preference: .auto,
+            onDate: { store.send(.aiDateResult($0)) }
+        )
         panel = CalendarPanel(
             contentRect: NSRect(x: -1000, y: -1000, width: 316, height: maximumHeight),
             caretOffset: 150, calendarStore: store, content: { _ in AnyView(EmptyView()) }
@@ -595,6 +625,9 @@ private final class CalendarKeyboardRootFixture {
         ) { Issue.record("Keyboard fixture must not operate a global hotkey") }
         // Replace only fixture presentation to inject the existing root preferences seam.
         // This keyboard test does not accept the private KVO resize path.
+        let aiModel = aiModel
+        let taskReceipts = AIDateIntegrationTaskReceipts()
+        aiTaskReceipts = taskReceipts
         hosting = NSHostingView(rootView: AnyView(
             CalendarPopoverView(
                 store: store, panel: panel, layout: panel.layoutState,
@@ -620,7 +653,13 @@ private final class CalendarKeyboardRootFixture {
                     print("GLIMPSE_KEYBOARD_EDITOR_PRESENTATION count=\(effects.presentationRequests)")
                     requestFocus()
                 },
-                querySubmission: { query in
+                aiQueryModel: aiModel,
+                loadAISettings: {
+                    let settings = aiSettings.value
+                    return (settings.enabled, settings.preference)
+                },
+                querySubmissionObservation: { query, task in
+                    taskReceipts.tasks.append(AIDateIntegrationTrackedTask(task))
                     let matched = NSApp.currentEvent === dispatch.expected
                     effects.submissions.append(query)
                     effects.currentEvents.append(matched)
@@ -642,6 +681,25 @@ private final class CalendarKeyboardRootFixture {
         completionObserver = NotificationCenter.default.addObserver(
             forName: .calendarPanelDidCompleteReopen, object: panel, queue: nil
         ) { _ in MainActor.assumeIsolated { lifecycle.completions += 1 } }
+    }
+
+    func awaitAcceptedSubmissions() async throws {
+        let cleanup = Task { @MainActor in
+            var failedReceipts: [Int] = []
+            for (index, receipt) in self.aiTasks.enumerated() {
+                do { try await receipt.finish() }
+                catch { failedReceipts.append(index) }
+            }
+            // Every actual receipt is visited before reporting unresolved work.
+            if !failedReceipts.isEmpty {
+                throw AIDateIntegrationFixtureFailure.receiptFailures(failedReceipts)
+            }
+        }
+        try await cleanup.value
+    }
+
+    func trackEligibilityProbe(_ task: Task<Void, Never>) {
+        aiTaskReceipts.tasks.append(AIDateIntegrationTrackedTask(task))
     }
 
     func date(day: Int) -> Date? {
@@ -1054,7 +1112,7 @@ private final class CalendarKeyboardPeerView: NSView {
 }
 
 @MainActor
-private final class CalendarKeyboardOwnedPeer {
+final class CalendarKeyboardOwnedPeer {
     let panel = NSPanel(
         contentRect: NSRect(x: -1800, y: -1800, width: 120, height: 80),
         styleMask: [.titled, .nonactivatingPanel], backing: .buffered, defer: false

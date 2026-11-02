@@ -155,8 +155,25 @@ private final class DateAccessibilityFixture {
             $0.launchAtLoginClient = .testValue
         }
         let calendarStore = store
+        let aiModel = AIDateQueryModel(
+            client: AIDateQueryClient(
+                resolveProvider: { _ in
+                    Issue.record("Date fixture must not resolve an AI provider")
+                    return .none
+                },
+                parseDate: { _, _ in
+                    Issue.record("Date fixture must not request an AI date")
+                    return nil
+                }
+            ),
+            enabled: false, preference: .auto,
+            onDate: { _ in Issue.record("Date fixture must not receive an AI date") }
+        )
         host = AccessibilityTestHost(width: 316, height: 550) {
-            CalendarPopoverView(store: calendarStore, preferencesStore: preferences)
+            CalendarPopoverView(
+                store: calendarStore, preferencesStore: preferences,
+                aiQueryModel: aiModel, loadAISettings: { (false, .auto) }
+            )
                 .environment(\.colorScheme, appearance)
         }
     }

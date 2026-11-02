@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "methods": {
+    "AIDateSearchIntegrationTests/actualRowShowsStaticOutcomesAndResubmitsOnce(outcome:)": 3,
+    "AIDateSearchIntegrationTests/cancellationEndsProgressWithoutFeedback()": 1,
+    "AIDateSearchIntegrationTests/nativeDraftEditRejectsLateCompletionAndAllowsClose()": 1,
+    "AIDateSearchIntegrationTests/directSettingsSettersInvalidateBeforeCompletion(action:)": 3,
+    "AIDateSearchIntegrationTests/preferenceReloadReconcilesCurrentSettings(disable:)": 2,
+    "AIDateSearchIntegrationTests/hiddenPreparationAndVisibleShowPreserveOwnership()": 1,
+    "AIDateSearchIntegrationTests/dismissEscapeAndRemovalRejectLateCompletion(boundary:)": 3,
+    "AIDateSearchIntegrationTests/failureCopyFitsAndRemainsAccessible(outcome:)": 3
+  }
+}
