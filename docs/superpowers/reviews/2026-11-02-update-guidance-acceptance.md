@@ -2,7 +2,7 @@
 
 2026-11-02. Candidate **v1.4.12/build 19** on `codex/update-guidance`.
 
-**Status: implemented; focused driver, About action and full-view visual evidence accepted. Candidate whole-source quality, independent A1–A8 review, protected integration and delivery remain pending.**
+**Status: implemented; focused driver, About action, full-view visual evidence and candidate whole-source quality accepted. Independent A1–A8 review found no additional application defect and required the readiness correction recorded below. Final bookkeeping hook, protected integration and delivery remain pending.**
 
 ## User-visible behavior
 
@@ -16,7 +16,8 @@ The [accepted design](../specs/2026-11-02-update-guidance-design.md) records the
 
 - Base main: `1ee8f7ec96c524544cd089aae635488b46c40737`.
 - Scoped driver commit: `c8292523791547c4ff4132bc500c430a4f67a7c5`; its normal hook tested exact staged tree `d33129781723590146ab7ef4fb7d162ae1e921ea`.
-- Candidate UI/readiness/version work follows that commit. Both lockfiles remain unchanged; 15 matching app/Core pins include Sparkle 2.9.4.
+- Candidate UI/version commit: `cc272c525a7aadd0f5c7d94d29bb77cdf03ad78c`, exact staged tree `888967f24788d9c779196134746f346c5c2d8cab`. Its normal hook completed with exit0 and no timeout; tested file bytes match the commit.
+- Both lockfiles remain unchanged; 15 matching app/Core pins include Sparkle 2.9.4.
 - Core, calendar/AI behavior, production feed, signature verification, startup preferences and permissions are outside this change.
 
 Retained evidence lives under `build/validation/update-guidance-implementation.bpo8vktn/` in the shared build root. JSON acceptances retain source/pin identities and artifact digests. These files are not shipped with the app.
@@ -27,11 +28,13 @@ Retained evidence lives under `build/validation/update-guidance-implementation.b
 | Driver precision regression | First GREEN exposed an `NSDecimalNumber` fraction rounded to latest; Foundation probe reproduced comparison precision loss | `task1-green-1`, `decimal-reason-comparison-probe.*` |
 | Final driver GREEN | 32 named tests / 151 cases; zero failures/skips/xcresult runtime warnings | `task1-green-2`, `task1-focused-acceptance.json` |
 | Driver normal whole-quality hook | 459 named tests: app197/461 cases, Core70, tooling165, monitoring27; zero failures/skips | `task1-commit-run`, `task1-hook-quality-summary.json`, `task1-whole-quality-acceptance.json` |
+| Candidate normal whole-quality hook | 464 named tests: app202/512 cases, Core70, tooling165, monitoring27; zero failures/skips/xcresult runtime warnings; source/tree/pins match | `task2-candidate-commit-run`, `task2-candidate-hook-quality-summary.json`, `task2-candidate-whole-quality-acceptance.json` |
 | About behavioral RED | 3 names / 12 cases failed on expected reason/detail/latest copy; eligibility freshness already passed | `task2-red-1` |
 | Final About GREEN | 11 named tests / 72 cases; zero failures/skips/xcresult runtime warnings | `task2-green-2`, `task2-focused-acceptance.json` |
 | Actual full About rendering | 36 light/dark reason/detail/eligibility cases; width300, actual fitting/content height332–413; text/control bounds visible and nonoverlapping | `task2-renders-2`, `task2-render-manifest.json` |
 | Visual review | Lead inspected all 36 layouts in contact sheets1–3; header, wrapping, actions, diagnostics and footer fit | Original transparent PNGs retained; contact sheets use neutral light/dark backgrounds for inspection |
-| Candidate metadata/pins | Four marketing versions1.4.12, four build numbers19 and README badge synchronized; version and dependency checks passed | `task2-version-before.json` plus final whole-quality metadata check still required |
+| Candidate metadata/pins | Four marketing versions1.4.12, four build numbers19 and README badge synchronized; version and dependency checks passed in the candidate hook | `task2-version-before.json`, candidate whole-quality receipt |
+| Independent A1–A8 review | Full `1ee8f7e..cc272c5` reviewed read-only; no additional application defect. F1 requires current readiness evidence; F2 identifies conservative stale completion status | `whole-branch-review.md`, `whole-branch-review.json`; final bookkeeping gate still required |
 
 Named tests and parameterized cases are distinct counts. Focused gates overlap the whole gate and must not be summed as unique whole-product coverage.
 
@@ -48,7 +51,20 @@ Named tests and parameterized cases are distinct counts. Focused gates overlap t
 | 7. About reopen and official link | Recreated view preserves state/I/O/UUIDs; actual link press records only official releases/latest |
 | 8. Readable text and valid actions | Owned accessibility roles, names, values, enabled sets and geometry; physical VoiceOver/keyboard unperformed |
 | 9. Full light/dark fit | Actual injected production About view, complete header/diagnostics/footer, optional and 32-character details, disabled footnote; signed native fit unperformed |
-| 10. Scope and delivery gates | Pins/security/settings preserved at current source; candidate whole gate/review/integration/public/install verification pending |
+| 10. Scope and delivery gates | Pins/security/settings preserved; candidate whole gate and independent application review accepted. Readiness bookkeeping is corrected below; final hook/integration/public/install verification pending |
+
+## Scoped readiness decisions
+
+The lead accepts these decisions on 2026-11-02 under the autonomous product goal. These are candidate-scope decisions, not acceptance of the whole reliability goal or unavailable native checks.
+
+| Role | Decision and actual evidence |
+| --- | --- |
+| Product | Passed: the implemented reason matrix and recovery actions match the accepted UPD-03 design and acceptance criteria1–7. It replaces false latest claims without introducing a compatibility calculation or changing the official feed. |
+| UX | Passed at owned-view scope: all36 actual full About light/dark layouts were inspected by the lead; copy, valid optional detail, unavailable-check footnote, header, diagnostics and footer remain readable with named usable controls. Physical keyboard/VoiceOver and signed native fit remain open. |
+| Code | Passed for application source at `cc272c5`: the one independent whole-branch A1–A8 review inspected all11 changed files and all five review risks, with no additional application-code finding. Known F1 is corrected by synchronizing `.github/release-readiness.json` to1.4.12/build19 and this document; ordinary readiness/final-hook verification is still required before integration. |
+| QA | Passed for candidate behavior: genuine SDK-error/item adapters, controlled driver lifecycle, actual owned AX presses/reopen/link receipts and complete production-view geometry/renders pass. The normal exact staged-source gate passed464 named tests,512 app cases, with unchanged pins and zero failures/skips/xcresult runtime warnings. Native/endurance limits below remain open. |
+
+The prior v1.4.11 manifest was intentionally preserved during the candidate hook. The readiness CLI's observed exit1 exposed its version/build mismatch; the correction uses this new scoped evidence rather than carrying forward the accessibility release's approvals. No release-policy, signing or admission control is changed.
 
 ## Fixture investigation and diagnostics
 
@@ -62,6 +78,6 @@ Expected public `SUAppcastItem(dictionary:)` deprecation is retained: the fixtur
 
 These are unsigned owned fixtures on macOS27.0.1/arm64. They do not establish real incompatible-feed selection, Intel eligibility, older macOS behavior, physical keyboard/VoiceOver, real retry/install/relaunch or signed native About fit. Intel acceptance requires Intel hardware; translated execution on Apple silicon is insufficient. Official feed/security settings remain unchanged.
 
-Latest verified public/installed distribution remains **v1.4.11/build18**. Candidate1.4.12 is not released. Whole quality, independent review, protected admission, terminal exact-source Release/Recovery, public signed/notarized DMG/appcast verification and official installation/launch must be recorded separately before delivery is claimed.
+Latest verified public/installed distribution remains **v1.4.11/build18**. Candidate1.4.12 is not released. Candidate whole quality and independent application review are recorded above. Final corrected-source hook/readiness, protected admission, terminal exact-source Release/Recovery, public signed/notarized DMG/appcast verification and official installation/launch must be recorded separately before delivery is claimed.
 
 The user's other-Mac termination is unexplained, restart testing is user-deferred, and controlled performance/endurance acceptance remains open.

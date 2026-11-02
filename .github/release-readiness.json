@@ -1,22 +1,22 @@
 {
-  "version": "1.4.11",
-  "build": "18",
+  "version": "1.4.12",
+  "build": "19",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-02-accessibility-controls-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-02-update-guidance-acceptance.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-02-accessibility-controls-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-02-update-guidance-acceptance.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-02-accessibility-controls-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-02-update-guidance-acceptance.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-02-accessibility-controls-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-02-update-guidance-acceptance.md"
     }
   }
 }
