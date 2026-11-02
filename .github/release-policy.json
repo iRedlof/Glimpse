@@ -3,17 +3,6 @@
   "bundle_id": "com.rohit.Glimpse",
   "team_id": "5D7M37QQLU",
   "sparkle_public_key": "r3bpqxl5pEGWf6atYS0ZWP3FZyTVVcFAfDj22fuCioE=",
-  "legacy_recovery": {
-    "source_sha": "eb4fc447be5491f2e665b3bde005c622b5083853",
-    "failed_run_id": 41364245310,
-    "failed_run_attempt": 1,
-    "failed_tag": "v1.4.4",
-    "creator_id": 891898,
-    "status_id": 57802094024,
-    "healthy_tag": "v1.4.3",
-    "healthy_source_sha": "1eaae2643625f435c3a5b176b7f63b5de1ebcd21",
-    "healthy_run_id": 30221537836
-  },
   "legacy_release": {
     "repository": "rlchandani/Glimpse",
     "tag": "v1.4.3",

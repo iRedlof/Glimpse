@@ -70,7 +70,7 @@ health sampling tool, release/QA documentation.
 - [x] Align the app/core dependency graph to the app's compiling graph.
 - [x] Test CI/gate/verification/recovery against passing and failing fixtures (74 contracts).
 - [x] Implement signed-artifact verification and ownership-scoped failed-publication withdrawal.
-- [ ] Verify the first new signed publication through the hosted release workflow.
+- [x] Verify the first new signed publication through the hosted release workflow.
 - [x] Install scoped commit/push hooks and establish quiet monitoring.
 - [x] Record independent review, suite and bounded live QA evidence.
 - [x] Pass exact staged-tree quality checks and hosted checks before merging.
@@ -194,3 +194,43 @@ Root/QA confirmed unchanged app/Core behavior and synchronized 1.4.5/build 12
 metadata; scoped readiness matches. Existing product/UX acceptance carries
 forward with native limits unchanged. Staged/hosted and real public checks
 remain required.
+
+## Verified public milestone and internal follow-up
+
+PR #9 passed its real staged hook and hosted exact-source/merge checks, then
+merged normally as `6ffae9e5396f3e5274d000bcae8e7a2947abb3f0` with the
+approved tree. Release `41379941334` attempt 1 completed successfully and
+published v1.4.5/build 12. Root and independent QA passed actual public DMG
+and app strict signatures, team identity, notarization tickets and direct
+Gatekeeper checks, Sparkle Ed25519, exact source/tag/run/attempt, public hashes
+and tagged/latest feed identity. All four signed entitlements match source;
+read-only mounts are detached. Delivery metrics record 254.28 seconds and
+`release_verified=true`.
+
+The first signed public-artifact milestone is satisfied. The policy's
+first-install `legacy_recovery` entry has been removed, preserving the separate
+legacy distribution audit. The fresh exact-main gate passes without that
+exception. The final internal-only follow-up aligns local artifact preparation
+with explicit identity/keychain selection, manual archive/export signing and
+signed DMG verification. It retains v1.4.5/build 12 and requires offline failure
+contracts, independent review, normal staged/hosted checks and whole final
+verification. It does not publish another app build.
+
+The helper correction passed expected RED failures before implementation,
+then 13 GREEN tests/41 script fixture executions, all 142 tooling and 27
+monitoring tests. Independent applicable A1–A8 review found no actionable
+blocker and passed focused signing/verifier/helper contracts and static checks.
+Normal staged and hosted source/merge checks and whole final verification
+remain mandatory. The offline helper commands and verifier callback are fakes;
+no native helper cryptographic validation is claimed.
+
+Hosted review caught a remaining preflight/helper prerequisite mismatch.
+The correction requires the same explicit policy-team keychain, notarization
+and tools, checks Sparkle metadata without reading its private key, and uses
+project-relative paths regardless of caller directory. Twelve new contracts
+cover 29 script executions; expected baseline failures preceded 154 tooling
+and 27 monitoring passes. Independent review and normal integration gates
+remain required; no native preflight credential validation was performed.
+
+Native UI, SavePanel/Powerbox, login/reboot, sleep/wake and sustained runtime
+acceptance remain open. The reported other Mac's crash cause is still unknown.

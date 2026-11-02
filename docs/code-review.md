@@ -1,5 +1,40 @@
 # Production review — 2026-11-01
 
+Current artifact gate: public v1.4.5/build 12 at exact source
+`6ffae9e5396f3e5274d000bcae8e7a2947abb3f0`, Release `41379941334` attempt 1,
+passed the whole workflow and separate root/QA actual macOS artifact checks.
+The DMG's own signature and direct Gatekeeper assessment now pass along with
+the app, tickets, Sparkle, hashes, feed and signed entitlements. This permits
+retiring the narrowly pinned first-install `legacy_recovery` policy. The
+historical review below does not extend unperformed native runtime acceptance.
+
+An initial internal-only helper/policy/doc snapshot passed independent applicable
+A1–A8 review against accepted source `6ffae9e5396f3e5274d000bcae8e7a2947abb3f0`
+with no actionable P1/P2 finding. The helper requires an explicit existing
+absolute keychain and selects the policy team's exact Developer ID SHA.
+Manual archive/export and final post-icon DMG signing use that identity;
+strict container verification precedes notarization. Quoting, paths with
+spaces, valid headless/default packaging, retained app/link, failure propagation
+and local-only output boundaries passed offline actual-script contracts.
+Root retired only `legacy_recovery` after accepted public artifact evidence.
+Independent verification passed 13 helper, 14 signing and three downloaded-DMG
+contracts plus Bash, Python parsing, ShellCheck and whitespace checks; the
+complete implementation suites passed 142 tooling and 27 monitoring tests.
+No native helper cryptographic operations were performed. Actual staged,
+hosted source/merge and whole final verification are separate mandatory gates.
+Receipt in original checkout storage:
+`build/validation/internal-review-eurgcdbv/review-receipt.json`.
+
+Hosted review subsequently identified an adjacent preflight mismatch: its
+optional default-keychain check could approve a machine the corrected helper
+rejects. Preflight now uses the same explicit keychain/policy-team selector
+and fails for missing notarization, executable Sparkle tools, packaging or
+authenticated GitHub CLI. It checks Sparkle metadata without reading the
+private key and limits success to machine prerequisites. Twelve regression
+contracts cover 29 actual-script fixture executions; all 154 tooling and
+27 monitoring tests pass. Independent correction review, staged-source,
+hosted source/merge and final delivery checks remain separate gates.
+
 **Bounded source and delivery review passed.** The startup, input, event,
 diagnostics and release corrections passed review, including the narrow
 first-install recovery, strict public downloads and temporary storage routing.

@@ -2,7 +2,7 @@
 
 Reviewed on 2026-11-01 against the working source labeled **1.4.4 / build 11** and the criteria in [ux-audit.md](ux-audit.md). This review inspected source and regression-test coverage. It did not operate the native app, rerun the complete quality gate, or change release readiness.
 
-**Disposition:** the bounded reliability UX contract below is accepted by source review. No new source blocker was found in that contract. Native interaction acceptance remains unperformed, final quality verification is pending, and this document does not approve publication or claim that all UX issues are resolved.
+**Disposition:** the bounded reliability UX contract below is accepted by source review. No new source blocker was found in that contract. The contract carries forward to public v1.4.5/build 12 because the packaging correction left app/Core behavior unchanged. Staged and hosted quality plus actual public artifact verification passed at source `6ffae9e5396f3e5274d000bcae8e7a2947abb3f0`, Release `41379941334` attempt 1. Signed entitlements match source. Native interaction acceptance remains unperformed; this does not claim that all UX issues are resolved.
 
 ## Accepted source behavior
 

@@ -1,4 +1,11 @@
-# Product acceptance — 1.4.4 / build 11
+# Product acceptance — 1.4.5 / build 12
+
+Current publication: v1.4.5/build 12, source
+`6ffae9e5396f3e5274d000bcae8e7a2947abb3f0`, whole successful Release
+`41379941334` attempt 1. Root and independent QA accepted the actual public
+signed DMG and contained app. The bounded product contract carries forward
+because app/Core behavior was unchanged for the packaging correction. This
+does not extend native startup, UI, diagnostics or endurance acceptance.
 
 Reviewed 2026-11-01 against `docs/stability-roadmap.md`, `docs/ux-audit.md`, current app/core source, and recorded test evidence.
 

@@ -122,9 +122,12 @@ Uses shared Auris proxy at `proxy.auris.workers.dev/refine`. App secret is XOR-o
 - Secrets: `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD`, `SPARKLE_PRIVATE_KEY`, `APPLE_ID`, `APPLE_ID_PASSWORD`, `TEAM_ID`
 
 **Local (backup):**
-- `./tools/scripts/preflight.sh` — Checks all prerequisites (`--setup` for interactive guided setup)
+- `GLIMPSE_SIGNING_KEYCHAIN="/absolute/path/signing.keychain-db" ./tools/scripts/preflight.sh` — Checks mandatory machine prerequisites with the same policy-team identity selector; Sparkle metadata only (`--setup` for interactive guided setup, then rerun)
 - `./tools/scripts/release-upload.sh` — Builds, signs, creates DMG, generates appcast locally
-- If Developer ID available: adds notarization + clean DMG background. If not: Sparkle EdDSA only.
+- Requires an absolute existing `GLIMPSE_SIGNING_KEYCHAIN` containing exactly one valid Developer ID Application identity for the policy team, usable private-key access, the existing `AC_PASSWORD` notarization profile, and the existing Sparkle key.
+- Archive and export use the selected certificate SHA with manual signing. Xcode export must already find the selected keychain through its normal search; the helper must not import/unlock credentials or alter keychain search lists/ACLs.
+- Signs the final DMG after icon edits and strictly verifies it before notarization. `GLIMPSE_HEADLESS_DMG=1` skips cosmetic Finder automation; `0` is the styled local default. Only `0`/`1` are accepted.
+- Retains verified outputs in a unique `local-release.*` directory under the configured build root. Publication uses the gated GitHub workflow.
 
 ### DMG Layout
 
@@ -147,8 +150,8 @@ Uses shared Auris proxy at `proxy.auris.workers.dev/refine`. App secret is XOR-o
 
 | Secret | Scope | Setup |
 |---|---|---|
-| Developer ID cert | Optional, same across machines | Xcode → Accounts → Manage Certificates |
-| Notarization creds | Optional, re-enter per machine | `xcrun notarytool store-credentials "AC_PASSWORD"` |
+| Developer ID cert | Required for local release artifacts, same across machines | Configure existing certificate/private key in an absolute `GLIMPSE_SIGNING_KEYCHAIN`; keychain must already be usable and discoverable by Xcode export |
+| Notarization creds | Required for local release artifacts, re-enter per machine | Existing `AC_PASSWORD` profile |
 | Sparkle EdDSA key | Only needed for local releases | Import: `generate_keys --import KEY` |
 
 The Sparkle private key in GitHub Secrets is the source of truth for distribution. Local machines don't need it unless doing local releases. Never run `generate_keys` without `--import` — it creates a new key that breaks updates for existing users.
