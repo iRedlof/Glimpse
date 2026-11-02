@@ -11,7 +11,7 @@ chosen-file diagnostics correction. Results:
 `/Volumes/xHome/Github/Glimpse/build/validation/app-validation-final-4.xcresult`.
 Core verification records **62 passing tests in five suites**, exit 0, in
 `/tmp/glimpse-core-green.log`; core source was unchanged afterward.
-Release tooling has **77 passing contracts** and monitoring has **27 passing
+Release tooling has **91 passing contracts** and monitoring has **27 passing
 fixtures**. Independent review also ran the contracts in a nongit staged-archive
 environment. A subsequent real-hook attempt exposed Git repository variables
 leaking into temporary fixture repositories. The commit was rejected; clearing
@@ -37,9 +37,14 @@ quality runs and `/tmp` fallback, including both default and supplied result
 paths. Independent QA passed all 77 tooling contracts and 27 monitoring fixtures.
 Scoped ShellCheck, Bash syntax and diff checks passed. These command fixtures
 verify private workspace removal while retaining logs, partial result bundles,
-hashes, caches, archives and unrelated temporary files. The actual split of
-external source/results/cache and internal build/temp remains subject to the
-normal staged hook and hosted checks. Forced kills can bypass shell cleanup;
+hashes, caches, archives and unrelated temporary files. The normal staged hook
+then passed 57 app, 62 core, 77 tooling and 27 monitoring tests for commit
+`4b41fbb489bf38fd941e79dc4c730e9f6bc36a62`; independent QA verified the
+retained evidence, unchanged pins and removal of external source/internal scratch.
+Push Quality `41372558066` passed that commit. PR Quality `41372562579`
+passed both introduced commits and merge snapshot
+`801adb28c8724f621e29e345f069e83f3eb31eb9`, each with 57 app and 62 core
+tests, result bundles and unchanged pins. Forced kills can bypass shell cleanup;
 the CI runner manages its temp directory at job boundaries.
 
 The first-install contracts reject mismatched run/attempt/source, publication,
@@ -83,3 +88,22 @@ Exact staged-tree quality checks and hosted CI are mandatory independent gates.
 Release publication must additionally pass the signed, notarized, downloaded
 artifact and public-feed checks. Hourly local monitoring records meaningful
 availability/crash-report changes while leaving unchanged observations quiet.
+
+The first modern main Release `41373019433` attempt 1 passed quality for merged
+source `75b68685b2de1690cb4b78f71150d654ed17e359`, then failed at archive
+signing before export or publication. Xcode selected a login-keychain development
+identity instead of the imported Developer ID identity. Automatic Recovery
+`41373225077` attempt 1 succeeded, verified the unchanged public v1.4.3
+distribution and bound its proof to the exact failed source/run/attempt.
+The live remediation gate passes; v1.4.4 is still unpublished.
+
+Independent QA reviewed the signing follow-up under A4/A7/A8 and ran the full
+91-contract suite and 27 monitoring fixtures successfully. The fourteen new
+regressions exercise valid distribution-identity selection, ambiguity and team
+failures, command timeout and sanitized errors, exact keychain paths with spaces,
+consistent manual archive/export inputs, signing/verification failures stopping
+archive, private probe cleanup, certificate mode 0600, original-keychain
+restoration and certificate cleanup even when restoration fails. Bash syntax,
+ShellCheck for all five changed workflow blocks, actionlint and diff checks
+passed. These tests use fake signing commands; actual private-key access,
+archive/export and notarization remain hosted release requirements.

@@ -127,7 +127,9 @@ jobs:
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
+          umask 077
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           KEYCHAIN_PATH=$RUNNER_TEMP/glimpse-signing.keychain-db
           KEYCHAIN_PWD=$(openssl rand -hex 16)
@@ -159,10 +161,22 @@ jobs:
           # Include login keychain + System Roots for Apple CA trust chain
           security list-keychains -d user -s "$KEYCHAIN_PATH" ~/Library/Keychains/login.keychain-db /Library/Keychains/System.keychain /System/Library/Keychains/SystemRootCertificates.keychain
 
-          # Verify certificate chain is valid
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          SIGNING_IDENTITY=$(python3 tools/scripts/select-signing-identity.py \
+            --keychain "$KEYCHAIN_PATH" --team-id "$TEAM_ID")
+          printf 'SIGNING_IDENTITY=%s\nSIGNING_KEYCHAIN=%s\n' \
+            "$SIGNING_IDENTITY" "$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
           rm -f "$CERTIFICATE_PATH" "$RUNNER_TEMP/AppleRoot.cer" "$RUNNER_TEMP/AppleWWDRCAG3.cer" "$RUNNER_TEMP/DeveloperIDG2CA.cer"
+
+      - name: Validate signing identity
+        run: |
+          SMOKE_DIR=$(mktemp -d "$RUNNER_TEMP/glimpse-signing-smoke.XXXXXX")
+          trap 'rm -rf -- "$SMOKE_DIR"' EXIT
+          SIGNING_PROBE="$SMOKE_DIR/signing-probe"
+          cp /usr/bin/true "$SIGNING_PROBE"
+          codesign --force --sign "$SIGNING_IDENTITY" --keychain "$SIGNING_KEYCHAIN" \
+            --options runtime --timestamp=none "$SIGNING_PROBE"
+          codesign --verify --strict --verbose=2 "$SIGNING_PROBE"
 
       - name: Resolve SPM dependencies
         run: |
@@ -175,6 +189,8 @@ jobs:
         run: command -v create-dmg || brew install create-dmg
 
       - name: Archive
+        env:
+          TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
           xcodebuild -project Glimpse.xcodeproj -scheme Glimpse -configuration Release \
             -destination 'platform=macOS' \
@@ -183,13 +199,23 @@ jobs:
             -skipMacroValidation -disableAutomaticPackageResolution \
             INFOPLIST_FILE="$RUNNER_TEMP/glimpse-release-info-$GITHUB_RUN_ID.plist" \
             ARCHS=arm64 \
-            DEVELOPMENT_TEAM=${{ secrets.TEAM_ID }} archive
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
+            OTHER_CODE_SIGN_FLAGS="--keychain \"$SIGNING_KEYCHAIN\"" \
+            DEVELOPMENT_TEAM="$TEAM_ID" archive
 
       - name: Export
+        env:
+          TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
-          /usr/libexec/PlistBuddy -c "Add :method string developer-id" ./build/ExportOptions.plist
-          /usr/libexec/PlistBuddy -c "Add :signingStyle string automatic" ./build/ExportOptions.plist
-          /usr/libexec/PlistBuddy -c "Add :teamID string ${{ secrets.TEAM_ID }}" ./build/ExportOptions.plist
+          python3 - <<'PY'
+          import os, plistlib
+          options = {"method": "developer-id", "signingStyle": "manual",
+                     "signingCertificate": os.environ["SIGNING_IDENTITY"],
+                     "teamID": os.environ["TEAM_ID"]}
+          with open("./build/ExportOptions.plist", "wb") as output:
+              plistlib.dump(options, output)
+          PY
           xcodebuild -exportArchive \
             -archivePath ./build/archive.xcarchive \
             -exportPath ./build/export \
@@ -291,6 +317,7 @@ jobs:
       - name: Clean up
         if: always()
         run: |
+          trap 'rm -f -- "$RUNNER_TEMP/build_certificate.p12" "$RUNNER_TEMP/AppleRoot.cer" "$RUNNER_TEMP/AppleWWDRCAG3.cer" "$RUNNER_TEMP/DeveloperIDG2CA.cer"' EXIT
           security delete-keychain "$RUNNER_TEMP/glimpse-signing.keychain-db" 2>/dev/null || true
           # Restore original keychain search list
           if [ -f "$RUNNER_TEMP/original-keychains.txt" ]; then

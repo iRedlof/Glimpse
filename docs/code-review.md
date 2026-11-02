@@ -212,9 +212,55 @@ cleanup. Root reviewed the bounded diff; independent QA passed 77 contracts and
 27 monitoring fixtures, scoped ShellCheck and shell syntax. Regression fixtures
 cover success and app failure with default/supplied results, private permissions,
 partial result retention, unrelated sibling files and inherited external temp
-settings. The full staged hook and updated hosted checks must still verify the
-actual split. No forced-kill guarantee is claimed for local `/tmp`; CI additionally
+settings. The full staged hook passed 57 app, 62 core, 77 tooling and 27
+monitoring tests for `4b41fbb489bf38fd941e79dc4c730e9f6bc36a62`.
+Independent QA inspected the exact tree, retained results and dependency hashes,
+and confirmed removal of the source archive and temporary workspace. Push
+Quality `41372558066` and PR Quality `41372562579` passed; the latter tested
+both introduced commits and merge snapshot
+`801adb28c8724f621e29e345f069e83f3eb31eb9`. No forced-kill guarantee is
+claimed for local `/tmp`; CI additionally
 uses runner-managed temp cleanup.
+
+## A4/A7/A8 — release signing follow-up
+
+The first modern Release `41373019433` attempt 1 passed source quality for
+merged main `75b68685b2de1690cb4b78f71150d654ed17e359`, then failed at
+archive signing. The temporary job keychain contained a valid Developer ID
+identity, but Xcode's automatic archive signing selected a different development
+identity from the login keychain and failed while signing Sparkle. No export,
+notarization or publication ran; no v1.4.4 release or tag was created.
+Automatic Recovery `41373225077` attempt 1 verified the unchanged v1.4.3
+distribution and bound its record to that exact failed run, attempt and source.
+Root, QA and the release specialist independently verified the recovery; the
+live gate passes for the failed main source.
+
+The bounded correction selects exactly one valid Developer ID Application
+identity for the expected team from the job keychain. Missing, malformed,
+wrong-team, ambiguous and unreadable identity results fail closed. Archive uses
+manual signing with the exact SHA and explicit keychain; export uses the same
+SHA and manual style with the existing job-first keychain search list. A private,
+disposable executable probe checks signing and strict verification before archive.
+It has no timestamp so it tests key access separately from notarization.
+
+Review additionally found that an early import/selection failure could skip
+certificate-file removal. The install step now creates files under `umask 077`,
+and the always-cleanup step has an EXIT backstop removing only the known job
+certificate/CA paths, even if original-keychain restoration fails. The saved
+original list survives a restoration failure for diagnosis. No login-key ACL or
+distribution key changes.
+
+Root reviewed the helper and workflow against A4/A7/A8 and inspected the
+developer's fourteen passing regressions. They cover identity selection and
+timeouts, absence of raw error output, spaces in keychain paths, archive/export
+consistency, signing/verification failures stopping archive, probe cleanup,
+certificate mode 0600, original-list restoration, restoration failure and
+unrelated-file preservation. The prior automatic-signing workflow and certificate
+cleanup failed their regression fixtures before correction. Actionlint passes
+all three workflows. Independent QA found no blocker under A4/A7/A8 and passed
+all 91 tooling contracts, 27 monitoring fixtures, Bash syntax, ShellCheck on
+all five changed workflow blocks and actionlint. Full staged-source checks and
+real signed publication remain independent gates.
 
 ## Enforcement and native limits
 

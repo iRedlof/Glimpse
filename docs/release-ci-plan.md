@@ -83,7 +83,7 @@ this follow-up before merge:
   build storage; remove only the temporary workspace on ordinary exit.
 - [x] Exercise success and failure cleanup, supplied result paths and inherited
   external temporary settings.
-- [ ] Verify the actual split with external archived source/results/cache and
+- [x] Verify the actual split with external archived source/results/cache and
   internal build/temp, then rerun exact-source hosted checks.
 
 The temporary comparison's repository build-root override was restored after
@@ -92,8 +92,35 @@ per-file state; it does not establish that every external-volume build fails.
 Independent QA passed 77 tooling contracts and 27 monitoring fixtures after the
 cleanup change. Scoped ShellCheck and Bash syntax checks passed. The runner's
 internal temp directory provides job-boundary cleanup; local forced kills can
-leave `/tmp` workspaces. Actual split-path integration and hosted publication
-remain open.
+leave `/tmp` workspaces. The normal staged hook then passed 57 app, 62 core,
+77 tooling and 27 monitoring tests for commit
+`4b41fbb489bf38fd941e79dc4c730e9f6bc36a62`. Its external source archive and
+internal `/tmp` workspace were removed; external logs, hashes and result bundles
+were retained. Push Quality `41372558066` passed that commit. PR Quality
+`41372562579` passed both introduced commits and merge revision
+`801adb28c8724f621e29e345f069e83f3eb31eb9`, with 57 app and 62 core tests per
+revision, unchanged pins and cleaned internal scratch.
+
+PR #5 merged as `75b68685b2de1690cb4b78f71150d654ed17e359`, whose tree
+matches the reviewed head. Its first modern Release, `41373019433` attempt 1,
+passed inspection and quality, including 57 app and 62 core tests. Archive
+failed while signing the embedded Sparkle framework: Xcode selected a development
+certificate from the login keychain instead of the valid Developer ID certificate
+imported into the job's temporary keychain. Export, notarization and publication
+were skipped. No v1.4.4 release or tag exists.
+
+Automatic Recovery `41373225077` attempt 1 succeeded. Its retained record binds
+the exact failed run, attempt and source to healthy v1.4.3, with
+`rollback_verified: true`. The independently refreshed gate passed for main
+`75b68685b2de1690cb4b78f71150d654ed17e359`; this uses ordinary Recovery,
+not the first-install exception. The signing follow-up selects a single valid
+Developer ID identity for the expected team from the job keychain, checks that
+key with a disposable signing probe, and uses the same identity for manual
+archive/export signing. Actual signed publication remains a separate gate.
+Independent QA found no new signing blocker under A4/A7/A8. All 91 tooling
+contracts and 27 monitoring fixtures passed, including fourteen signing and
+cleanup regressions, with workflow/shell checks clean. Exact staged-source
+integration and hosted signing remain separate requirements.
 
 Constraints: no signing-key generation, no installed-app mutation, no destructive
 source reverts. Product, UX, code,
