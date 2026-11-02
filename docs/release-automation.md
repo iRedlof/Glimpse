@@ -60,6 +60,14 @@ AppleScript on a CI runner. The image still contains the app and an Applications
 shortcut; custom Finder icon positioning is omitted. App/DMG notarization,
 stapling, Sparkle signing and local/draft/public verification remain mandatory.
 
+The public v1.4.4 workflow passed while omitting the DMG's own signature and
+direct Gatekeeper assessment. Independent downloaded-artifact QA found that
+container unsigned, despite its valid notarization ticket and accepted signed
+app. The packaging correction signs final container bytes with the selected
+Developer ID/keychain before notarization and enforces downloaded container
+signature, team identity and Gatekeeper checks before mounting or publishing.
+It uses a higher version/build because v1.4.4 already reached public distribution.
+
 GitHub can defer a new tag until publication. Drafts therefore use a validated
 positive numeric release ID from structured REST creation/update output;
 verification by ID still checks the expected tag, exact target source and

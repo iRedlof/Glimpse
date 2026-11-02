@@ -11,7 +11,7 @@ chosen-file diagnostics correction. Results:
 `/Volumes/xHome/Github/Glimpse/build/validation/app-validation-final-4.xcresult`.
 Core verification records **62 passing tests in five suites**, exit 0, in
 `/tmp/glimpse-core-green.log`; core source was unchanged afterward.
-Release tooling has **123 passing contracts** and monitoring has **27 passing
+Release tooling has **129 passing contracts** and monitoring has **27 passing
 fixtures**. Independent review also ran the contracts in a nongit staged-archive
 environment. A subsequent real-hook attempt exposed Git repository variables
 leaking into temporary fixture repositories. The commit was rejected; clearing
@@ -182,3 +182,44 @@ Independent frozen-diff A4/A7/A8 QA passed all 123 tooling contracts and
 Python syntax and whitespace checks. No scoped code blocker was found.
 Root's fresh exact-main gate independently verified Recovery before staging.
 Real GitHub draft handoff and signed public-artifact acceptance remain pending.
+
+The numeric-ID correction passed its normal staged hook and both hosted Quality
+workflows before PR #8 merged as `b37a4d4bc8f67bff728dd75b581fc0fc6849dd3a`.
+Release `41378309147` attempt 1 completed successfully and handed private draft
+`431002599` to that exact source/run before publishing v1.4.4. Anonymous DMG,
+manifest, tagged feed and latest-feed downloads match GitHub digests; root's
+fresh exact-main gate passes. The contained app passes strict Developer ID/team,
+hardened runtime, notarization, Gatekeeper and Sparkle checks. Independent
+read-only mounting confirms all four required signed entitlements match source.
+No native SavePanel, Powerbox, startup or interaction acceptance follows from
+that readback.
+
+Additional independent public-artifact checks found the DMG container unsigned:
+both codesign display/strict verify exit 1, and direct Gatekeeper open assessment
+exits 3 with `no usable signature`. Its stapled notarization ticket validates.
+The exact workflow omitted container signing, and the verifier omitted its
+signature/Gatekeeper checks. Full artifact acceptance is therefore open despite
+whole-workflow success. The correction must sign before DMG notarization,
+enforce downloaded container identity/Gatekeeper checks, and use v1.4.5/build 12
+because v1.4.4 has already reached public distribution.
+Independent receipt:
+`build/validation/qa-public/v1.4.4-run41378309147-sippj6cs/qa-receipt.json`
+in the original checkout's external validation storage.
+
+Independent frozen-diff A4/A7/A8 QA passed the v1.4.5 correction: 129 tooling
+contracts, 27 monitoring fixtures, publisher/verifier/workflow Bash and
+ShellCheck, all-workflow actionlint, Python syntax and whitespace checks.
+Expected RED fixtures preceded the correction. The workflow signs final
+post-icon bytes with the selected identity/keychain and secure timestamp, then
+strictly verifies before notarization. Downloaded signature, Developer ID/team,
+ticket and direct Gatekeeper checks run before mounting; failure prevents
+publication. The native command fixtures are fakes; actual public signing
+acceptance remains required. Independent temporary probes also confirm detach
+and mount-directory cleanup after app signature, app Gatekeeper and Sparkle
+failures; these probes are outside the 129 formal count.
+
+Root and QA confirmed unchanged app/Core behavioral source, four synchronized
+versions/builds and README at 1.4.5/build 12. Product/UX carry forward only the
+previously accepted bounded source contract. Readiness is updated for scoped
+source acceptance; staged/hosted, public container and native checks remain
+separate gates.

@@ -279,6 +279,10 @@ jobs:
             rm -f "$ICON_RSRC"
           fi
 
+          # Gatekeeper assesses the disk image's own signature before its app.
+          codesign --force --sign "$SIGNING_IDENTITY" --keychain "$SIGNING_KEYCHAIN" \
+            --timestamp "./build/Glimpse-${VERSION}.dmg"
+          codesign --verify --strict --verbose=2 "./build/Glimpse-${VERSION}.dmg"
           xcrun notarytool submit "./build/Glimpse-${VERSION}.dmg" \
             --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID" --wait
           for i in 1 2 3; do

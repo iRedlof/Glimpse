@@ -334,6 +334,34 @@ Bash/ShellCheck, all-workflow actionlint, Python syntax and whitespace checks
 passed. These fixtures do not replace real GitHub handoff/publication or
 signed artifact acceptance.
 
+PR #8 merged as `b37a4d4bc8f67bff728dd75b581fc0fc6849dd3a` after exact staged
+and hosted checks. Release `41378309147` attempt 1 completed successfully and
+published v1.4.4 with the recovered draft's exact new identity. Independent public
+hash/feed/source checks and app signature/notarization/Gatekeeper/entitlement
+checks passed.
+
+### A4/A7/A8 — resolved in source: DMG container signing and acceptance gate
+
+Root and QA independently reproduced codesign exit 1 (`code object is not signed
+at all`) and direct DMG Gatekeeper exit 3 (`no usable signature`). DMG stapling
+and the contained app's Developer ID/Gatekeeper checks pass. The release workflow
+signs the app but not the final container, and `verify-dmg.sh` omits container
+signature/team/Gatekeeper checks. Whole-workflow success therefore did not
+establish full container acceptance. The fix must sign the final bytes with the
+selected Developer ID/keychain before notarization, fail before publication on
+signature/identity/Gatekeeper errors, and advance to v1.4.5/build 12 without
+rewriting the public v1.4.4 assets or tag. Native runtime limits remain open.
+
+Independent frozen-diff review finds no code blocker in the correction.
+Selected identity/keychain and secure timestamp sign the final bytes before
+strict verification/notarization. Downloaded strict signature, exact team and
+Developer ID authority, ticket and direct Gatekeeper checks precede mounting.
+Existing app/runtime/source/feed/Sparkle checks remain. All 129 tooling
+contracts, 27 monitoring fixtures and static checks pass; additional temporary
+failure probes confirm detach/cleanup. App/Core behavior is unchanged, and all
+four versions/builds plus README are synchronized to 1.4.5/build 12.
+Actual hosted signing and independent public-artifact acceptance remain open.
+
 ## Enforcement and native limits
 
 The applied canonical main protection was independently read through GitHub API:

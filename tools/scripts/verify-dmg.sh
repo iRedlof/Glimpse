@@ -15,7 +15,18 @@ cleanup() {
   rmdir "$MOUNT_DIR"
 }
 trap cleanup EXIT
+codesign --verify --strict --verbose=2 "$DMG"
+codesign -dvv "$DMG" 2>"$ARTIFACT_DIR/dmg-signing-verification.txt"
+python3 - "$ROOT/.github/release-policy.json" "$ARTIFACT_DIR/dmg-signing-verification.txt" <<'PY'
+import json, pathlib, sys
+policy = json.loads(pathlib.Path(sys.argv[1]).read_text())
+signing = pathlib.Path(sys.argv[2]).read_text().splitlines()
+if f"TeamIdentifier={policy['team_id']}" not in signing or not any(
+        line.startswith("Authority=Developer ID Application:") for line in signing):
+    raise SystemExit("Downloaded DMG signing identity mismatch")
+PY
 xcrun stapler validate "$DMG"
+spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
 hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_DIR" "$DMG" >/dev/null
 mounted=true
 APP="$MOUNT_DIR/Glimpse.app"

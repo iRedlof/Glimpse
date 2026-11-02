@@ -60,3 +60,17 @@ A supportable claim is: “This iteration reports macOS login status accurately,
 Do not claim the other-machine crash reproduced or fixed, restart reliability verified, long-term disappearance resolved, all UX accepted, improved open-panel performance, or days-long uptime. The original report lacks a reproducer, and a minute of idle observation plus source/tests cannot supply those conclusions.
 
 Final quality, artifact/release verification, and readiness remain the parent task's separate gates. The next native session should complete the interaction matrix above and collect signed installed-build startup and sustained runtime evidence before expanding the UX acceptance claim.
+
+## Packaging correction carry-forward — v1.4.5 / build 12
+
+The accepted app/Core UX contract is carried forward for this packaging-only
+correction while its behavioral source remains unchanged from public source
+`b37a4d4bc8f67bff728dd75b581fc0fc6849dd3a`; root must verify that boundary.
+The version/build increase preserves update ordering after public v1.4.4.
+Container signing and downloaded Gatekeeper acceptance require independent
+code/QA and hosted verification. This carry-forward does not extend native UI,
+SavePanel/Powerbox, restart, accessibility or performance acceptance.
+
+Root and independent QA verified unchanged app/Core behavioral source and the
+synchronized metadata boundary. The bounded UX phase carries forward; remaining
+native and artifact acceptance are unchanged.
