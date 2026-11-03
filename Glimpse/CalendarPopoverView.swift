@@ -2,16 +2,21 @@ import GlimpseCore
 import EventKit
 import SwiftUI
 
+struct CalendarPresentationSnapshot: Equatable, Sendable {
+    let keyboardSession: Int
+    let editorFocused: Bool
+}
+
 struct CalendarPopoverView: View {
     @Bindable var store: StoreOf<CalendarFeature>
     weak var panel: CalendarPanel?
 
     let layout: PanelLayoutState
     let keyboardObservation: ((CalendarKeyboardInvocation) -> Void)?
-    let preferencesHotkeyModel: HotkeyPreferencesModel?
     let editorPresentation: ((@escaping @MainActor () -> Void) -> Void)?
     let querySubmissionObservation: (@MainActor (String, Task<Void, Never>) -> Void)?
     let loadAISettings: @MainActor () -> (enabled: Bool, preference: AIProvider)
+    let presentationObservation: ((CalendarPresentationSnapshot) -> Void)?
 
     @State private var scrollRouter = CalendarScrollRouter()
     @State private var scrollMonitor: Any?
@@ -21,43 +26,39 @@ struct CalendarPopoverView: View {
     @State private var isRecordingHotkey = false
     @State private var aiQueryModel: AIDateQueryModel
     @FocusState private var aiFieldFocused: Bool
+    @State private var editorFocusGeneration = 0
     @FocusState private var controlFocus: CalendarKeyboardOwner?
     @State private var logicalDate: Date?
     @State private var gridHasFocus = false
     @State private var keyboardSession = 0
     @State private var keyboardOwnerRelay = CalendarKeyboardOwnerRelay()
     @State private var showQuitConfirm: Bool = false
-    @State private var preferencesStore: StoreOf<PreferencesFeature>
     private let caretHeight = CalendarPanel.caretHeight
 
     init(store: StoreOf<CalendarFeature>, panel: CalendarPanel? = nil,
          layout: PanelLayoutState? = nil,
-         preferencesStore: StoreOf<PreferencesFeature>? = nil,
          keyboardObservation: ((CalendarKeyboardInvocation) -> Void)? = nil,
-         preferencesHotkeyModel: HotkeyPreferencesModel? = nil,
          editorPresentation: ((@escaping @MainActor () -> Void) -> Void)? = nil,
          aiQueryModel: AIDateQueryModel? = nil,
          loadAISettings: @escaping @MainActor () -> (enabled: Bool, preference: AIProvider) = {
              let preferences = PreferencesClient.liveValue
              return (preferences.loadShowAISearch(), preferences.loadAIProvider())
          },
-         querySubmissionObservation: (@MainActor (String, Task<Void, Never>) -> Void)? = nil) {
+         querySubmissionObservation: (@MainActor (String, Task<Void, Never>) -> Void)? = nil,
+         presentationObservation: ((CalendarPresentationSnapshot) -> Void)? = nil) {
         self.store = store
         self.panel = panel
         self.layout = layout ?? panel?.layoutState ?? PanelLayoutState()
         self.keyboardObservation = keyboardObservation
-        self.preferencesHotkeyModel = preferencesHotkeyModel
         self.editorPresentation = editorPresentation
         self.loadAISettings = loadAISettings
         self.querySubmissionObservation = querySubmissionObservation
+        self.presentationObservation = presentationObservation
         let settings = loadAISettings()
         self._aiQueryModel = State(initialValue: aiQueryModel ?? AIDateQueryModel(
             client: .live, enabled: settings.enabled, preference: settings.preference,
             onDate: { store.send(.aiDateResult($0)) }
         ))
-        self._preferencesStore = State(initialValue: preferencesStore ?? Store(
-            initialState: PreferencesFeature.State.live()
-        ) { PreferencesFeature() })
     }
 
     var body: some View {
@@ -66,12 +67,6 @@ struct CalendarPopoverView: View {
                 caretView.frame(height: caretHeight)
                 PanelViewport(layout: layout) {
                     VStack(spacing: 12) {
-                        if store.showingPreferences {
-                            PreferencesView(
-                                store: preferencesStore, hotkeyPreferences: preferencesHotkeyModel,
-                                onAISettingsChange: synchronizeAISettings
-                            )
-                        }
                         headerView.id("panel-header")
                         if store.showAISearch {
                             aiQueryField
@@ -79,7 +74,7 @@ struct CalendarPopoverView: View {
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                         }
                         CalendarGridKeyboardContent(
-                            isEligible: !store.showingPreferences && store.days.count == 42,
+                            isEligible: store.days.count == 42,
                             focus: $controlFocus,
                             context: keyboardContext, move: moveLogicalDate,
                             activate: activateLogicalDate, observe: keyboardObservation
@@ -110,6 +105,14 @@ struct CalendarPopoverView: View {
             .frame(width: PanelGeometry.panelWidth)
             .onAppear {
                 store.send(.onAppear)
+                let model = aiQueryModel
+                let calendarStore = store
+                panel?.aiSettingsDidChange = { [weak model, weak calendarStore] enabled, preference in
+                    model?.synchronizeSettings(enabled: enabled, preference: preference)
+                    if let calendarStore, calendarStore.showAISearch != enabled {
+                        calendarStore.send(.reloadPreferences)
+                    }
+                }
                 let settings = loadAISettings()
                 synchronizeAISettings(settings.enabled, settings.preference)
                 aiQueryModel.setPanelVisible(panel?.isVisible == true)
@@ -118,13 +121,10 @@ struct CalendarPopoverView: View {
                 setupScrollMonitor()
             }
             .onDisappear {
+                editorFocusGeneration += 1
                 aiQueryModel.setPanelVisible(false)
                 removeMonitors()
                 store.send(.onDisappear)
-            }
-            .onChange(of: store.showingPreferences) { _, _ in
-                reader.scrollTo("panel-content-top", anchor: .top)
-                scrollRouter.suspendNavigation()
             }
             .onChange(of: layout.isOverflowing) { _, _ in
                 scrollRouter.suspendNavigation()
@@ -132,6 +132,7 @@ struct CalendarPopoverView: View {
             .onChange(of: aiQueryModel.isEditorOpen) { _, active in
                 panel?.isTextInputActive = active
                 if active { reader.scrollTo("panel-ai-input", anchor: .center) }
+                else { editorFocusGeneration += 1 }
             }
             .onChange(of: store.days.map(\.date)) { _, _ in reconcileLogicalDate() }
             .onChange(of: logicalDate) { _, date in
@@ -139,6 +140,11 @@ struct CalendarPopoverView: View {
             }
             .onChange(of: gridHasFocus) { _, focused in
                 if focused, let logicalDate { reader.scrollTo(logicalDate, anchor: .center) }
+            }
+            .onChange(of: CalendarPresentationSnapshot(
+                keyboardSession: keyboardSession, editorFocused: aiFieldFocused
+            ), initial: true) { _, snapshot in
+                presentationObservation?(snapshot)
             }
             .onChange(of: layout.viewportHeight) { _, _ in
                 if gridHasFocus, let logicalDate { reader.scrollTo(logicalDate, anchor: .center) }
@@ -163,6 +169,7 @@ struct CalendarPopoverView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .calendarPanelWillHide)) { notification in
                 guard notification.object as? CalendarPanel === panel else { return }
+                editorFocusGeneration += 1
                 removeMonitors()
                 aiQueryModel.setPanelVisible(false)
                 aiFieldFocused = false
@@ -176,8 +183,15 @@ struct CalendarPopoverView: View {
                 hoveredDate = nil
                 store.send(.onDisappear)
             }
+            .onReceive(NotificationCenter.default.publisher(for: .calendarPanelWillPresentSettings)) { notification in
+                guard notification.object as? CalendarPanel === panel else { return }
+                editorFocusGeneration += 1
+                aiFieldFocused = false
+                scrollRouter.suspendNavigation()
+            }
             .onReceive(NotificationCenter.default.publisher(for: .calendarPanelDidShow)) { notification in
                 guard notification.object as? CalendarPanel === panel else { return }
+                editorFocusGeneration += 1
                 // Preparation is hidden. Only actual native visibility is authoritative.
                 aiQueryModel.setPanelVisible(panel?.isVisible == true)
                 controlFocus = nil
@@ -231,7 +245,7 @@ struct CalendarPopoverView: View {
             guard let panel, panel.isVisible, NSApp.keyWindow === panel, event.window === panel,
                   !isRecordingHotkey else { return event }
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
-            let editingText = panel.firstResponder is NSTextView || store.showingPreferences
+            let editingText = panel.firstResponder is NSTextView
             // Cmd+G — activate inline AI input (if enabled)
             if event.keyCode == 5 && modifiers == .command && store.showAISearch {
                 aiQueryModel.setEditorOpen(true)
@@ -245,15 +259,9 @@ struct CalendarPopoverView: View {
                     panel.deactivateTextInput()
                     return nil
                 }
-                if store.showingPreferences {
-                    withAnimation(AppDesign.Animation.standard) {
-                        _ = store.send(.togglePreferences)
-                    }
-                } else {
-                    store.send(.closePanel)
-                    panel.isPinned = false
-                    panel.orderOut(nil)
-                }
+                store.send(.closePanel)
+                panel.isPinned = false
+                panel.orderOut(nil)
                 return nil
             default:
                 let route = CalendarKeyboardRouter.browse(
@@ -263,7 +271,6 @@ struct CalendarPopoverView: View {
                     context: CalendarKeyboardContext(
                         visible: panel.isVisible, key: NSApp.keyWindow === panel,
                         eventForPanel: event.window === panel, recording: isRecordingHotkey,
-                        preferences: store.showingPreferences,
                         modified: !modifiers.isEmpty, editingText: editingText
                     )
                 )
@@ -287,7 +294,7 @@ struct CalendarPopoverView: View {
         return CalendarKeyboardContext(
             visible: panel.isVisible, key: NSApp.keyWindow === panel,
             eventForPanel: true,
-            recording: isRecordingHotkey, preferences: store.showingPreferences,
+            recording: isRecordingHotkey,
             modified: !event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
             editingText: panel.firstResponder is NSTextView
         )
@@ -410,12 +417,19 @@ struct CalendarPopoverView: View {
             },
             onDismiss: { aiQueryModel.discardEditor() },
             onEditorAppear: {
+                let generation = editorFocusGeneration
+                let requestFocus: @MainActor () -> Void = {
+                    guard generation == editorFocusGeneration, aiQueryModel.isEditorOpen,
+                          let panel, panel.isVisible, panel.isKeyWindow,
+                          NSApp.keyWindow === panel else { return }
+                    aiFieldFocused = true
+                }
                 if let editorPresentation {
-                    editorPresentation { aiFieldFocused = true }
+                    editorPresentation(requestFocus)
                 } else {
                     panel?.activateForTextInput()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        aiFieldFocused = true
+                        requestFocus()
                     }
                 }
             }, keyboardContext: keyboardContext, keyboardObservation: keyboardObservation,
@@ -781,7 +795,6 @@ struct CalendarPopoverView: View {
     private var footerButtons: some View {
         CalendarFooterControls(
             isPinned: store.isPinned,
-            showingPreferences: store.showingPreferences,
             quit: {
                 withAnimation(AppDesign.Animation.standard) {
                     showQuitConfirm = true
@@ -793,11 +806,7 @@ struct CalendarPopoverView: View {
                 panel?.isPinned = store.isPinned
             },
             openCalendar: openAppleCalendar,
-            togglePreferences: {
-                withAnimation(AppDesign.Animation.standard) {
-                    _ = store.send(.togglePreferences)
-                }
-            }
+            openSettings: { panel?.requestSettings?() }
         )
     }
 
@@ -941,12 +950,11 @@ struct CalendarHeaderControls: View {
 @MainActor
 struct CalendarFooterControls: View {
     let isPinned: Bool
-    let showingPreferences: Bool
     let quit: () -> Void
     let about: () -> Void
     let togglePin: () -> Void
     let openCalendar: () -> Void
-    let togglePreferences: () -> Void
+    let openSettings: () -> Void
 
     var body: some View {
         HStack(spacing: AppDesign.Spacing.sm) {
@@ -1008,22 +1016,18 @@ struct CalendarFooterControls: View {
             .accessibilityLabel("Open Calendar app")
 
             Button {
-                togglePreferences()
+                openSettings()
             } label: {
-                Image(systemName: showingPreferences ? "gearshape.fill" : "gearshape")
+                Image(systemName: "gearshape")
                     .font(.body)
-                    .foregroundStyle(
-                        showingPreferences ? Color.accentColor : .secondary
-                    )
+                    .foregroundStyle(.secondary)
                     .frame(width: AppDesign.Control.iconTargetSize,
                            height: AppDesign.Control.iconTargetSize)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .focusable(false)
-            .accessibilityLabel(
-                showingPreferences ? "Close preferences" : "Open preferences"
-            )
+            .accessibilityLabel("Open Settings")
         }
         .padding(.trailing, AppDesign.Control.iconTrailingClearance)
     }

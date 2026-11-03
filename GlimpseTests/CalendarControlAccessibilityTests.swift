@@ -7,13 +7,10 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct CalendarIconTargetTests {
-    @Test(arguments: [false, true], [false, true])
-    func headerAndFooterTargetsHaveSingleEdgeActions(
-        pinned: Bool, preferences: Bool
-    ) async throws {
+    @Test(arguments: [false, true])
+    func headerAndFooterTargetsHaveSingleEdgeActions(pinned: Bool) async throws {
         let fixture = CalendarControlFixture()
         fixture.isPinned = pinned
-        fixture.showingPreferences = preferences
         let host = AccessibilityTestHost(width: 268, height: 120) {
             CalendarControlFixtureRows(fixture: fixture)
         }
@@ -38,11 +35,10 @@ struct CalendarIconTargetTests {
             }
         }
         #expect(fixture.isPinned == !pinned)
-        #expect(fixture.showingPreferences == !preferences)
         #expect(try host.control(named: fixture.name(for: .pin)).role == .button)
-        #expect(try host.control(named: fixture.name(for: .preferences)).role == .button)
+        #expect(try host.control(named: "Open Settings").role == .button)
 
-        if !pinned && !preferences {
+        if !pinned {
             let calendar = Calendar(identifier: .gregorian)
             let artifactDirectory = ProcessInfo.processInfo.environment["GLIMPSE_HEADER_ARTIFACT_DIR"]
                 .map { URL(fileURLWithPath: $0, isDirectory: true) }
@@ -94,6 +90,32 @@ struct CalendarIconTargetTests {
         }
     }
 
+    @Test(arguments: [false, true])
+    func settingsPressDispatchesOnceWithoutChangingCalendarControls(pinned: Bool) async throws {
+        let fixture = CalendarControlFixture()
+        fixture.isPinned = pinned
+        let host = AccessibilityTestHost(width: 268, height: 120) {
+            CalendarControlFixtureRows(fixture: fixture)
+        }
+        defer { host.close() }
+        try await host.settle()
+        let names = CalendarControlAction.allCases.map { fixture.name(for: $0) }
+        let frames = try names.map { try host.control(named: $0).frame }
+        let settings = try host.control(named: "Open Settings")
+        #expect(settings.role == .button && settings.enabled)
+        #expect(settings.press())
+        try await host.settle()
+        #expect(fixture.receipts == [.settings: 1])
+        #expect(fixture.isPinned == pinned)
+        #expect(fixture.monthYearString == "September 9999")
+        #expect(try names.map { try host.control(named: $0).frame } == frames)
+        #expect(try host.control(named: "Open Settings").press())
+        try await host.settle()
+        #expect(fixture.receipts == [.settings: 2])
+        #expect(fixture.isPinned == pinned)
+        #expect(try names.map { try host.control(named: $0).frame } == frames)
+    }
+
     @Test
     func neighborGapsAndDisabledTodayDoNothing() async throws {
         let fixture = CalendarControlFixture()
@@ -134,9 +156,9 @@ private struct CalendarControlFixtureRows: View {
 }
 
 enum CalendarControlAction: String, CaseIterable {
-    case previous, today, next, quit, about, pin, calendar, preferences
+    case previous, today, next, quit, about, pin, calendar, settings
     static let header: [Self] = [.previous, .today, .next]
-    static let footer: [Self] = [.quit, .about, .pin, .calendar, .preferences]
+    static let footer: [Self] = [.quit, .about, .pin, .calendar, .settings]
 }
 
 enum IconClickPosition: CaseIterable {
@@ -179,14 +201,13 @@ func expectDisjointIconRow(_ frames: [NSRect]) {
 @MainActor @Observable
 final class CalendarControlFixture {
     var isPinned = false
-    var showingPreferences = false
     var monthYearString = "September 9999"
     var todayIsDisabled = false
     private(set) var receipts: [CalendarControlAction: Int] = [:]
-    private let togglePresentationOnAction: Bool
+    private let togglePinOnAction: Bool
 
-    init(togglePresentationOnAction: Bool = true) {
-        self.togglePresentationOnAction = togglePresentationOnAction
+    init(togglePinOnAction: Bool = true) {
+        self.togglePinOnAction = togglePinOnAction
     }
 
     var header: some View {
@@ -201,10 +222,10 @@ final class CalendarControlFixture {
 
     var footer: some View {
         CalendarFooterControls(
-            isPinned: isPinned, showingPreferences: showingPreferences,
+            isPinned: isPinned,
             quit: { self.record(.quit) }, about: { self.record(.about) },
             togglePin: { self.record(.pin) }, openCalendar: { self.record(.calendar) },
-            togglePreferences: { self.record(.preferences) }
+            openSettings: { self.record(.settings) }
         )
     }
 
@@ -217,15 +238,13 @@ final class CalendarControlFixture {
         case .about: "About Glimpse"
         case .pin: isPinned ? "Unpin window" : "Pin window"
         case .calendar: "Open Calendar app"
-        case .preferences: showingPreferences ? "Close preferences" : "Open preferences"
+        case .settings: "Open Settings"
         }
     }
 
     private func record(_ action: CalendarControlAction) {
         receipts[action, default: 0] += 1
-        guard togglePresentationOnAction else { return }
-        if action == .pin { isPinned.toggle() }
-        if action == .preferences { showingPreferences.toggle() }
+        if action == .pin && togglePinOnAction { isPinned.toggle() }
     }
 }
 

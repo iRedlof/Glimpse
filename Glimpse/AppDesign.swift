@@ -51,6 +51,15 @@ enum AppDesign {
         }
     }
 
+    enum Settings {
+        static let contentSize = CGSize(width: 600, height: 480)
+        static let minimumContentSize = CGSize(width: 520, height: 360)
+        static let sidebarWidth: CGFloat = 164
+        static let detailInset: CGFloat = 24
+        static let screenInset: CGFloat = 10
+        static let windowGap: CGFloat = 12
+    }
+
     // MARK: - Calendar Grid
 
     enum Grid {

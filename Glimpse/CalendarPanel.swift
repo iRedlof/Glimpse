@@ -21,7 +21,11 @@ final class CalendarPanel: NSPanel {
     }
     var isPinned = false
     var isTextInputActive = false
+    var aiSettingsDidChange: (@MainActor (Bool, AIProvider) -> Void)?
+    var requestSettings: (@MainActor () -> Void)?
     private var previousApp: NSRunningApplication?
+    private let capturePreviousApp: @MainActor () -> NSRunningApplication?
+    private let restorePreviousApp: @MainActor (NSRunningApplication) -> Void
     private let calendarStore: StoreOf<CalendarFeature>
     private var hostingView: NSHostingView<AnyView>?
     private var sizeObservation: NSKeyValueObservation?  // invalidated on dealloc via ARC
@@ -39,8 +43,16 @@ final class CalendarPanel: NSPanel {
     }
 
     init(contentRect: NSRect, caretOffset: CGFloat, calendarStore store: StoreOf<CalendarFeature>,
-         content: ((PanelLayoutState) -> AnyView)? = nil) {
+         content: ((PanelLayoutState) -> AnyView)? = nil,
+         capturePreviousApp: @escaping @MainActor () -> NSRunningApplication? = {
+             NSWorkspace.shared.frontmostApplication
+         },
+         restorePreviousApp: @escaping @MainActor (NSRunningApplication) -> Void = {
+             $0.activate(options: .activateIgnoringOtherApps)
+         }) {
         self.calendarStore = store
+        self.capturePreviousApp = capturePreviousApp
+        self.restorePreviousApp = restorePreviousApp
         layoutState.updatePlacement(
             maximumHeight: layoutState.maximumHeight, caretXOffset: caretOffset
         )
@@ -177,16 +189,26 @@ final class CalendarPanel: NSPanel {
         super.orderOut(sender)
     }
 
+    func prepareForSettingsPresentation() {
+        // This is an internal transition; restoring another app would steal
+        // focus from the Settings window. Ordinary dismissal keeps its lease.
+        previousApp = nil
+        NotificationCenter.default.post(name: .calendarPanelWillPresentSettings, object: self)
+        isTextInputActive = false
+        makeFirstResponder(nil)
+        if !isPinned { orderOut(nil) }
+    }
+
     /// Activate the app so TextField can receive focus
     func activateForTextInput() {
-        previousApp = NSWorkspace.shared.frontmostApplication
+        previousApp = capturePreviousApp()
         NSApp.activate(ignoringOtherApps: true)
         makeKey()
     }
 
     /// Restore focus to the previous app
     func deactivateTextInput() {
-        previousApp?.activate(options: .activateIgnoringOtherApps)
+        if let previousApp { restorePreviousApp(previousApp) }
         previousApp = nil
     }
 

@@ -1,4 +1,5 @@
 import AppKit
+import ComposableArchitecture
 import GlimpseCore
 import SwiftUI
 import Testing
@@ -15,12 +16,7 @@ struct AccessibilityViewportTests {
         maximumHeight: CGFloat, presentation: (Bool, NSScroller.Style)
     ) async throws {
         let (processing, style) = presentation
-        var state = PreferencesFeature.State()
-        state.startOfWeekday = 2
-        state.aiProvider = .proxy
-        let preferences = PreferencesAccessibilityFixture(state: state)
-        let controls = CalendarControlFixture(togglePresentationOnAction: false)
-        controls.showingPreferences = true
+        let controls = CalendarControlFixture(togglePinOnAction: false)
         let search = DateSearchFixture()
         let query = String(repeating: "synthetic next Friday ", count: 20)
         let error = String(repeating: "Synthetic date search error. ", count: 12)
@@ -31,11 +27,10 @@ struct AccessibilityViewportTests {
         layout.updatePlacement(maximumHeight: maximumHeight, caretXOffset: 158)
         let host = AccessibilityTestHost(width: 316, height: maximumHeight) {
             AccessibilityViewportContent(
-                layout: layout, controls: controls,
-                preferences: preferences, dateSearch: search
+                layout: layout, controls: controls, dateSearch: search
             )
         }
-        defer { host.close(); preferences.close() }
+        defer { host.close() }
         try await host.settle()
         try host.loadAccessibilityWindowTree()
         try await host.settle()
@@ -80,14 +75,6 @@ struct AccessibilityViewportTests {
             #expect(!search.isProcessing && search.submissions == 0)
             #expect(host.window.isVisible)
             #expect(controls.receipts.isEmpty && !controls.isPinned)
-            #expect(controls.showingPreferences)
-            #expect(preferences.store.startOfWeekday == 2)
-            #expect(preferences.store.aiProvider == .proxy)
-            #expect(preferences.receipts.value.forbidden == 0)
-            #expect(preferences.hotkey.backend.operations.isEmpty)
-            #expect(preferences.receipts.value.displaySaves.isEmpty)
-            #expect(preferences.receipts.value.weekdaySaves.isEmpty)
-            #expect(preferences.receipts.value.providerSaves.isEmpty)
             try await applyFixtureScrollerStyle(style, scroll: scroll, host: host)
             #expect(accessibilityScrollView(in: host.hosting) === scroll)
             #expect(scroll.documentView === document)
@@ -114,21 +101,15 @@ struct AccessibilityViewportTests {
     func targetsFitAndRemainReachableInPersistentViewport(
         maximumHeight: CGFloat, presentation: (Bool, NSScroller.Style)
     ) async throws {
-        let (preferencesOpen, style) = presentation
-        var state = PreferencesFeature.State()
-        state.startOfWeekday = 2
-        state.aiProvider = .proxy
-        let preferences = PreferencesAccessibilityFixture(state: state)
-        let controls = CalendarControlFixture(togglePresentationOnAction: false)
-        controls.showingPreferences = preferencesOpen
+        let (pinned, style) = presentation
+        let controls = CalendarControlFixture(togglePinOnAction: false)
+        controls.isPinned = pinned
         let layout = PanelLayoutState()
         layout.updatePlacement(maximumHeight: maximumHeight, caretXOffset: 158)
         let host = AccessibilityTestHost(width: 316, height: maximumHeight) {
-            AccessibilityViewportContent(
-                layout: layout, controls: controls, preferences: preferences
-            )
+            AccessibilityViewportContent(layout: layout, controls: controls)
         }
-        defer { host.close(); preferences.close() }
+        defer { host.close() }
         try await host.settle()
         let scroll = try #require(accessibilityScrollView(in: host.hosting))
         let document = try #require(scroll.documentView)
@@ -183,23 +164,14 @@ struct AccessibilityViewportTests {
                 #expect(!frame.intersects(other))
             }
         }
-        #expect(controls.showingPreferences == preferencesOpen)
-        #expect(!controls.isPinned)
-        #expect(preferences.store.startOfWeekday == 2)
-        #expect(preferences.store.aiProvider == .proxy)
-        #expect(preferences.receipts.value.forbidden == 0)
-        #expect(preferences.hotkey.backend.operations.isEmpty)
-        #expect(preferences.receipts.value.displaySaves.isEmpty)
-        #expect(preferences.receipts.value.weekdaySaves.isEmpty)
-        #expect(preferences.receipts.value.providerSaves.isEmpty)
-        for open in [!preferencesOpen, preferencesOpen] {
-            controls.showingPreferences = open
+        #expect(controls.isPinned == pinned)
+        for pinState in [!pinned, pinned] {
+            controls.isPinned = pinState
             try await host.settle()
             try await applyFixtureScrollerStyle(style, scroll: scroll, host: host)
             #expect(accessibilityScrollView(in: host.hosting) === scroll)
             #expect(scroll.documentView === document)
-            #expect(preferences.store.startOfWeekday == 2)
-            #expect(preferences.store.aiProvider == .proxy)
+            #expect(try host.control(named: "Open Settings").role == .button)
         }
         let height = layout.naturalContentHeight
         let size = host.hosting.intrinsicContentSize
@@ -208,6 +180,82 @@ struct AccessibilityViewportTests {
             #expect(layout.naturalContentHeight == height)
             #expect(host.hosting.intrinsicContentSize == size)
             #expect(accessibilityScrollView(in: host.hosting) === scroll)
+        }
+        #expect(abs(size.width - 316) < 0.5)
+        #expect(size.height <= maximumHeight + 0.5)
+        #expect(abs(host.hosting.fittingSize.width - 316) < 0.5)
+        #expect(host.hosting.fittingSize.height <= maximumHeight + 0.5)
+        #expect(scroll.scrollerStyle == style)
+        #expect(scroll.contentView.bounds.width >= 300)
+    }
+
+    @Test(arguments: [CGFloat(812), 312], [NSScroller.Style.legacy, .overlay])
+    func completeCalendarDatesAndFooterRemainReachable(
+        maximumHeight: CGFloat, style: NSScroller.Style
+    ) async throws {
+        let layout = PanelLayoutState()
+        layout.updatePlacement(maximumHeight: maximumHeight, caretXOffset: 158)
+        let fixture = try CalendarViewportFixture(layout: layout, maximumHeight: maximumHeight)
+        let host = fixture.host
+        defer { fixture.close() }
+        try await host.settle()
+        try host.loadAccessibilityWindowTree()
+        try await host.settle()
+        let scroll = try #require(accessibilityScrollView(in: host.hosting))
+        let document = try #require(scroll.documentView)
+        try await applyFixtureScrollerStyle(style, scroll: scroll, host: host)
+        let dates = host.elements().filter { $0.role == .button && $0.label?.contains("2030") == true }
+        #expect(dates.count == 42, "The real calendar must expose every date\n\(host.treeDescription)")
+        let dateNames = dates.compactMap(\.label)
+        #expect(Set(dateNames).count == 42)
+        let controls = [
+            "Previous month", "Go to today", "Next month",
+            "Quit Glimpse", "About Glimpse", "Pin window",
+            "Open Calendar app", "Open Settings",
+        ]
+        var dateFrames: [NSRect] = []
+        for name in dateNames + controls {
+            let beforeScroll = try host.control(named: name)
+            _ = document.scrollToVisible(host.rect(beforeScroll.frame, in: document)
+                .insetBy(dx: -4, dy: -4))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            try await host.settle()
+            let node = try host.control(named: name)
+            let body = viewportBodyScreenRect(host: host, scroll: scroll, layout: layout)
+            let clip = host.window.convertToScreen(
+                scroll.contentView.convert(scroll.contentView.bounds, to: nil)
+            )
+            #expect(body.contains(node.frame), "\(name) outside calendar body \(body)")
+            #expect(clip.contains(node.frame), "\(name) clipped by calendar viewport \(clip)")
+            if style == .legacy, let scroller = scroll.verticalScroller, !scroller.isHidden {
+                let scrollerFrame = host.window.convertToScreen(
+                    scroller.convert(scroller.bounds, to: nil)
+                )
+                #expect(!node.frame.intersects(scrollerFrame), "\(name) overlaps the scrollbar")
+            }
+            if dateNames.contains(name) {
+                #expect(node.enabled)
+                #expect(abs(node.frame.height - 30) < 0.5)
+                #expect(node.frame.width > 28)
+                dateFrames.append(host.rect(node.frame, in: document))
+            }
+            #expect(accessibilityScrollView(in: host.hosting) === scroll)
+            #expect(scroll.documentView === document)
+        }
+        for (index, frame) in dateFrames.enumerated() {
+            for other in dateFrames.dropFirst(index + 1) {
+                #expect(!frame.intersects(other))
+            }
+        }
+        #expect(fixture.store.displayedMonth == fixture.month)
+        #expect(fixture.store.selectedDate == nil)
+        #expect(fixture.protectedEffects.value == 0)
+        let height = layout.naturalContentHeight
+        let size = host.hosting.intrinsicContentSize
+        for _ in 0..<4 {
+            try await host.settle()
+            #expect(layout.naturalContentHeight == height)
+            #expect(host.hosting.intrinsicContentSize == size)
         }
         #expect(abs(size.width - 316) < 0.5)
         #expect(size.height <= maximumHeight + 0.5)
@@ -232,7 +280,6 @@ private func applyFixtureScrollerStyle(
 struct AccessibilityViewportContent: View {
     let layout: PanelLayoutState
     let controls: CalendarControlFixture
-    let preferences: PreferencesAccessibilityFixture
     var dateSearch: DateSearchFixture? = nil
 
     var body: some View {
@@ -240,13 +287,6 @@ struct AccessibilityViewportContent: View {
             Color.clear.frame(height: CalendarPanel.caretHeight)
             PanelViewport(layout: layout) {
                 VStack(spacing: 12) {
-                    if controls.showingPreferences {
-                        PreferencesView(
-                            store: preferences.store,
-                            hotkeyPreferences: preferences.hotkeyModel,
-                            notificationCenter: preferences.notifications
-                        )
-                    }
                     controls.header
                     if let dateSearch {
                         DateSearchFixtureRow(fixture: dateSearch)
@@ -264,6 +304,79 @@ struct AccessibilityViewportContent: View {
             .clipShape(RoundedRectangle(cornerRadius: AppDesign.CornerRadius.lg))
         }
         .frame(width: PanelGeometry.panelWidth)
+    }
+}
+
+/// The complete production calendar; protected services and status-item rendering are isolated.
+@MainActor
+private final class CalendarViewportFixture {
+    let month: Date
+    let store: StoreOf<CalendarFeature>
+    let host: AccessibilityTestHost
+    let protectedEffects = LockIsolated(0)
+
+    init(layout: PanelLayoutState, maximumHeight: CGFloat) throws {
+        month = try #require(Calendar.current.date(from: DateComponents(
+            year: 2030, month: 11, day: 15, hour: 12
+        )))
+        let effects = protectedEffects
+        let today = month
+        store = Store(initialState: CalendarFeature.State(displayedMonth: month)) {
+            CalendarFeature()
+        } withDependencies: {
+            $0.date = .constant(today)
+            $0.calendarClient = .liveValue // Pure grid/date generation; no service I/O.
+            $0.calendarClient.menuBarDateString = { _, _ in
+                effects.withValue { $0 += 1 }
+                Issue.record("Viewport fixture must not render a production status item")
+                return ""
+            }
+            $0.preferencesClient = .testValue
+            $0.preferencesClient.loadStartOfWeekday = { 1 }
+            $0.preferencesClient.loadWorkdays = { [2, 3, 4, 5, 6] }
+            $0.preferencesClient.loadShowAISearch = { false }
+            $0.eventKitClient = EventKitClient(
+                requestAccess: {
+                    effects.withValue { $0 += 1 }
+                    Issue.record("Viewport fixture must not request calendar access")
+                    return false
+                },
+                fetchEvents: { _ in
+                    effects.withValue { $0 += 1 }
+                    Issue.record("Viewport fixture must not read private events")
+                    return []
+                },
+                authorizationStatus: { .notDetermined }
+            )
+        }
+        let calendarStore = store
+        let model = AIDateQueryModel(
+            client: AIDateQueryClient(
+                resolveProvider: { _ in
+                    effects.withValue { $0 += 1 }
+                    Issue.record("Viewport fixture must not resolve an AI provider")
+                    return .none
+                },
+                parseDate: { _, _ in
+                    effects.withValue { $0 += 1 }
+                    Issue.record("Viewport fixture must not request an AI date")
+                    return nil
+                }
+            ),
+            enabled: false, preference: .auto,
+            onDate: { _ in Issue.record("Viewport fixture must not receive an AI date") }
+        )
+        host = AccessibilityTestHost(width: 316, height: maximumHeight) {
+            CalendarPopoverView(
+                store: calendarStore, layout: layout,
+                aiQueryModel: model, loadAISettings: { (false, .auto) }
+            )
+        }
+    }
+
+    func close() {
+        host.hosting.rootView = AnyView(EmptyView())
+        host.close()
     }
 }
 

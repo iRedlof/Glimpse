@@ -7,7 +7,9 @@ import subprocess
 import tempfile
 import unittest
 
-from keyboard_xcresult_fixture import METHOD_IDS, cases, current_suite, manifest, parameterized, summary, tree
+from keyboard_xcresult_fixture import (
+    METHOD_IDS, cases, current_suite, manifest, parameterized, settings_suite, summary, tree,
+)
 
 SCRIPTS = pathlib.Path(__file__).parents[1]
 VIEWPORT_PNGS = (
@@ -528,20 +530,32 @@ if '-resultBundlePath' in sys.argv:
         self.assertTrue(receipt["owned_host_absence_confirmed"])
         self.assert_workspace_cleanup(root, runner_temp, workspace, observed)
 
-    def test_checked_in_manifest_requires_prepared_fourteen_methods_and_sixteen_cases(self):
-        _, result_summary, result_tests = current_suite()
+    def test_checked_in_manifest_requires_twenty_eight_methods_and_forty_six_cases(self):
+        required, result_summary, result_tests = settings_suite()
         expected = json.loads((SCRIPTS / "keyboard-ownership-methods.json").read_text())
+        self.assertEqual(expected, required)
         result, _, _, _, _, results, _, _ = self.run_workspace_fixture(
             keyboard="both", keyboard_manifest=expected,
             keyboard_summary=result_summary, keyboard_tests=result_tests,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         receipt = json.loads((results / "keyboard-ownership-acceptance.json").read_text())
-        self.assertEqual(len(receipt["methods"]), 14)
-        self.assertEqual(receipt["executed_cases"], 16)
+        self.assertEqual(len(receipt["methods"]), 28)
+        self.assertEqual(receipt["executed_cases"], 46)
         for method in ("heldHeaderSpaceActivatesOnceAndConsumesRepeat()",
                        "todayBecomingDisabledHasNoExtraTodayAction()"):
             self.assertEqual(receipt["methods"]["CalendarKeyboardOwnershipTests/" + method], 1)
+        for method, count in (
+            ("settingsRecordingFollowsItsOwnWindow(boundary:)", 5),
+            ("settingsHandoffPreservesPinnedContext(pinned:editorOpen:)", 4),
+            ("settingsHandoffRejectsDeferredCalendarPresentation(source:)", 3),
+            ("settingsGearFrontsWindowWithoutInlineExpansion()", 1),
+            ("nativeSettingsMenuHasOneRetainedDestination()", 1),
+            ("settingsSectionsKeepWindowAndCalendarStable(constrained:)", 2),
+            ("settingsNativeCloseLeavesCalendarUntouched(boundary:)", 4),
+            ("settingsPanesAndRecoveryRemainReachable(constrained:dark:)", 4),
+        ):
+            self.assertEqual(receipt["methods"]["CalendarKeyboardOwnershipTests/" + method], count)
 
     def test_exit_zero_cannot_admit_missing_failed_skipped_or_invalid_results(self):
         for scenario in ("zero", "missing", "failed", "skipped", "expected-failure",

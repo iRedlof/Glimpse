@@ -51,12 +51,14 @@ open Glimpse.xcodeproj
 | File | Purpose |
 |---|---|
 | `GlimpseApp.swift` | @main entry, AppDelegate |
-| `CalendarPanel.swift` | NSPanel (non-activating, pin support, text input, preferences collapse) |
+| `CalendarPanel.swift` | NSPanel (non-activating, pin support, text input, Settings handoff) |
 | `CalendarStatusItem.swift` | NSStatusItem, panel positioning, midnight refresh, NotificationCenter observer |
 | `MenuBarItemRenderer.swift` | Composites the whole menu bar item (border/filled, icon + separator + text) into one `NSImage` set as `button.image`. No subview — a child view in the status button pegs CPU on macOS 26 (see gotchas.md) |
 | `StatusItemPreview.swift` | NSViewRepresentable rendering the same MenuBarItemRenderer image for the SwiftUI preferences preview |
 | `CalendarPopoverView.swift` | Main calendar UI, date selection, AI field, events, footer with quit confirm |
-| `PreferencesView.swift` | Grouped cards layout (Display, Calendar, Features) |
+| `SettingsWindow.swift` | Retained native Settings controller, exact shortcut owner, refresh and bounded placement |
+| `SettingsRootView.swift` | Four-section sidebar with native focus and independently scrolling detail |
+| `PreferencesView.swift` | Selected-section controls and existing preference setters |
 | `MonthBorderShape.swift` | Contoured month border (SwiftUI Shape) |
 | `DateIconRenderer.swift` | Date number + red accent menu bar icon, configurable text color |
 | `GlobalHotkey.swift` | Carbon EventHotKey, configurable combo with persistence |
@@ -80,8 +82,8 @@ open Glimpse.xcodeproj
 ### 1. NSPanel + TextField
 `.nonactivatingPanel` prevents SwiftUI TextField from working. Must call `NSApp.activate(ignoringOtherApps: true)` via `panel.activateForTextInput()`. Previous app stored and restored on deactivate.
 
-### 2. Preferences Collapse on Reopen
-`onAppear` does NOT fire when NSPanel is reused via orderOut/orderFront. `CalendarPanel` stores a reference to the TCA store and `collapsePreferencesIfNeeded()` is called from `CalendarStatusItem.showPanel()`.
+### 2. Reused Windows and Settings Handoff
+`onAppear` does NOT fire when an AppKit window is reused via orderOut/orderFront. Calendar reopening retains its explicit Today reset. Gear and ⌘, share one retained `SettingsWindowController`; each presentation explicitly refreshes its preferences store while preserving pending login operations/errors. Settings handoff cancels deferred calendar editor focus and abandons the previous external-app restoration lease. A pinned calendar keeps its frame, scroll and selection; an unpinned calendar hides. Closing Settings does not reopen the calendar.
 
 ### 3. Menu Bar Refresh
 `onChange` on TCA `@ObservableState` bindings does NOT reliably fire. PreferencesView uses custom `Binding`s that post `NotificationCenter.menuBarDisplayDidChange`. CalendarStatusItem observes this and calls `updateMenuBarDisplay()`.

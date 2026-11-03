@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 import test_quality_gate
-from keyboard_xcresult_fixture import cases
+from keyboard_xcresult_fixture import cases, current_suite
 
 SCRIPTS = pathlib.Path(__file__).parents[1]
 EDITOR = "CalendarKeyboardOwnershipTests/nativeEditorSubmitEscapeAndHiddenReopen()"
@@ -19,7 +19,9 @@ class KeyboardRuntimeWarningContracts(unittest.TestCase):
     def setUp(self):
         fixture = json.loads((pathlib.Path(__file__).parent
                               / "fixtures/keyboard-runtime-warning.json").read_text())
-        self.expected = json.loads((SCRIPTS / "keyboard-ownership-methods.json").read_text())
+        # The retained warning result has a fourteen-method historical contract.
+        # Future native methods must not be required retroactively from this input.
+        self.expected = current_suite()[0]
         self.summary, self.tests = fixture["summary"], fixture["tests"]
         spec = importlib.util.spec_from_file_location(
             "keyboard_checker", SCRIPTS / "check-keyboard-xcresult.py")

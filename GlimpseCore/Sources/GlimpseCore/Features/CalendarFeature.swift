@@ -13,6 +13,8 @@ public struct CalendarFeature: Sendable {
         public var startOfWeekday: Int = 1
         public var workdays: Set<Int> = [2, 3, 4, 5, 6]
         public var isPinned: Bool = false
+        // Temporary reducer-only compatibility for existing reopen/reset fixtures.
+        // Settings presentation is owned by SettingsWindowController; no live view reads this.
         public var showingPreferences: Bool = false
         public var events: [CalendarEvent] = []
         public var eventsDate: Date?

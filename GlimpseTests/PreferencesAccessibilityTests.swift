@@ -8,27 +8,34 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct PreferencesAccessibilityTests {
-    @Test
-    func nativeTitlesPreserveRolesAndSelectedValues() async throws {
+    @Test(arguments: [SettingsSection.menuBar, .calendar, .aiDateSearch])
+    func nativeTitlesPreserveRolesAndSelectedValues(section: SettingsSection) async throws {
         var state = PreferencesFeature.State()
         state.startOfWeekday = 2
         state.aiProvider = .proxy
         state.displayOptions.showFilledBackground = true
         let fixture = PreferencesAccessibilityFixture(state: state)
-        let host = fixture.host()
+        let host = fixture.host(section: section)
         defer { host.close(); fixture.close() }
         try await host.settle()
-        for (name, expected) in [("Filled background", 1), ("AI date search", 1)] {
+        switch section {
+        case .menuBar, .aiDateSearch:
+            let name = section == .menuBar ? "Filled background" : "AI date search"
             let node = try host.control(named: name)
             #expect(node.role == .checkBox)
-            #expect((node.value as? NSNumber)?.intValue == expected)
+            #expect((node.value as? NSNumber)?.intValue == 1)
+            if section == .aiDateSearch {
+                let provider = try host.control(named: "AI provider")
+                #expect(provider.role == .popUpButton)
+                #expect(provider.value as? String == "Cloud AI")
+            }
+        case .calendar:
+            let weekday = try host.control(named: "Week starts on")
+            #expect(weekday.role == .popUpButton)
+            #expect(weekday.value as? String == Calendar.current.weekdaySymbols[1])
+        case .general:
+            Issue.record("This role matrix covers the three panes with selected preference values")
         }
-        let weekday = try host.control(named: "Week starts on")
-        #expect(weekday.role == .popUpButton)
-        #expect(weekday.value as? String == Calendar.current.weekdaySymbols[1])
-        let provider = try host.control(named: "AI provider")
-        #expect(provider.role == .popUpButton)
-        #expect(provider.value as? String == "Cloud AI")
     }
 
     @Test(arguments: ["Icon", "Day", "Mon", "Date", "Year"], [false, true])
@@ -41,7 +48,7 @@ struct PreferencesAccessibilityTests {
         )
         state.displayOptions[keyPath: keyPath] = initial
         let fixture = PreferencesAccessibilityFixture(state: state)
-        let host = fixture.host()
+        let host = fixture.host(section: .menuBar)
         defer { host.close(); fixture.close() }
         try await host.settle()
         let before = fixture.store.displayOptions
@@ -75,7 +82,7 @@ struct PreferencesAccessibilityTests {
         var state = PreferencesFeature.State()
         state.aiProvider = .proxy
         let fixture = PreferencesAccessibilityFixture(state: state)
-        let host = fixture.host()
+        let host = fixture.host(section: .aiDateSearch)
         defer { host.close(); fixture.close() }
         try await host.settle()
         #expect(try host.control(named: "AI provider").value as? String == "Cloud AI")
@@ -99,7 +106,7 @@ struct PreferencesAccessibilityTests {
         state.startOfWeekday = 1
         state.aiProvider = .auto
         let fixture = PreferencesAccessibilityFixture(state: state)
-        let host = fixture.host()
+        let host = fixture.host(section: pickerName == "Week starts on" ? .calendar : .aiDateSearch)
         defer { host.close(); fixture.close() }
         try await host.settle()
         let popup = try host.control(named: pickerName)
@@ -142,18 +149,23 @@ struct PreferencesAccessibilityTests {
     @Test
     func hostingPreferencesNeverTouchesProtectedDependencies() async throws {
         let fixture = PreferencesAccessibilityFixture(state: .init())
-        let host = fixture.host()
-        defer { host.close(); fixture.close() }
-        try await host.settle()
-        #expect(fixture.hotkey.backend.operations.isEmpty)
-        #expect(fixture.receipts.value.forbidden == 0)
-        #expect(fixture.receipts.value.displaySaves.isEmpty)
-        #expect(fixture.receipts.value.aiSaves.isEmpty)
-        #expect(fixture.receipts.value.providerSaves.isEmpty)
-        #expect(fixture.receipts.value.weekdaySaves.isEmpty)
-        #expect(!host.window.isKeyWindow)
-        #expect(!host.window.isMainWindow)
-        #expect(!host.elements().isEmpty)
+        defer { fixture.close() }
+        for section in SettingsSection.allCases {
+            let host = fixture.host(section: section)
+            defer { host.close() }
+            try await host.settle()
+            #expect(fixture.hotkey.backend.operations.isEmpty)
+            #expect(fixture.receipts.value.forbidden == 0)
+            #expect(fixture.receipts.value.displaySaves.isEmpty)
+            #expect(fixture.receipts.value.aiSaves.isEmpty)
+            #expect(fixture.receipts.value.providerSaves.isEmpty)
+            #expect(fixture.receipts.value.weekdaySaves.isEmpty)
+            #expect(fixture.receipts.value.menuNotifications == 0)
+            #expect(fixture.receipts.value.calendarNotifications == 0)
+            #expect(!host.window.isKeyWindow)
+            #expect(!host.window.isMainWindow)
+            #expect(!host.elements().isEmpty)
+        }
     }
 
     private func pillContract(
@@ -342,12 +354,14 @@ final class PreferencesAccessibilityFixture {
         ]
     }
 
-    func host() -> AccessibilityTestHost {
-        AccessibilityTestHost(width: 268, height: 700) {
+    func host(section: SettingsSection = .general) -> AccessibilityTestHost {
+        AccessibilityTestHost(width: 600, height: 480) {
             PreferencesView(
                 store: store, hotkeyPreferences: hotkeyModel,
-                notificationCenter: notifications
+                notificationCenter: notifications, section: section
             )
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 

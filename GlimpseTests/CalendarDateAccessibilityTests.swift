@@ -144,16 +144,6 @@ private final class DateAccessibilityFixture {
                 authorizationStatus: { .notDetermined }
             )
         }
-        let preferences = Store(initialState: PreferencesFeature.State()) {
-            Reduce<PreferencesFeature.State, PreferencesFeature.Action> { _, _ in
-                Issue.record("Date fixture must not invoke preferences")
-                return .none
-            }
-            PreferencesFeature()
-        } withDependencies: {
-            $0.preferencesClient = .testValue
-            $0.launchAtLoginClient = .testValue
-        }
         let calendarStore = store
         let aiModel = AIDateQueryModel(
             client: AIDateQueryClient(
@@ -171,7 +161,7 @@ private final class DateAccessibilityFixture {
         )
         host = AccessibilityTestHost(width: 316, height: 550) {
             CalendarPopoverView(
-                store: calendarStore, preferencesStore: preferences,
+                store: calendarStore,
                 aiQueryModel: aiModel, loadAISettings: { (false, .auto) }
             )
                 .environment(\.colorScheme, appearance)

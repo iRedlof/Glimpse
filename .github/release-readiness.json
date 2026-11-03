@@ -1,22 +1,22 @@
 {
-  "version": "1.4.19",
-  "build": "26",
+  "version": "1.4.20",
+  "build": "27",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-calmer-grid-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-03-settings-window-acceptance.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-calmer-grid-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-03-settings-window-acceptance.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-calmer-grid-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-03-settings-window-acceptance.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-calmer-grid-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-03-settings-window-acceptance.md"
     }
   }
 }

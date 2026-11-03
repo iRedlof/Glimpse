@@ -14,6 +14,20 @@
     "CalendarKeyboardOwnershipTests/focusedLogicalDateStaysVisibleInCappedViewport(maximumHeight:)": 2,
     "CalendarKeyboardOwnershipTests/completionGuardsDoNotResetUnpreparedHiddenOrNonkeyPanels()": 1,
     "CalendarKeyboardOwnershipTests/heldHeaderSpaceActivatesOnceAndConsumesRepeat()": 1,
-    "CalendarKeyboardOwnershipTests/todayBecomingDisabledHasNoExtraTodayAction()": 1
+    "CalendarKeyboardOwnershipTests/todayBecomingDisabledHasNoExtraTodayAction()": 1,
+    "CalendarKeyboardOwnershipTests/shortcutRecordingStartsFromItsOrdinaryWindow()": 1,
+    "CalendarKeyboardOwnershipTests/backgroundShortcutControlCannotRecordFromAnotherPanel()": 1,
+    "CalendarKeyboardOwnershipTests/settingsRecordingFollowsItsOwnWindow(boundary:)": 5,
+    "CalendarKeyboardOwnershipTests/settingsReopenRefreshesWithoutReplacingState()": 1,
+    "CalendarKeyboardOwnershipTests/settingsHandoffPreservesPinnedContext(pinned:editorOpen:)": 4,
+    "CalendarKeyboardOwnershipTests/settingsHandoffRejectsDeferredCalendarPresentation(source:)": 3,
+    "CalendarKeyboardOwnershipTests/normalCalendarTextDismissalStillRestoresPreviousApplication()": 1,
+    "CalendarKeyboardOwnershipTests/settingsGearFrontsWindowWithoutInlineExpansion()": 1,
+    "CalendarKeyboardOwnershipTests/nativeSettingsMenuHasOneRetainedDestination()": 1,
+    "CalendarKeyboardOwnershipTests/settingsSectionsKeepWindowAndCalendarStable(constrained:)": 2,
+    "CalendarKeyboardOwnershipTests/settingsNativeCloseLeavesCalendarUntouched(boundary:)": 4,
+    "CalendarKeyboardOwnershipTests/settingsPanesAndRecoveryRemainReachable(constrained:dark:)": 4,
+    "CalendarKeyboardOwnershipTests/settingsNativeTraversalAndActivation()": 1,
+    "CalendarKeyboardOwnershipTests/settingsPopupEscapePreservesSelectionAndWindow()": 1
   }
 }
