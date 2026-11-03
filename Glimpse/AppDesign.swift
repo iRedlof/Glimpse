@@ -38,6 +38,8 @@ enum AppDesign {
 
     enum Control {
         static let iconTargetSize: CGFloat = 28
+        static let todayTargetWidth: CGFloat = 48
+        static let todayBackgroundOpacity: Double = 0.10
         static let dismissTargetSize: CGFloat = 24
         static let focusLineWidth: CGFloat = 2
         static let focusInset: CGFloat = 2

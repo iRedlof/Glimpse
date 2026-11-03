@@ -145,6 +145,67 @@ struct CalendarKeyboardOwnershipTests {
             print("GLIMPSE_KEYBOARD_DISABLED_TODAY_OBSERVATION repeat=\(repeatPress) disabledBeforeEvent=\(disabledBeforeEvent) localCallbacks=\(rows.count) todayOwnerCallbacks=\(todayRows.count) disabledOwnerHandlerExercised=\(disabledBeforeEvent && !todayRows.isEmpty) owners=\(rows.compactMap { $0["owner"] as? String })")
             fixture.trace("today-disabled-after-space-\(repeatPress)")
         }
+
+        // Keep the original key-routing sequence above intact; observe the same
+        // root afterward so visual checks do not introduce extra fixture opens.
+        let otherDate = try #require(fixture.store.days.first {
+            $0.isCurrentMonth && !fixture.store.calendar.isDateInToday($0.date)
+        }?.date)
+        for (appearanceName, theme) in [
+            (NSAppearance.Name.aqua, "light"), (.darkAqua, "dark")
+        ] {
+            fixture.panel.appearance = try #require(NSAppearance(named: appearanceName))
+
+            @MainActor
+            func observeToday(_ state: String, enabled: Bool) async throws {
+                await fixture.settleRendering()
+                try #require(fixture.store.calendar.isDateInToday(fixture.today),
+                             "Public today crossed midnight during this fixture")
+                try fixture.loadOwnedAccessibilityTree()
+                let nodes = fixture.accessibilityNodes().filter {
+                    $0.role == .button && $0.label == "Go to today"
+                }
+                #expect(nodes.count == 1)
+                let node = try #require(nodes.first)
+                #expect(node.enabled == enabled)
+                #expect(node.help == "Go to today")
+                expectCalendarControlTarget(node.frame, action: .today)
+                #expect(fixture.hosting.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua])
+                        == appearanceName)
+                let bounds = fixture.panel.convertToScreen(
+                    fixture.hosting.convert(fixture.hosting.bounds, to: nil)
+                )
+                try fixture.saveFocusedDateBitmap(
+                    bounds, name: "today-root-\(theme)-\(state)"
+                )
+                fixture.clearActionReceipts()
+                if enabled {
+                    #expect(node.press())
+                } else {
+                    _ = node.press()
+                }
+                await fixture.settleRendering()
+                #expect(fixture.actions.value == (enabled ? ["today"] : []))
+                #expect(fixture.store.isShowingCurrentMonth)
+                #expect(fixture.store.selectedDate == fixture.today)
+                let after = fixture.accessibilityNodes().filter {
+                    $0.role == .button && $0.label == "Go to today"
+                }
+                #expect(after.count == 1 && after.first?.enabled == false)
+                print("GLIMPSE_TODAY_STATE theme=\(theme) state=\(state) enabled=\(enabled) target=\(node.frame)")
+            }
+
+            fixture.store.send(.goToToday)
+            try await observeToday("today-selected", enabled: false)
+            fixture.store.send(.dateTapped(otherDate))
+            try await observeToday("other-selected", enabled: true)
+            fixture.store.send(.dateTapped(otherDate))
+            fixture.store.send(.dateTapped(otherDate))
+            #expect(fixture.store.selectedDate == nil)
+            try await observeToday("no-selection", enabled: true)
+            fixture.store.send(.goToPreviousMonth)
+            try await observeToday("away-month", enabled: true)
+        }
     }
 
     @Test
