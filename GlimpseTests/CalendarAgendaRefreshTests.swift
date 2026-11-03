@@ -407,6 +407,13 @@ struct CalendarAgendaRefreshTests {
                 fixture.store.eventsError != nil && !fixture.store.isLoadingEvents
             }, reason: "query failure renders existing recovery control")
             try await fixture.expectContext(on: fixture.selectedDay, selectedWeek: fixture.selectedWeek)
+            let rawError = try #require(fixture.store.eventsError)
+            #expect(fixture.hasText("Couldn’t load events."))
+            #expect(!fixture.hasText("No events"))
+            #expect(fixture.elements().allSatisfy {
+                !($0.label?.contains(rawError) ?? false)
+                    && !(($0.value as? String)?.contains(rawError) ?? false)
+            }, "Query failure keeps its payload in state without exposing it in the agenda")
             if !useRetry { try await fixture.captureContext("selected-error") }
             let retry = try #require(fixture.elements().first {
                 $0.role == .button && $0.label == "Retry loading calendar events"

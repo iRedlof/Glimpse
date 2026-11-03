@@ -1,22 +1,22 @@
 {
-  "version": "1.4.22",
-  "build": "29",
+  "version": "1.4.23",
+  "build": "30",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-agenda-refresh-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-03-calendar-query-feedback-acceptance.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-agenda-refresh-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-03-calendar-query-feedback-acceptance.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-agenda-refresh-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-03-calendar-query-feedback-acceptance.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-agenda-refresh-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-03-calendar-query-feedback-acceptance.md"
     }
   }
 }
