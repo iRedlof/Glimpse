@@ -751,9 +751,9 @@ struct CalendarPopoverView: View {
                 ProgressView().controlSize(.small)
                 Text("Loading events…").font(.subheadline).foregroundStyle(.secondary)
             }
-        } else if let error = store.eventsError {
+        } else if store.eventsError != nil {
             VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
-                Text("Couldn’t load events: \(error)").font(.caption).foregroundStyle(.red)
+                Text("Couldn’t load events.").font(.caption).foregroundStyle(.red)
                 Button("Retry") { store.send(.retryEvents) }
                     .buttonStyle(.plain)
                     .focusable(false)
