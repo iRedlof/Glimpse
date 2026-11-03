@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from unittest import mock
 
+from agenda_refresh_xcresult_fixture import AGENDA_PNGS, EXPECTED as AGENDA_EXPECTED
+
 
 path = pathlib.Path(__file__).parents[1] / "collect-keyboard-artifacts.py"
 spec = importlib.util.spec_from_file_location("keyboard_artifacts", path)
@@ -96,6 +98,35 @@ class KeyboardArtifactContracts(unittest.TestCase):
         self.assertTrue(receipt["preserve_staging"])
         self.assertEqual(receipt["copies"], [])
         self.assertFalse(self.destination.exists())
+
+    def test_each_declared_agenda_image_is_required_and_completed_copies_survive(self):
+        self.manifest.write_text(json.dumps(AGENDA_EXPECTED))
+        for omitted in AGENDA_PNGS:
+            with self.subTest(omitted=omitted):
+                for name in AGENDA_PNGS:
+                    (self.stage / name).write_bytes(b"completed context image")
+                self.destination = self.root / ("durable-" + omitted)
+                (self.stage / omitted).unlink()
+                receipt = self.collect()
+                self.assertEqual(receipt["exit_code"], 1)
+                self.assertTrue(receipt["preserve_staging"])
+                self.assertTrue(receipt["owned_host_absence_confirmed"])
+                self.assertEqual({pathlib.Path(row["destination"]).name for row in receipt["copies"]},
+                                 set(AGENDA_PNGS) - {omitted})
+                self.assertTrue(any(omitted in error for error in receipt["errors"]))
+                self.assertEqual(len(list(self.stage.iterdir())), 13)
+                for target in self.destination.iterdir():
+                    self.assertEqual(target.read_bytes(), (self.stage / target.name).read_bytes())
+                    target.unlink()
+                (self.stage / omitted).write_bytes(b"completed context image")
+
+    def test_missing_agenda_contract_does_not_allow_empty_capture_success(self):
+        self.manifest.write_text(json.dumps({"schema_version": 1, "methods": AGENDA_EXPECTED["methods"]}))
+        receipt = self.collect()
+        self.assertEqual(receipt["exit_code"], 1)
+        self.assertTrue(receipt["preserve_staging"])
+        self.assertTrue(receipt["errors"])
+        self.assertEqual(receipt["copies"], [])
 
     def test_receipt_write_failure_does_not_release_workspace_retention_marker(self):
         marker = self.root / "retain-keyboard-artifacts"

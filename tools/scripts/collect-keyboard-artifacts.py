@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import pathlib
+import re
 import subprocess
 
 
@@ -76,11 +77,12 @@ def collect(staging, destination, host_executable, manifest, native_exit):
                 receipt["errors"].append(f"{source.name}: {error}")
                 receipt["preserve_staging"] = True
 
-    # Older archives have no viewport bitmap contract. Native failures retain
+    # Older keyboard/AI archives have no bitmap contract. Native failures retain
     # every completed PNG without replacing the native exit with missing-output errors.
     if native_exit == 0:
         try:
-            methods = json.loads(manifest.read_text())["methods"]
+            document = json.loads(manifest.read_text())
+            methods = document["methods"]
             if not isinstance(methods, dict):
                 raise ValueError("Invalid method manifest")
             if VIEWPORT_METHOD in methods:
@@ -94,8 +96,21 @@ def collect(staging, destination, host_executable, manifest, native_exit):
                 missing = sorted(expected - copied)
                 if missing:
                     receipt["errors"].append("Missing required viewport PNGs: " + ", ".join(missing))
+            if any(identifier.startswith("CalendarAgendaRefreshTests/") for identifier in methods):
+                # Seven approved context observations each require light and dark.
+                expected = document.get("required_pngs")
+                if (not isinstance(expected, list) or len(expected) != 14
+                        or not all(isinstance(name, str)
+                                   and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*\.png", name)
+                                   for name in expected)
+                        or len(set(expected)) != len(expected)):
+                    raise ValueError("Invalid Agenda required_pngs contract")
+                copied = {pathlib.Path(row["destination"]).name for row in receipt["copies"]}
+                missing = sorted(set(expected) - copied)
+                if missing:
+                    receipt["errors"].append("Missing required Agenda PNGs: " + ", ".join(missing))
         except (OSError, ValueError, KeyError, TypeError) as error:
-            receipt["errors"].append(f"Viewport artifact requirement: {error}")
+            receipt["errors"].append(f"Native PNG requirement: {error}")
     receipt["exit_code"] = int(bool(receipt["errors"]))
     receipt["preserve_staging"] = bool(receipt["errors"])
     return receipt
