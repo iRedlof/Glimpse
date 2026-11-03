@@ -3,11 +3,14 @@
 2026-11-02. Candidate **v1.4.18/build25**, based on verified v1.4.17 source
 `aa6009abf6c9ec46f21e66807d1a0ae635dddeae`.
 
-**Product, UX and code acceptance cover the original four-file source scope;
-release metadata is synchronized to v1.4.18/build25. Targeted unchanged-source
-keyboard QA passed after an earlier unexplained failure. Final expanded source
-review, complete exact staged-source quality, protected integration and promotion
-remain pending. v1.4.18 is unshipped; installed v1.4.17/build24 remains preserved.**
+**Product and UX acceptance cover the maintenance scope. Independent A1–A8 code
+review accepted the expanded eight-file candidate at tree
+`a75fa406ca985602204ce52e4f6bdce963015ec5`, including release metadata.
+Its complete local quality gate and both hosted Quality runs passed and were
+independently accepted. This note corrects the earlier, stale pending-review
+statement; the amended candidate must pass exact-source integration checks before
+protected integration and promotion. v1.4.18 is unshipped; installed
+v1.4.17/build24 remains preserved.**
 
 ## Value and scope
 
@@ -37,12 +40,20 @@ closed all three with no new findings at staged tree
 wording, the 593-method historical breakdown, readable spacing and preserved
 history. This does not review later release metadata or an added fixture change.
 
+[Expanded independent A1–A8 review](/Volumes/xHome/Github/Glimpse/build/validation/diagnostics-fixture-implementation.yucljzsb/operating-roadmap-expanded-source-review.etxge57y/review.md)
+subsequently accepted the full eight-file candidate at tree
+`a75fa406ca985602204ce52e4f6bdce963015ec5`, with zero Critical, Important or
+blocking findings. The lead accepted its two Minor documentation findings:
+compressed prose and an omitted account of the metadata-tool collision. The
+collision and recovery are recorded below. No production or fixture Swift change
+was introduced.
+
 | Role | Current bounded decision |
 | --- | --- |
-| Product — Lead | Passed for four-file source: truthful distribution and operating status are useful maintenance. No selected-event handoff or new app behavior is promised. |
-| UX — Lead | Passed for four-file source: supported DMG route, migration caveat and acceptance limits are explicit. No new native interaction acceptance is claimed. |
-| Code — independent reviewers | Passed for final four-file tree `e96ba167…`; minor findings closed. Final expanded candidate review remains pending. |
-| QA — Lead | Targeted keyboard14/16 now passes with the original source and assertions; all222 archived source files match. The earlier ordinary failure is retained. Complete final-source quality remains mandatory. |
+| Product — Lead | Passed for the maintenance scope: truthful distribution and operating status are useful. No selected-event handoff or new app behavior is promised. |
+| UX — Lead | Passed for the maintenance scope: supported DMG route, migration caveat and acceptance limits are explicit. No new native interaction acceptance is claimed. |
+| Code — independent reviewers | Passed for expanded tree `a75fa406…`, including project, README and readiness metadata; zero Critical, Important or blocking findings. |
+| QA — independent reviewer and Lead | Complete local quality and hosted branch/PR Quality passed for `d40a0f5…` / tree `a75fa406…`, with 593 distinct methods per tested source. The earlier ordinary failure is retained. The amended candidate still requires fresh exact-source checks. |
 
 ## QA and release boundary
 
@@ -64,14 +75,32 @@ post-cleanup trace cannot do so. No cause, fixed failure or product defect is
 established. No activation, hide policy, assertion or fixture change enters this
 candidate. The final ordinary gate remains the integration requirement.
 
+Concurrent metadata reads against the same instrumented result bundle initially
+exited 64 with a SQLite collision. Those failures remain retained. A copied bundle
+was then read sequentially: summary, tests, checker and collector all exited 0.
+This was a metadata-tool recovery, not a product fix or an additional passing
+test.
+
+The later [ordinary local quality acceptance](/Volumes/xHome/Github/Glimpse/build/validation/diagnostics-fixture-implementation.yucljzsb/operating-roadmap-implementation.qnop355g/root-local-quality18-independent-qa-acceptance.json)
+and [hosted quality acceptance](/Volumes/xHome/Github/Glimpse/build/validation/diagnostics-fixture-implementation.yucljzsb/root-hosted-quality18-independent-acceptance.json)
+cover candidate `d40a0f5e38082e3802953bee232cfc36daf671e6`, tree `a75fa406…`.
+Hosted branch run `41558675943/1` and PR run `41558742267/1` passed; the PR also
+tested merge commit `983858669bca1cf604c5684d8093f2489ddc3979` with the same tree.
+Each tested source passed 593 distinct methods: 255 ordinary app methods
+(629 cases, with 22 duplicate isolated methods skipped), 14 keyboard methods
+(16 cases), 8 AI methods (17 cases), 70 Core, 219 release-tooling and 27 monitoring
+methods. Native/compiler warnings and the original keyboard failure remain in
+the retained evidence. These results do not claim a cause for the earlier
+failure or verification of a new public release.
+
 `tools/scripts/release-control.py:183` excludes root `glimpse.rb` from its
 internal-only allowlist. The earlier internal-only recommendation is superseded:
 this candidate follows the normal **v1.4.18/build25 release**. Do not relax the
 classifier or split the deletion to evade release requirements. All four
 marketing/build pairs, README badge and matching readiness evidence must be
 synchronized; static version/pin checks and scoped source review apply to that
-metadata. Readiness records focused domain acceptance, while final expanded
-review and complete staged-source quality remain required before normal
+metadata. Readiness records completed domain acceptance, including the expanded
+code review. Fresh complete staged-source quality remains required before normal
 protected admission/integration, terminal exact-source release, independent
 public artifact verification and recoverable installation. These delivery steps have not been accepted for this candidate.
 
