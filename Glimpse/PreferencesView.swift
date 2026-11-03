@@ -8,17 +8,23 @@ struct PreferencesView: View {
     @State private var hotkeyPreferences: HotkeyPreferencesModel
     private let notificationCenter: NotificationCenter
     private let onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)?
+    private let recordingWindow: @MainActor () -> NSWindow?
+    private let section: SettingsSection
 
     init(
         store: StoreOf<PreferencesFeature>,
         hotkeyPreferences: HotkeyPreferencesModel? = nil,
         notificationCenter: NotificationCenter = .default,
-        onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)? = nil
+        onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)? = nil,
+        section: SettingsSection = .general,
+        recordingWindow: @escaping @MainActor () -> NSWindow? = { nil }
     ) {
         self.store = store
         _hotkeyPreferences = State(initialValue: hotkeyPreferences ?? HotkeyPreferencesModel())
         self.notificationCenter = notificationCenter
         self.onAISettingsChange = onAISettingsChange
+        self.recordingWindow = recordingWindow
+        self.section = section
     }
 
     private let allWeekdays = Array(1...7)
@@ -53,12 +59,19 @@ struct PreferencesView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppDesign.Spacing.sm + 2) {
-            displayCard
-            calendarCard
-            featuresCard
-            brandedDivider
-                .padding(.top, AppDesign.Spacing.xs)
+        VStack(alignment: .leading, spacing: AppDesign.Spacing.lg) {
+            switch section {
+            case .general:
+                launchAtLoginRow
+                Divider()
+                hotkeyRow
+            case .menuBar:
+                menuBarSettings
+            case .calendar:
+                calendarSettings
+            case .aiDateSearch:
+                aiSettingsRows
+            }
         }
         .onAppear { store.send(.onAppear) }
         .onReceive(notificationCenter.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -66,41 +79,17 @@ struct PreferencesView: View {
         }
     }
 
-    // MARK: - Reusable Card Container
+    // MARK: - Menu Bar
 
-    private func settingsCard<Content: View>(
-        _ title: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: AppDesign.Spacing.sm) {
-            Text(title.uppercased())
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .tracking(0.5)
-
-            VStack(alignment: .leading, spacing: AppDesign.Spacing.sm) {
-                content()
-            }
-            .padding(AppDesign.Spacing.sm + 2)
-            .background(
-                RoundedRectangle(cornerRadius: AppDesign.CornerRadius.md)
-                    .fill(Color.secondary.opacity(0.08))
-            )
-        }
-    }
-
-    // MARK: - Display Card
-
-    private var displayCard: some View {
-        settingsCard("Display") {
+    private var menuBarSettings: some View {
+        VStack(alignment: .leading, spacing: AppDesign.Spacing.lg) {
             // Preview
             menuBarPreview
                 .frame(maxWidth: .infinity)
 
-            // Toggle pills row
             displayToggleRow
 
-            cardDivider
+            Divider()
 
             // Filled background
             settingsRow {
@@ -136,7 +125,10 @@ struct PreferencesView: View {
             ("Year", "Show year in menu bar", \.showYear, { .setShowYear($0) }),
         ]
 
-        return HStack(spacing: AppDesign.Spacing.xs + 2) {
+        return LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 44), spacing: AppDesign.Spacing.sm)],
+            alignment: .leading, spacing: AppDesign.Spacing.sm
+        ) {
             ForEach(options, id: \.0) { label, accessibilityName, keyPath, action in
                 let isOn = store.displayOptions[keyPath: keyPath]
                 Button {
@@ -154,7 +146,6 @@ struct PreferencesView: View {
                         .foregroundStyle(isOn ? .white : .secondary)
                 }
                 .buttonStyle(.plain)
-                .focusable(false)
                 .contentShape(RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2))
                 .accessibilityLabel(accessibilityName)
                 .accessibilityValue(isOn ? "On" : "Off")
@@ -163,10 +154,10 @@ struct PreferencesView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Calendar Card
+    // MARK: - Calendar
 
-    private var calendarCard: some View {
-        settingsCard("Calendar") {
+    private var calendarSettings: some View {
+        VStack(alignment: .leading, spacing: AppDesign.Spacing.lg) {
             // Week starts on
             settingsRow {
                 Text("Week starts on")
@@ -187,14 +178,21 @@ struct PreferencesView: View {
                 .frame(width: 110)
             }
 
-            cardDivider
+            Divider()
 
             // Workdays
             VStack(alignment: .leading, spacing: AppDesign.Spacing.sm) {
                 Text("Workdays")
                     .font(.subheadline)
 
-                HStack(spacing: AppDesign.Spacing.xs) {
+                LazyVGrid(
+                    columns: [GridItem(
+                        .adaptive(minimum: AppDesign.Grid.todayCircleSize,
+                                  maximum: AppDesign.Grid.todayCircleSize),
+                        spacing: AppDesign.Spacing.xs
+                    )],
+                    alignment: .leading, spacing: AppDesign.Spacing.sm
+                ) {
                     ForEach(allWeekdays, id: \.self) { weekday in
                         workdayPill(weekday)
                     }
@@ -227,61 +225,49 @@ struct PreferencesView: View {
                 .contentShape(RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2))
         }
         .buttonStyle(.plain)
-        .focusable(false)
         .accessibilityLabel("\(fullName), \(isSelected ? "workday" : "not a workday")")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    // MARK: - Features Card
+    // MARK: - AI Date Search
 
-    private var featuresCard: some View {
-        settingsCard("Features") {
-            // AI date search
+    @ViewBuilder
+    private var aiSettingsRows: some View {
+        settingsRow {
+            Text("AI date search")
+            Spacer()
+            Toggle("AI date search", isOn: Binding(
+                get: { store.showAISearch },
+                set: { newValue in
+                    store.send(.setShowAISearch(newValue))
+                    onAISettingsChange?(store.showAISearch, store.aiProvider)
+                }
+            ))
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .labelsHidden()
+        }
+
+        if store.showAISearch {
+            Divider()
+
             settingsRow {
-                Text("AI date search")
+                Text("Provider")
                 Spacer()
-                Toggle("AI date search", isOn: Binding(
-                    get: { store.showAISearch },
-                    set: { newValue in
-                        store.send(.setShowAISearch(newValue))
+                Picker("AI provider", selection: Binding(
+                    get: { store.aiProvider },
+                    set: { provider in
+                        store.send(.setAIProvider(provider))
                         onAISettingsChange?(store.showAISearch, store.aiProvider)
                     }
-                ))
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .labelsHidden()
-            }
-
-            if store.showAISearch {
-                cardDivider
-
-                settingsRow {
-                    Text("Provider")
-                    Spacer()
-                    Picker("AI provider", selection: Binding(
-                        get: { store.aiProvider },
-                        set: { provider in
-                            store.send(.setAIProvider(provider))
-                            onAISettingsChange?(store.showAISearch, store.aiProvider)
-                        }
-                    )) {
-                        ForEach(GlimpseCore.AIProvider.allCases, id: \.self) { provider in
-                            Text(provider.displayName).tag(provider)
-                        }
+                )) {
+                    ForEach(GlimpseCore.AIProvider.allCases, id: \.self) { provider in
+                        Text(provider.displayName).tag(provider)
                     }
-                    .labelsHidden()
-                    .frame(width: 110)
                 }
+                .labelsHidden()
+                .frame(width: 110)
             }
-
-            cardDivider
-
-            // Global shortcut
-            hotkeyRow
-
-            cardDivider
-
-            launchAtLoginRow
         }
     }
 
@@ -332,7 +318,6 @@ struct PreferencesView: View {
                 .padding(.vertical, AppDesign.Spacing.xs)
                 .contentShape(Rectangle())
                 .buttonStyle(.plain)
-                .focusable(false)
                 .disabled(store.isUpdatingLaunchAtLogin)
                 .accessibilityLabel("Open Login Items in System Settings")
             }
@@ -407,7 +392,6 @@ struct PreferencesView: View {
                     )
             }
             .buttonStyle(.plain)
-            .focusable(false)
             .contentShape(Rectangle())
             .accessibilityLabel(hotkeyPreferences.isRecording
                 ? "Cancel shortcut recording"
@@ -428,7 +412,6 @@ struct PreferencesView: View {
                 .padding(.vertical, AppDesign.Spacing.xs)
                 .contentShape(Rectangle())
                 .buttonStyle(.plain)
-                .focusable(false)
                 .accessibilityLabel("Keep global shortcut off")
             }
 
@@ -439,9 +422,6 @@ struct PreferencesView: View {
             }
         }
         .onDisappear { hotkeyPreferences.cancelRecording() }
-        .onReceive(notificationCenter.publisher(for: .calendarPanelWillHide)) { _ in
-            hotkeyPreferences.cancelRecording()
-        }
     }
 
     private var hotkeyRecorderLabel: String {
@@ -472,26 +452,9 @@ struct PreferencesView: View {
 
     private func startRecording() {
         guard !hotkeyPreferences.isRecording,
-              let panel = NSApplication.shared.keyWindow as? NSPanel,
-              panel.isVisible else { return }
-        hotkeyPreferences.beginRecording(using: .live(panel: panel))
-    }
-
-    // MARK: - Branded Divider
-
-    private var brandedDivider: some View {
-        HStack(spacing: AppDesign.Spacing.sm) {
-            VStack { Divider() }
-            VStack(spacing: 3) {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(AppDesign.Colors.accentRed)
-                    .frame(width: AppDesign.Icon.accentLineWidth, height: AppDesign.Icon.accentLineHeight + 0.5)
-                Image(systemName: "chevron.compact.down")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary.opacity(0.5))
-            }
-            VStack { Divider() }
-        }
+              let window = recordingWindow(), window.isVisible, window.isKeyWindow,
+              NSApplication.shared.keyWindow === window else { return }
+        hotkeyPreferences.beginRecording(using: .live(window: window))
     }
 
     // MARK: - Shared Components
@@ -505,7 +468,4 @@ struct PreferencesView: View {
         .font(.subheadline)
     }
 
-    private var cardDivider: some View {
-        Divider()
-    }
 }

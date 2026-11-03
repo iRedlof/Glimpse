@@ -171,3 +171,34 @@ struct PanelGeometryTests {
         #expect(!PanelGeometry.framesMatch(CGRect(x: 10, y: 20, width: 316, height: 432), other))
     }
 }
+@Suite
+struct SettingsWindowGeometryTests {
+    @Test(arguments: [
+        CGRect(x: 0, y: 0, width: 1280, height: 800),
+        CGRect(x: -1920, y: -200, width: 1920, height: 1080),
+        CGRect(x: -800, y: -700, width: 500, height: 320),
+    ])
+    func outerFrameFitsVisibleBounds(visible: CGRect) {
+        let result = SettingsWindowGeometry.placement(
+            frame: CGRect(x: -5000, y: 4000, width: 600, height: 502),
+            visibleFrame: visible
+        )
+        #expect(visible.insetBy(dx: 10, dy: 10).contains(result))
+        #expect(result.width > 0 && result.height > 0)
+        if visible.width >= 620 && visible.height >= 522 {
+            #expect(result.size == CGSize(width: 600, height: 502))
+        }
+    }
+
+    @Test
+    func avoidsPinnedCalendarWhenRoomExists() {
+        let visible = CGRect(x: -1920, y: 0, width: 1920, height: 1080)
+        let calendar = CGRect(x: -1090, y: 500, width: 300, height: 420)
+        let result = SettingsWindowGeometry.placement(
+            frame: CGRect(x: -1220, y: 300, width: 600, height: 502),
+            visibleFrame: visible, avoiding: calendar
+        )
+        #expect(visible.insetBy(dx: 10, dy: 10).contains(result))
+        #expect(!result.intersects(calendar))
+    }
+}

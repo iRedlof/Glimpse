@@ -11,6 +11,7 @@ extension Notification.Name {
     static let calendarPanelWillHide = Notification.Name("calendarPanelWillHide")
     static let calendarPanelDidShow = Notification.Name("calendarPanelDidShow")
     static let calendarPanelDidCompleteReopen = Notification.Name("calendarPanelDidCompleteReopen")
+    static let calendarPanelWillPresentSettings = Notification.Name("calendarPanelWillPresentSettings")
     static let hotkeyRecordingDidChange = Notification.Name("hotkeyRecordingDidChange")
 }
 
@@ -23,6 +24,7 @@ final class CalendarStatusItem {
 
     private var statusItem: NSStatusItem?
     private var panel: CalendarPanel?
+    var requestSettings: (@MainActor () -> Void)?
     private let anchorProvider: (@MainActor () -> PanelAnchor?)?
     private let panelFactory: @MainActor (NSRect, CGFloat) -> CalendarPanel
     private let toggleVisibility: (@MainActor (CalendarPanel) -> Bool)?
@@ -275,6 +277,20 @@ final class CalendarStatusItem {
         try presentHiddenPanel()
     }
 
+    func prepareForSettingsPresentation() -> (visibleFrame: NSRect?, avoiding: NSRect?) {
+        pendingCrossScreenShow = nil
+        let placement = (
+            currentPanelAnchor()?.visibleFrame,
+            panel?.isVisible == true && panel?.isPinned == true ? panel?.frame : nil
+        )
+        panel?.prepareForSettingsPresentation()
+        return placement
+    }
+
+    func synchronizeAISettings(enabled: Bool, preference: AIProvider) {
+        panel?.aiSettingsDidChange?(enabled, preference)
+    }
+
     private func isOnSameScreen(_ panel: CalendarPanel) -> Bool {
         guard let panelScreen = panel.screen,
               let currentScreen = currentStatusItemScreen()
@@ -331,6 +347,7 @@ final class CalendarStatusItem {
         } else {
             calendarPanel = panelFactory(placement.frame, placement.caretXOffset)
             panel = calendarPanel
+            calendarPanel.requestSettings = { [weak self] in self?.requestSettings?() }
         }
         calendarPanel.prepareForReopen()
         calendarPanel.updatePlacement(

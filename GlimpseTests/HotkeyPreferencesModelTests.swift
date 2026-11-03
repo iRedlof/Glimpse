@@ -135,6 +135,27 @@ struct HotkeyPreferencesModelTests {
     }
 
     @Test
+    func settingsCommandCannotReplaceTheGlobalShortcut() {
+        let fixture = HotkeyModelFixture()
+        defer {
+            fixture.model.cancelRecording()
+            fixture.hotkeyFixture.cleanupDefaults()
+        }
+        fixture.model.beginRecording(using: fixture.monitor.client)
+
+        #expect(fixture.monitor.send(.init(keyCode: 43, modifiers: UInt32(cmdKey))))
+        #expect(fixture.model.isRecording)
+        #expect(fixture.model.recordingError == .reserved(
+            HotkeyCombo(keyCode: 43, modifiers: UInt32(cmdKey))
+        ))
+        #expect(fixture.model.displayedCombo == .default)
+        #expect(fixture.hotkeyFixture.backend.operations.isEmpty)
+        #expect(fixture.hotkeyFixture.defaults.object(forKey: "hotkeyKeyCode") == nil)
+        #expect(fixture.hotkeyFixture.defaults.object(forKey: "hotkeyModifiers") == nil)
+        #expect(fixture.hotkeyFixture.defaults.object(forKey: "hotkeyEnabled") == nil)
+    }
+
+    @Test
     func cancelHideAndDisappearAreIdempotentWithoutPreferenceChanges() {
         let fixture = HotkeyModelFixture()
         defer { fixture.hotkeyFixture.cleanupDefaults() }

@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import ComposableArchitecture
 import GlimpseCore
 import SwiftUI
@@ -109,21 +110,37 @@ struct AIDateSearchIntegrationTests {
     func directSettingsSettersInvalidateBeforeCompletion(action: AIDateIntegrationSettingsAction) async throws {
         try await withAIDateIntegrationFixture(allowAISettings: true) { fixture in
             let root = fixture.root
-            try await root.open()
+            try await root.openThroughShowOwner()
             let request = try await submitDraft(fixture)
-            root.store.send(.togglePreferences)
-            await root.settleRendering()
-            try root.loadOwnedAccessibilityTree()
+            let requestID = try #require(root.aiModel.currentRequestID)
+            let settings = SettingsAIIntegrationHost(root: root)
+            defer { settings.close() }
+            try await settings.open()
+            for section in [.general, .menuBar, .calendar, .aiDateSearch] as [SettingsSection] {
+                settings.controller.select(section)
+                await settings.settle()
+            }
+            try settings.loadAccessibilityWindowTree()
+            #expect(root.aiModel.currentRequestID == requestID && root.aiModel.isProcessing)
+            #expect(root.submissions.count == 1 && request.cancelCount.value == 0)
             switch action {
             case .disable:
-                let toggle = try control(root, named: "AI date search", role: .checkBox)
+                let toggle = try settings.control(named: "AI date search", role: .checkBox)
                 #expect(toggle.press())
                 #expect(!root.preferences.showAISearch && !root.aiSettings.value.enabled)
                 // No yield/redraw/delayed notification between setter and assertions.
                 #expect(!root.store.showAISearch)
                 #expect(!root.aiModel.isEditorOpen && root.aiModel.draft.isEmpty)
             case .provider:
-                let state = try await selectProvider(root, title: "Cloud AI", request: request)
+                let unchanged = try await selectProvider(
+                    root, settings: settings, title: "Auto", request: request
+                )
+                #expect(unchanged.preference == .auto && unchanged.savedPreference == .auto)
+                #expect(unchanged.currentRequestID == requestID && unchanged.isProcessing)
+                #expect(unchanged.cancelCount == 0 && unchanged.returnCount == 0)
+                let state = try await selectProvider(
+                    root, settings: settings, title: "Cloud AI", request: request
+                )
                 #expect(state.preference == .proxy)
                 #expect(state.savedPreference == .proxy)
                 #expect(state.isEditorOpen && state.draft == Self.draft)
@@ -131,11 +148,15 @@ struct AIDateSearchIntegrationTests {
             case .providerRoundTrip:
                 // Auto and Cloud resolve to the same synthetic provider. Each
                 // real selection must advance the revision, even after a round trip.
-                let cloud = try await selectProvider(root, title: "Cloud AI", request: request)
+                let cloud = try await selectProvider(
+                    root, settings: settings, title: "Cloud AI", request: request
+                )
                 #expect(cloud.preference == .proxy)
                 #expect(cloud.savedPreference == .proxy)
                 expectRequestRelinquished(cloud)
-                let auto = try await selectProvider(root, title: "Auto", request: request)
+                let auto = try await selectProvider(
+                    root, settings: settings, title: "Auto", request: request
+                )
                 #expect(auto.preference == .auto)
                 #expect(auto.savedPreference == .auto)
                 #expect(auto.savedPreferences == [.proxy, .auto])
@@ -147,6 +168,8 @@ struct AIDateSearchIntegrationTests {
             // The actual worker ignores cancel until this explicit release.
             #expect(request.returnCount.value == 0)
             #expect(request.cancelCount.value > 0)
+            settings.close()
+            #expect(root.panel.isVisible && root.submissions.count == 1)
             let target = try #require(root.date(day: 18))
             await request.release(.success(target))
             try await fixture.completed(request, at: 0)
@@ -387,10 +410,10 @@ struct AIDateSearchIntegrationTests {
     }
 
     private func selectProvider(
-        _ root: CalendarKeyboardRootFixture, title: String,
+        _ root: CalendarKeyboardRootFixture, settings: SettingsAIIntegrationHost, title: String,
         request: AIDateIntegrationRequest
     ) async throws -> ProviderSetterState {
-        let popup = try control(root, named: "AI provider", role: .popUpButton)
+        let popup = try settings.control(named: "AI provider", role: .popUpButton)
         var state: ProviderSetterState?
         let selection = NativePickerSelection(
             expectedTitles: ["Auto", "Cloud AI", "On-device AI"], selectedTitle: title,
@@ -419,6 +442,91 @@ struct AIDateSearchIntegrationTests {
         try #require(selection.actionAttempted && selection.trackingEnded && !selection.timedOut,
                      "\(selection.observation)")
         return try #require(state)
+    }
+}
+
+/// Uses the actual Settings controller with the root's existing injected store/model.
+/// It changes only owned hosting accessibility, never production preferences or TCC.
+@MainActor
+private final class SettingsAIIntegrationHost {
+    let controller: SettingsWindowController
+    private let root: CalendarKeyboardRootFixture
+
+    init(root: CalendarKeyboardRootFixture) {
+        self.root = root
+        let statusItem = root.showOwner
+        controller = SettingsWindowController(
+            store: root.preferences, hotkeyPreferences: root.hotkeyModel,
+            onAISettingsChange: { [weak statusItem] enabled, preference in
+                statusItem?.synchronizeAISettings(enabled: enabled, preference: preference)
+            }
+        )
+    }
+
+    func open() async throws {
+        let placement = root.showOwner.prepareForSettingsPresentation()
+        controller.show(visibleFrame: placement.visibleFrame, avoiding: placement.avoiding)
+        controller.select(.aiDateSearch)
+        let window = try #require(controller.window)
+        let hosting = try #require(window.contentView as? NSHostingView<SettingsRootView>)
+        window.contentView = NSHostingView(rootView: AnyView(
+            hosting.rootView.environment(\.accessibilityEnabled, true)
+        ))
+        await settle()
+        try loadAccessibilityWindowTree()
+        try #require(window.isVisible && window.isKeyWindow && NSApp.keyWindow === window)
+        try #require(root.panel.isVisible && !root.panel.isKeyWindow)
+    }
+
+    func loadAccessibilityWindowTree() throws {
+        let application = AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier)
+        var windows: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(
+            application, kAXWindowsAttribute as CFString, &windows
+        )
+        try #require(result == .success)
+    }
+
+    func control(named name: String, role: NSAccessibility.Role) throws -> AccessibilityTestNode {
+        var queue: [Any] = [try #require(controller.window?.contentView)]
+        var visited: Set<ObjectIdentifier> = []
+        var matches: [AccessibilityTestNode] = []
+        var index = 0
+        while index < queue.count {
+            let object = queue[index] as AnyObject
+            index += 1
+            guard object.responds?(to: #selector(NSAccessibilityProtocol.accessibilityRole)) == true,
+                  visited.insert(ObjectIdentifier(object)).inserted else { continue }
+            let node = AccessibilityTestNode(object: object)
+            if node.label == name && node.role == role { matches.append(node) }
+            queue.append(contentsOf: node.children)
+            queue.append(contentsOf: node.contents)
+            queue.append(contentsOf: node.visibleChildren)
+        }
+        try #require(matches.count == 1)
+        let node = try #require(matches.first)
+        try #require(node.object.accessibilityWindow?() as? NSWindow === controller.window)
+        return node
+    }
+
+    func settle() async {
+        for _ in 0..<12 {
+            _ = controller.window?.contentView?.fittingSize
+            controller.window?.contentView?.layoutSubtreeIfNeeded()
+            controller.window?.contentView?.displayIfNeeded()
+            pumpRunLoop()
+            await Task.yield()
+        }
+    }
+
+    private func pumpRunLoop() {
+        CFRunLoopRunInMode(.defaultMode, 0.01, true)
+    }
+
+    func close() {
+        controller.cancelRecording()
+        controller.window?.contentView = nil
+        controller.window?.close()
     }
 }
 

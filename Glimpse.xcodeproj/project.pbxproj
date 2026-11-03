@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E20000000000000000000001 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000002 /* SettingsWindow.swift */; };
+		E20000000000000000000003 /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000004 /* SettingsRootView.swift */; };
 		DD0000000000000000000095 /* AIDateQueryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000096 /* AIDateQueryModel.swift */; };
 		DD0000000000000000000097 /* AIDateQueryModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000098 /* AIDateQueryModelTests.swift */; };
 		DD0000000000000000000091 /* AIDateQueryClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000092 /* AIDateQueryClient.swift */; };
@@ -79,6 +81,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		E20000000000000000000002 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
+		E20000000000000000000004 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
 		DD0000000000000000000096 /* AIDateQueryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryModel.swift; sourceTree = "<group>"; };
 		DD0000000000000000000098 /* AIDateQueryModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryModelTests.swift; sourceTree = "<group>"; };
 		DD0000000000000000000092 /* AIDateQueryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryClient.swift; sourceTree = "<group>"; };
@@ -174,6 +178,8 @@
 		AA00000000000000000031 /* Glimpse */ = {
 			isa = PBXGroup;
 			children = (
+				E20000000000000000000002 /* SettingsWindow.swift */,
+				E20000000000000000000004 /* SettingsRootView.swift */,
 				DD0000000000000000007B /* PanelViewport.swift */,
 				DD00000000000000000079 /* PanelLayoutState.swift */,
 				DD00000000000000000071 /* PanelGeometry.swift */,
@@ -344,6 +350,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E20000000000000000000001 /* SettingsWindow.swift in Sources */,
+				E20000000000000000000003 /* SettingsRootView.swift in Sources */,
 				DD0000000000000000007A /* PanelViewport.swift in Sources */,
 				DD00000000000000000078 /* PanelLayoutState.swift in Sources */,
 				DD00000000000000000070 /* PanelGeometry.swift in Sources */,
@@ -482,7 +490,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -490,7 +498,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.19;
+				MARKETING_VERSION = 1.4.20;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -507,7 +515,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -515,7 +523,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.19;
+				MARKETING_VERSION = 1.4.20;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -530,9 +538,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.19;
+				MARKETING_VERSION = 1.4.20;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -547,9 +555,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.19;
+				MARKETING_VERSION = 1.4.20;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

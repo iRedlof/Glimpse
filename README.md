@@ -1,6 +1,6 @@
 # Glimpse
 
-[![Version](https://img.shields.io/badge/version-1.4.19-green)](https://github.com/iRedlof/Glimpse/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.4.20-green)](https://github.com/iRedlof/Glimpse/releases/latest)
 [![Download](https://img.shields.io/badge/download-DMG-brightgreen)](https://github.com/iRedlof/Glimpse/releases/latest)
 
 [![Release](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml/badge.svg)](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml)
@@ -22,7 +22,7 @@ A lightweight macOS menu bar calendar app. Click the date icon to see the curren
 - **Filled background mode** — solid pill style for the menu bar item
 - **Workday highlighting** — configure which days are workdays
 - **Pin window** — keep the calendar visible while working
-- **Grouped preferences** — Display, Calendar, Features cards with branded divider
+- **Settings window** — General, Menu bar, Calendar, and AI date search sections, without resizing the calendar
 - **Auto-updates** — inline status in About, guarded retry after failed checks, and an official release link when updating is unavailable
 - **Shortcuts.app** — "Show Glimpse Calendar" available via Siri and Shortcuts
 - **Launch at login** — actual macOS registration status, with a shortcut to approve it in Login Items
@@ -32,7 +32,7 @@ A lightweight macOS menu bar calendar app. Click the date icon to see the curren
 1. Download the latest release from [GitHub Releases](https://github.com/iRedlof/Glimpse/releases/latest)
 2. Move `Glimpse.app` to `/Applications`
 3. Launch — the date icon appears in the menu bar
-4. Click it to see the calendar, click the gear icon for preferences
+4. Click it to see the calendar; click the gear icon or press ⌘, for settings
 
 ## Architecture
 
@@ -102,9 +102,11 @@ Glimpse/                             # App target
 ├── CalendarPanel.swift              # NSPanel (non-activating, pin, text input)
 ├── CalendarStatusItem.swift         # NSStatusItem, positioning, midnight refresh
 ├── StatusItemView.swift             # Menu bar rendering (bordered/filled)
-├── StatusItemPreview.swift          # NSViewRepresentable for preferences preview
+├── StatusItemPreview.swift          # Shared renderer preview in the current appearance
 ├── CalendarPopoverView.swift        # SwiftUI calendar, date selection, AI field
-├── PreferencesView.swift            # Grouped cards preferences (Display/Calendar/Features)
+├── SettingsWindow.swift             # Retained native Settings window and bounded placement
+├── SettingsRootView.swift           # Settings sidebar and independently scrolling detail
+├── PreferencesView.swift            # Controls for the selected Settings section
 ├── MonthBorderShape.swift           # Contoured month border (SwiftUI Shape)
 ├── DateIconRenderer.swift           # Date number + red accent menu bar icon
 ├── GlobalHotkey.swift               # Carbon EventHotKey, configurable combo
@@ -153,7 +155,9 @@ tools/
 | ← → | Previous / next month |
 | ↑ ↓ | Previous / next year |
 | Enter | Go to today |
-| Escape | Close preferences or calendar |
+| Escape | Close AI editor, then calendar; in Settings, cancel recording, then close window |
+| ⌘, | Open Settings |
+| ⌘W | Close the active window |
 | ⌘G | AI date search |
 
 ## Permissions

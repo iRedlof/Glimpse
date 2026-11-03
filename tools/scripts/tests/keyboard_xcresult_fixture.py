@@ -106,3 +106,45 @@ def current_suite():
     result.update(totalTestCount=14, passedTests=14)
     result["devicesAndConfigurations"][0]["passedTests"] = 16
     return expected, result, tests
+
+
+def settings_suite():
+    """Current Settings coverage, independent of the retained fourteen-method archive."""
+    expected, result, tests = current_suite()
+    additions = [
+        ("shortcutRecordingStartsFromItsOrdinaryWindow()", 1),
+        ("backgroundShortcutControlCannotRecordFromAnotherPanel()", 1),
+        ("settingsRecordingFollowsItsOwnWindow(boundary:)", 5),
+        ("settingsReopenRefreshesWithoutReplacingState()", 1),
+        ("settingsHandoffPreservesPinnedContext(pinned:editorOpen:)", 4),
+        ("settingsHandoffRejectsDeferredCalendarPresentation(source:)", 3),
+        ("normalCalendarTextDismissalStillRestoresPreviousApplication()", 1),
+        ("settingsGearFrontsWindowWithoutInlineExpansion()", 1),
+        ("nativeSettingsMenuHasOneRetainedDestination()", 1),
+        ("settingsSectionsKeepWindowAndCalendarStable(constrained:)", 2),
+        ("settingsNativeCloseLeavesCalendarUntouched(boundary:)", 4),
+        ("settingsPanesAndRecoveryRemainReachable(constrained:dark:)", 4),
+        ("settingsNativeTraversalAndActivation()", 1),
+        ("settingsPopupEscapePreservesSelectionAndWindow()", 1),
+    ]
+    for method, count in additions:
+        identifier = "CalendarKeyboardOwnershipTests/" + method
+        expected["methods"][identifier] = count
+        case = {
+            "name": method, "nodeIdentifier": identifier, "nodeType": "Test Case",
+            "nodeIdentifierURL": "test://com.apple.xcode/Glimpse/GlimpseTests/" + identifier,
+            "result": "Passed", "duration": "0.01s", "durationInSeconds": 0.01,
+        }
+        if count > 1:
+            case["children"] = [
+                {
+                    "name": f"fixture argument {index}", "nodeType": "Arguments",
+                    "result": "Passed", "duration": "0.01s", "durationInSeconds": 0.01,
+                    "nodeIdentifierURL": case["nodeIdentifierURL"] + f"?args={index}",
+                }
+                for index in range(1, count + 1)
+            ]
+        cases(tests).append(case)
+    result.update(totalTestCount=28, passedTests=28)
+    result["devicesAndConfigurations"][0]["passedTests"] = 46
+    return expected, result, tests

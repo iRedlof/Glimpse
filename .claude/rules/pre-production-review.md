@@ -22,7 +22,8 @@ Run these checks before any release or significant merge.
 ## A2 — NSPanel & Menu Bar
 
 ### A2.1 Panel Lifecycle
-- Panel collapses preferences on re-show (`collapsePreferencesIfNeeded`)
+- Reused calendar re-show preserves its explicit Today/reset hook; settings are presented in a separate retained window
+- Settings handoff leaves pinned calendar geometry/state intact and explicitly hides an unpinned calendar
 - Panel positions correctly on all screens (multi-monitor)
 - Panel respects edge margins (10pt from screen edges)
 - Caret offset calculated correctly from status item position
@@ -36,9 +37,9 @@ Run these checks before any release or significant merge.
 - Status item handles menu bar overflow gracefully
 
 ### A2.3 Text Input Activation
-- `NSApp.activate(ignoringOtherApps:)` called only for TextField focus
-- Previous app restored on deactivate
-- AI field focus set with 100ms delay for reliable activation
+- Calendar app activation is confined to explicit text editing; Settings activation belongs to explicit native-window presentation
+- Previous app restored after external calendar editing, with that restoration lease abandoned for internal Settings handoff
+- Deferred AI editor focus must still prove current owner, editing intent and generation before activating
 
 ---
 
@@ -54,7 +55,9 @@ Run these checks before any release or significant merge.
 - Key monitor added in onAppear, removed in onDisappear
 - Scroll monitor added/removed alongside key monitor
 - Monitors return `nil` for consumed events, pass through for unhandled
-- Escape key handles: close AI field → close preferences → close panel
+- Calendar Escape closes the AI editor before closing the panel
+- Settings Escape cancels shortcut recording first, then closes its own window; popup tracking/sheets retain native event ownership
+- Settings Tab/Shift-Tab, Space/Return and Command-W use the native Settings owner and must not invoke calendar navigation
 
 ---
 

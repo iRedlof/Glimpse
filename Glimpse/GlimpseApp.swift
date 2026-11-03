@@ -6,17 +6,38 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let calendarStatusItem: CalendarStatusItem
     private let showCommand: CalendarShowCommand
+    private var settingsController: SettingsWindowController?
 
     override init() {
         calendarStatusItem = CalendarStatusItem()
         showCommand = .shared
         super.init()
+        connectSettingsEntry()
     }
 
-    init(calendarStatusItem: CalendarStatusItem, showCommand: CalendarShowCommand) {
+    init(calendarStatusItem: CalendarStatusItem, showCommand: CalendarShowCommand,
+         settingsController: SettingsWindowController? = nil) {
         self.calendarStatusItem = calendarStatusItem
         self.showCommand = showCommand
+        self.settingsController = settingsController
         super.init()
+        connectSettingsEntry()
+    }
+
+    private func connectSettingsEntry() {
+        calendarStatusItem.requestSettings = { [weak self] in self?.showSettings() }
+    }
+
+    func showSettings() {
+        if settingsController == nil {
+            settingsController = SettingsWindowController(
+                onAISettingsChange: { [weak calendarStatusItem] enabled, preference in
+                    calendarStatusItem?.synchronizeAISettings(enabled: enabled, preference: preference)
+                }
+            )
+        }
+        let placement = calendarStatusItem.prepareForSettingsPresentation()
+        settingsController?.show(visibleFrame: placement.visibleFrame, avoiding: placement.avoiding)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -53,6 +74,16 @@ struct GlimpseApp: App {
     var body: some Scene {
         Settings {
             EmptyView()
+        }
+        .commands {
+            CommandGroup(after: .newItem) {
+                Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
+                    .keyboardShortcut("w", modifiers: .command)
+            }
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { appDelegate.showSettings() }
+                    .keyboardShortcut(",", modifiers: .command)
+            }
         }
     }
 }

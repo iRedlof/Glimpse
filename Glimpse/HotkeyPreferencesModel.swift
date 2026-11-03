@@ -16,11 +16,13 @@ struct HotkeyRecordingClient {
     var remove: (Any) -> Void
     var didChange: (Bool) -> Void
 
-    static func live(panel: NSPanel) -> Self {
+    static func live(window: NSWindow) -> Self {
         .init(
-            install: { [weak panel] receive in
-                NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak panel] event in
-                    guard let panel else { return event }
+            install: { [weak window] receive in
+                guard let window, window.isVisible, window.isKeyWindow,
+                      NSApplication.shared.keyWindow === window else { return nil }
+                return NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak window] event in
+                    guard let window else { return event }
                     let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
                     var carbonModifiers: UInt32 = 0
                     if modifiers.contains(.command) { carbonModifiers |= UInt32(cmdKey) }
@@ -29,9 +31,9 @@ struct HotkeyRecordingClient {
                     if modifiers.contains(.control) { carbonModifiers |= UInt32(controlKey) }
                     let consumed = receive(.init(
                         keyCode: UInt32(event.keyCode), modifiers: carbonModifiers,
-                        ownerIsVisible: panel.isVisible,
-                        ownerIsKey: NSApplication.shared.keyWindow === panel,
-                        eventIsForOwner: event.window === panel
+                        ownerIsVisible: window.isVisible,
+                        ownerIsKey: window.isKeyWindow && NSApplication.shared.keyWindow === window,
+                        eventIsForOwner: event.window === window
                     ))
                     return consumed ? nil : event
                 }
@@ -157,7 +159,7 @@ final class HotkeyPreferencesModel {
 
     private static let reservedShortcuts: Set<HotkeyCombo> = {
         let command = UInt32(cmdKey)
-        return Set([12, 13, 4, 46, 0, 8, 9, 7, 6, 49, 35, 1, 3, 17, 45, 31].map {
+        return Set([12, 13, 4, 46, 0, 8, 9, 7, 6, 49, 35, 1, 3, 17, 45, 31, 43].map {
             HotkeyCombo(keyCode: UInt32($0), modifiers: command)
         }).union([HotkeyCombo(keyCode: 4, modifiers: UInt32(cmdKey | shiftKey))])
     }()
