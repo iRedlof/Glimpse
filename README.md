@@ -1,6 +1,6 @@
 # Glimpse
 
-[![Version](https://img.shields.io/badge/version-1.4.18-green)](https://github.com/iRedlof/Glimpse/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.4.19-green)](https://github.com/iRedlof/Glimpse/releases/latest)
 [![Download](https://img.shields.io/badge/download-DMG-brightgreen)](https://github.com/iRedlof/Glimpse/releases/latest)
 
 [![Release](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml/badge.svg)](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml)

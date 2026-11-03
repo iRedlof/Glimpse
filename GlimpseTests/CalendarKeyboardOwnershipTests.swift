@@ -206,6 +206,86 @@ struct CalendarKeyboardOwnershipTests {
             fixture.store.send(.goToPreviousMonth)
             try await observeToday("away-month", enabled: true)
         }
+
+        if fixture.gridVisualAcceptanceEnabled {
+            // Observe this same root after the original key-routing assertions.
+            // Calendar configuration is fixture-owned; no real preferences are saved.
+            let otherDate = try #require(fixture.store.days.first {
+                $0.isCurrentMonth && !fixture.store.calendar.isDateInToday($0.date)
+            }?.date)
+            for (appearanceName, theme) in CalendarKeyboardRootFixture.gridVisualAppearances {
+                fixture.panel.appearance = try #require(NSAppearance(named: appearanceName))
+
+                @MainActor
+                func observeGrid(_ state: String, enabled: Bool) async throws {
+                    await fixture.settleRendering()
+                    try #require(fixture.store.calendar.isDateInToday(fixture.today),
+                                 "Public today crossed midnight during this fixture")
+                    #expect(fixture.hosting.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua])
+                            == appearanceName)
+                    print("GLIMPSE_GRID_APPEARANCE theme=\(theme) state=\(state) requested=\(appearanceName.rawValue) hosting=\(fixture.hosting.effectiveAppearance.name.rawValue)")
+                    try fixture.loadOwnedAccessibilityTree()
+                    let nodes = fixture.accessibilityNodes()
+                    let dateLabels = fixture.store.days.map {
+                        $0.date.formatted(
+                            Date.FormatStyle.dateTime.weekday(.wide).month(.wide).day().year()
+                        )
+                    }
+                    let dates = nodes.filter {
+                        node in node.role == .button
+                            && dateLabels.contains { node.label?.hasPrefix($0) == true }
+                    }
+                    #expect(dates.count == 42)
+                    #expect(Set(dates.compactMap(\.label)).count == 42)
+                    for (index, date) in dates.enumerated() {
+                        #expect(date.enabled && abs(date.frame.height - 30) < 0.5)
+                        #expect(date.frame.width > 28)
+                        for other in dates.dropFirst(index + 1) {
+                            #expect(!date.frame.intersects(other.frame))
+                        }
+                    }
+                    let todayNodes = nodes.filter {
+                        $0.role == .button && $0.label == "Go to today"
+                    }
+                    #expect(todayNodes.count == 1)
+                    let todayNode = try #require(todayNodes.first)
+                    #expect(todayNode.enabled == enabled)
+                    let bounds = fixture.panel.convertToScreen(
+                        fixture.hosting.convert(fixture.hosting.bounds, to: nil)
+                    )
+                    try fixture.saveFocusedDateBitmap(
+                        bounds, name: "grid-root-\(theme)-\(state)"
+                    )
+                    fixture.clearActionReceipts()
+                    if enabled { #expect(todayNode.press()) } else { _ = todayNode.press() }
+                    await fixture.settleRendering()
+                    #expect(fixture.actions.value == (enabled ? ["today"] : []))
+                    #expect(fixture.store.isShowingCurrentMonth)
+                    #expect(fixture.store.selectedDate == fixture.today)
+                    print("GLIMPSE_GRID_STATE theme=\(theme) state=\(state) enabled=\(enabled) weekStart=\(fixture.store.startOfWeekday) workdays=\(fixture.store.workdays.sorted())")
+                }
+
+                fixture.store.send(.goToToday)
+                try await observeGrid("today-selected", enabled: false)
+                fixture.store.send(.dateTapped(otherDate))
+                try await observeGrid("other-selected", enabled: true)
+                fixture.store.send(.dateTapped(otherDate))
+                fixture.store.send(.dateTapped(otherDate))
+                #expect(fixture.store.selectedDate == nil)
+                try await observeGrid("no-selection", enabled: true)
+                fixture.store.send(.goToPreviousMonth)
+                try await observeGrid("away-month", enabled: true)
+
+                fixture.calendarSettings.setValue((startOfWeekday: 2, workdays: Set([1, 7])))
+                fixture.store.send(.reloadPreferences)
+                fixture.store.send(.dateTapped(otherDate))
+                #expect(fixture.store.startOfWeekday == 2)
+                #expect(fixture.store.workdays == Set([1, 7]))
+                try await observeGrid("monday-weekend-workdays", enabled: true)
+                fixture.calendarSettings.setValue((startOfWeekday: 1, workdays: Set([2, 3, 4, 5, 6])))
+                fixture.store.send(.reloadPreferences)
+            }
+        }
     }
 
     @Test
@@ -455,6 +535,22 @@ struct CalendarKeyboardOwnershipTests {
         let expectedDateFrame = expectedDate?.frame
         let clip = fixture.panel.convertToScreen(scroll.contentView.convert(scroll.contentView.bounds, to: nil))
         try fixture.saveFocusedDateBitmap(clip, name: "viewport-\(Int(maximumHeight))-before-assertions")
+        if fixture.gridVisualAcceptanceEnabled {
+            let originalAppearance = fixture.panel.appearance
+            for (appearanceName, theme) in CalendarKeyboardRootFixture.gridVisualAppearances {
+                fixture.panel.appearance = try #require(NSAppearance(named: appearanceName))
+                await fixture.settleRendering()
+                #expect(fixture.gridRenderingFocused && fixture.lastPublishedOwner == .grid)
+                #expect(fixture.hosting.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua])
+                        == appearanceName)
+                print("GLIMPSE_GRID_APPEARANCE theme=\(theme) viewport=\(Int(maximumHeight)) hosting=\(fixture.hosting.effectiveAppearance.name.rawValue)")
+                try fixture.saveFocusedDateBitmap(
+                    clip, name: "grid-focus-\(theme)-viewport-\(Int(maximumHeight))"
+                )
+            }
+            fixture.panel.appearance = originalAppearance
+            await fixture.settleRendering()
+        }
         if let expectedDateFrame {
             try fixture.saveFocusedDateBitmap(
                 expectedDateFrame, name: "expected-anchor-\(Int(maximumHeight))-before-assertions"
@@ -523,6 +619,13 @@ struct CalendarKeyboardOwnershipTests {
 
 @MainActor
 final class CalendarKeyboardRootFixture {
+    static let gridVisualAppearances: [(NSAppearance.Name, String)] = [
+        (.aqua, "light"),
+        (.darkAqua, "dark")
+    ]
+    var gridVisualAcceptanceEnabled: Bool {
+        ProcessInfo.processInfo.environment["GLIMPSE_GRID_VISUAL_ACCEPTANCE"] == "1"
+    }
     let today: Date
     let store: StoreOf<CalendarFeature>
     let panel: CalendarPanel
@@ -534,6 +637,9 @@ final class CalendarKeyboardRootFixture {
     var aiTasks: [AIDateIntegrationTrackedTask] { aiTaskReceipts.tasks }
     let aiSettingSaves = LockIsolated<[AIDateIntegrationSettings]>([])
     let actions = LockIsolated<[String]>([])
+    let calendarSettings = LockIsolated(
+        (startOfWeekday: 1, workdays: Set([2, 3, 4, 5, 6]))
+    )
     let actionCurrentEvents = LockIsolated<[Bool]>([])
     private let dispatch = CalendarKeyboardDispatchReceipt()
     private let focus = CalendarKeyboardFocusReceipt()
@@ -586,6 +692,7 @@ final class CalendarKeyboardRootFixture {
         let aiSettingSaves = aiSettingSaves
         let fixedToday = today
         let actions = actions
+        let calendarSettings = calendarSettings
         let events = actionCurrentEvents
         let dispatch = dispatch
         store = Store(initialState: CalendarFeature.State(displayedMonth: today)) {
@@ -620,8 +727,8 @@ final class CalendarKeyboardRootFixture {
                 return ""
             }
             $0.preferencesClient = .testValue
-            $0.preferencesClient.loadStartOfWeekday = { 1 }
-            $0.preferencesClient.loadWorkdays = { [2, 3, 4, 5, 6] }
+            $0.preferencesClient.loadStartOfWeekday = { calendarSettings.value.startOfWeekday }
+            $0.preferencesClient.loadWorkdays = { calendarSettings.value.workdays }
             $0.preferencesClient.loadShowAISearch = { aiSettings.value.enabled }
             $0.eventKitClient = EventKitClient(
                 requestAccess: {
@@ -650,8 +757,8 @@ final class CalendarKeyboardRootFixture {
             PreferencesFeature()
         } withDependencies: {
             $0.preferencesClient = .testValue
-            $0.preferencesClient.loadStartOfWeekday = { 1 }
-            $0.preferencesClient.loadWorkdays = { [2, 3, 4, 5, 6] }
+            $0.preferencesClient.loadStartOfWeekday = { calendarSettings.value.startOfWeekday }
+            $0.preferencesClient.loadWorkdays = { calendarSettings.value.workdays }
             $0.preferencesClient.loadDisplayOptions = { .default }
             $0.preferencesClient.loadShowAISearch = { aiSettings.value.enabled }
             $0.preferencesClient.loadAIProvider = { aiSettings.value.preference }
