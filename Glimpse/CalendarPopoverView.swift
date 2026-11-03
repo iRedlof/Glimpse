@@ -480,7 +480,7 @@ struct CalendarPopoverView: View {
                             let weekDate = days[row * 7].date
                             Text("\(cal.component(.weekOfYear, from: weekDate))")
                                 .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(.secondary)
                                 .frame(
                                     width: AppDesign.Grid.weekNumberWidth,
                                     height: AppDesign.Grid.cellHeight
@@ -519,7 +519,7 @@ struct CalendarPopoverView: View {
         .overlay(
             RoundedRectangle(cornerRadius: AppDesign.CornerRadius.lg)
                 .strokeBorder(
-                    Color.secondary.opacity(AppDesign.Grid.borderOpacity),
+                    Color.secondary.opacity(AppDesign.Grid.outerBorderOpacity),
                     lineWidth: 1
                 )
         )
@@ -631,7 +631,7 @@ struct CalendarPopoverView: View {
     ) -> Color {
         if isToday { return .white }
         if isSelected { return Color.accentColor }
-        if !day.isCurrentMonth { return .secondary.opacity(AppDesign.Grid.dimmedTextOpacity) }
+        if !day.isCurrentMonth { return .secondary }
         return .primary
     }
 

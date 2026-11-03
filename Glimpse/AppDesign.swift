@@ -58,9 +58,9 @@ enum AppDesign {
         static let weekNumberWidth: CGFloat = 28
         static let todayCircleSize: CGFloat = 28
         static let borderOpacity: Double = 0.25
+        static let outerBorderOpacity: Double = 0.12
         static let monthBorderOpacity: Double = 0.4
-        static let workdayTintOpacity: Double = 0.08
-        static let dimmedTextOpacity: Double = 0.4
+        static let workdayTintOpacity: Double = 0.04
         static let hoverBorderOpacity: Double = 0.4
     }
 
