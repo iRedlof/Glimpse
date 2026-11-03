@@ -1,22 +1,22 @@
 {
-  "version": "1.4.20",
-  "build": "27",
+  "version": "1.4.21",
+  "build": "28",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-settings-window-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-03-cask-retirement-acceptance.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-settings-window-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-03-cask-retirement-acceptance.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-settings-window-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-03-cask-retirement-acceptance.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-settings-window-acceptance.md"
+      "evidence": "docs/superpowers/reviews/2026-11-03-cask-retirement-acceptance.md"
     }
   }
 }
