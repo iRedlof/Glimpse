@@ -152,7 +152,7 @@ struct AccessibilityViewportTests {
             expectDisjointIconRow(rowFrames)
             for action in row {
                 let node = try host.control(named: controls.name(for: action))
-                expectIconTarget(node.frame)
+                expectCalendarControlTarget(node.frame, action: action)
                 #expect(body.contains(node.frame), "Target \(action) outside body \(body)")
                 #expect(clip.contains(node.frame), "Target \(action) clipped by \(clip)")
                 if style == .legacy, let scroller = scroll.verticalScroller, !scroller.isHidden {

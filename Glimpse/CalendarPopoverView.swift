@@ -384,7 +384,6 @@ struct CalendarPopoverView: View {
     private var headerView: some View {
         CalendarHeaderControls(
             monthYearString: store.monthYearString,
-            isShowingCurrentMonth: store.isShowingCurrentMonth,
             todayIsDisabled: store.isShowingCurrentMonth
                 && store.selectedDate.map { store.calendar.isDateInToday($0) } == true,
             previous: { store.send(.goToPreviousMonth) },
@@ -864,7 +863,6 @@ struct CalendarPopoverView: View {
 @MainActor
 struct CalendarHeaderControls: View {
     let monthYearString: String
-    let isShowingCurrentMonth: Bool
     let todayIsDisabled: Bool
     let previous: () -> Void
     let today: () -> Void
@@ -898,15 +896,15 @@ struct CalendarHeaderControls: View {
                 .accessibilityLabel("Previous month")
 
                 Button(action: today) {
-                    Image(systemName: "circle.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(
-                            isShowingCurrentMonth
-                                ? Color.secondary.opacity(0.3)
-                                : Color.accentColor
+                    Text("Today")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(todayIsDisabled ? Color.secondary : Color.accentColor)
+                        .frame(minWidth: AppDesign.Control.todayTargetWidth)
+                        .frame(height: AppDesign.Control.iconTargetSize)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm)
+                                .fill(Color.secondary.opacity(AppDesign.Control.todayBackgroundOpacity))
                         )
-                        .frame(width: AppDesign.Control.iconTargetSize,
-                               height: AppDesign.Control.iconTargetSize)
                         .contentShape(Rectangle())
                         .overlay { CalendarKeyboardFocusOutline() }
                 }
@@ -917,6 +915,7 @@ struct CalendarHeaderControls: View {
                     observe: keyboardObservation, focus: controlFocus, isEnabled: !todayIsDisabled
                 ))
                 .accessibilityLabel("Go to today")
+                .help("Go to today")
 
                 Button(action: next) {
                     Image(systemName: "chevron.right")

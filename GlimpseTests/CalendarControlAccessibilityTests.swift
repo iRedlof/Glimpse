@@ -26,7 +26,10 @@ struct CalendarIconTargetTests {
                 let node = try host.control(named: fixture.name(for: action))
                 #expect(node.role == .button)
                 #expect(node.enabled)
-                expectIconTarget(node.frame)
+                expectCalendarControlTarget(node.frame, action: action)
+                if action == .today {
+                    #expect(node.help == "Go to today")
+                }
                 let before = fixture.receipts
                 try await host.click(atScreenPoint: position.point(in: node.frame))
                 var expected = before
@@ -38,13 +41,63 @@ struct CalendarIconTargetTests {
         #expect(fixture.showingPreferences == !preferences)
         #expect(try host.control(named: fixture.name(for: .pin)).role == .button)
         #expect(try host.control(named: fixture.name(for: .preferences)).role == .button)
+
+        if !pinned && !preferences {
+            let calendar = Calendar(identifier: .gregorian)
+            let artifactDirectory = ProcessInfo.processInfo.environment["GLIMPSE_HEADER_ARTIFACT_DIR"]
+                .map { URL(fileURLWithPath: $0, isDirectory: true) }
+            if let artifactDirectory {
+                try FileManager.default.createDirectory(
+                    at: artifactDirectory, withIntermediateDirectories: true
+                )
+            }
+            for locale in ["en_US", "de_DE", "fr_FR", "fi_FI"] {
+                for year in [2026, 9999] {
+                    for month in 1...12 {
+                        let date = try #require(calendar.date(from: DateComponents(
+                            year: year, month: month, day: 15, hour: 12
+                        )))
+                        let title = date.formatted(
+                            .dateTime.month(.wide).year().locale(Locale(identifier: locale))
+                        )
+                        fixture.monthYearString = title
+                        try await host.settle()
+                        if let artifactDirectory {
+                            let bounds = host.hosting.bounds
+                            let bitmap = try #require(host.hosting.bitmapImageRepForCachingDisplay(in: bounds))
+                            host.hosting.cacheDisplay(in: bounds, to: bitmap)
+                            let data = try #require(bitmap.representation(using: .png, properties: [:]))
+                            let filename = "header-\(locale)-\(year)-\(month).png"
+                            try data.write(to: artifactDirectory.appendingPathComponent(filename))
+                        }
+                        let titles = host.elements().filter {
+                            $0.role?.rawValue == "AXHeading" &&
+                                ($0.label == title || $0.value as? String == title)
+                        }
+                        #expect(titles.count == 1, "Native title: \(title)\n\(host.treeDescription)")
+                        let heading = try #require(titles.first)
+                        let headingFrame = host.rect(heading.frame, in: host.hosting)
+                        #expect(host.hosting.bounds.contains(headingFrame), "Clipped title: \(title)")
+                        #expect(headingFrame.height <= 24, "Wrapped title: \(title)")
+                        let frames = try CalendarControlAction.header.map {
+                            try host.control(named: fixture.name(for: $0)).frame
+                        }
+                        expectDisjointIconRow(frames)
+                        for (action, frame) in zip(CalendarControlAction.header, frames) {
+                            expectCalendarControlTarget(frame, action: action)
+                            #expect(!heading.frame.intersects(frame), "Overlapping title: \(title)")
+                        }
+                        print("GLIMPSE_HEADER_TITLE locale=\(locale) year=\(year) month=\(month) title=\(title)")
+                    }
+                }
+            }
+        }
     }
 
     @Test
     func neighborGapsAndDisabledTodayDoNothing() async throws {
         let fixture = CalendarControlFixture()
         fixture.todayIsDisabled = true
-        fixture.isShowingCurrentMonth = true
         let host = AccessibilityTestHost(width: 268, height: 120) {
             CalendarControlFixtureRows(fixture: fixture)
         }
@@ -61,6 +114,8 @@ struct CalendarIconTargetTests {
         }
         let today = try host.control(named: "Go to today")
         #expect(!today.enabled)
+        #expect(today.help == "Go to today")
+        expectCalendarControlTarget(today.frame, action: .today)
         _ = today.press()
         try await host.settle()
         for position in IconClickPosition.allCases {
@@ -99,8 +154,12 @@ enum IconClickPosition: CaseIterable {
 }
 
 @MainActor
-func expectIconTarget(_ frame: NSRect) {
-    #expect(abs(frame.width - 28) < 0.5, "Measured target \(frame)")
+func expectCalendarControlTarget(_ frame: NSRect, action: CalendarControlAction) {
+    if action == .today {
+        #expect(frame.width >= 47.5, "Measured Today target \(frame)")
+    } else {
+        #expect(abs(frame.width - 28) < 0.5, "Measured icon target \(frame)")
+    }
     #expect(abs(frame.height - 28) < 0.5, "Measured target \(frame)")
 }
 
@@ -121,7 +180,7 @@ func expectDisjointIconRow(_ frames: [NSRect]) {
 final class CalendarControlFixture {
     var isPinned = false
     var showingPreferences = false
-    var isShowingCurrentMonth = false
+    var monthYearString = "September 9999"
     var todayIsDisabled = false
     private(set) var receipts: [CalendarControlAction: Int] = [:]
     private let togglePresentationOnAction: Bool
@@ -132,8 +191,7 @@ final class CalendarControlFixture {
 
     var header: some View {
         CalendarHeaderControls(
-            monthYearString: "November 2026",
-            isShowingCurrentMonth: isShowingCurrentMonth,
+            monthYearString: monthYearString,
             todayIsDisabled: todayIsDisabled,
             previous: { self.record(.previous) },
             today: { self.record(.today) },
