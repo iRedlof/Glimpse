@@ -13,7 +13,8 @@ def require(condition, message):
         raise ValueError(message)
 
 
-SUPPORTED_SUITES = ("CalendarKeyboardOwnershipTests", "AIDateSearchIntegrationTests")
+SUPPORTED_SUITES = ("CalendarKeyboardOwnershipTests", "AIDateSearchIntegrationTests",
+                    "CalendarAgendaRefreshTests")
 
 
 def validate(manifest, summary, tests, *, runtime_warnings=None, suite=SUPPORTED_SUITES[0]):
@@ -148,7 +149,9 @@ def main():
     except (ValueError, TypeError, OSError) as error:
         receipt["errors"].append(str(error))
     args.receipt.write_text(json.dumps(receipt, indent=2) + "\n")
-    label = "Keyboard ownership" if args.suite == SUPPORTED_SUITES[0] else "AI date search integration"
+    label = {"CalendarKeyboardOwnershipTests": "Keyboard ownership",
+             "AIDateSearchIntegrationTests": "AI date search integration",
+             "CalendarAgendaRefreshTests": "Agenda refresh"}[args.suite]
     print(f"{label}: {receipt['status']} ({receipt['executed_cases']} cases)")
     return 0 if receipt["status"] == "Passed" else 1
 

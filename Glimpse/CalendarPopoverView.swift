@@ -1,4 +1,5 @@
 import GlimpseCore
+import Combine
 import EventKit
 import SwiftUI
 
@@ -17,6 +18,7 @@ struct CalendarPopoverView: View {
     let querySubmissionObservation: (@MainActor (String, Task<Void, Never>) -> Void)?
     let loadAISettings: @MainActor () -> (enabled: Bool, preference: AIProvider)
     let presentationObservation: ((CalendarPresentationSnapshot) -> Void)?
+    private let eventChangeNotificationCenter: NotificationCenter
 
     @State private var scrollRouter = CalendarScrollRouter()
     @State private var scrollMonitor: Any?
@@ -44,6 +46,7 @@ struct CalendarPopoverView: View {
              let preferences = PreferencesClient.liveValue
              return (preferences.loadShowAISearch(), preferences.loadAIProvider())
          },
+         eventChangeNotificationCenter: NotificationCenter = .default,
          querySubmissionObservation: (@MainActor (String, Task<Void, Never>) -> Void)? = nil,
          presentationObservation: ((CalendarPresentationSnapshot) -> Void)? = nil) {
         self.store = store
@@ -52,6 +55,7 @@ struct CalendarPopoverView: View {
         self.keyboardObservation = keyboardObservation
         self.editorPresentation = editorPresentation
         self.loadAISettings = loadAISettings
+        self.eventChangeNotificationCenter = eventChangeNotificationCenter
         self.querySubmissionObservation = querySubmissionObservation
         self.presentationObservation = presentationObservation
         let settings = loadAISettings()
@@ -89,7 +93,7 @@ struct CalendarPopoverView: View {
                                     scrollRouter.suspendNavigation()
                                 }
                             }
-                        selectedDateInfo
+                        agendaDateContext
                         eventsSection
                         footerView
                     }
@@ -218,7 +222,18 @@ struct CalendarPopoverView: View {
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                 if panel?.isVisible == true { store.send(.refreshCalendarAuthorization) }
             }
+            .onReceive(eventChangeNotificationCenter.publisher(for: .EKEventStoreChanged)
+                .map { @Sendable _ in () }
+                .receive(on: RunLoop.main)) { _ in
+                refreshEventsAfterStoreChange()
+            }
         }
+    }
+
+    @MainActor
+    private func refreshEventsAfterStoreChange() {
+        guard panel?.isVisible == true else { return }
+        store.send(.refreshCalendarAuthorization)
     }
 
     nonisolated static func scrollPhase(_ phase: NSEvent.Phase) -> CalendarScrollRouter.Phase {
@@ -649,32 +664,46 @@ struct CalendarPopoverView: View {
         return .primary
     }
 
-    // MARK: - Selected Date Info
+    // MARK: - Agenda Date Context
 
-    @ViewBuilder
-    private var selectedDateInfo: some View {
-        if let info = store.selectedDateInfo {
-            HStack(spacing: AppDesign.Spacing.sm) {
-                Image(systemName: "calendar.circle")
-                    .font(.subheadline)
-                    .foregroundStyle(Color.accentColor)
-                Text(info)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .accessibilityLabel("Selected date: \(info)")
+    private static let agendaDateStyle = Date.FormatStyle.dateTime
+        .weekday(.abbreviated).month(.abbreviated).day().year()
+
+    private var agendaDateContext: some View {
+        let date = store.eventsDate ?? store.selectedDate ?? Date()
+        let isToday = store.calendar.isDateInToday(date)
+        let selectedWeek = store.selectedDate.flatMap { selected in
+            store.calendar.isDate(selected, inSameDayAs: date)
+                ? Calendar.current.component(.weekOfYear, from: selected)
+                : nil
         }
+        var label = "Calendar events for \(date.formatted(Self.accessibilityDateStyle))"
+        if isToday { label += ", today" }
+        if let selectedWeek { label += ", selected date, Week \(selectedWeek)" }
+
+        return HStack(alignment: .top, spacing: AppDesign.Spacing.sm) {
+            Image(systemName: "calendar.circle")
+                .font(.subheadline)
+                .foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
+                Text("Events · \(isToday ? "Today" : date.formatted(Self.agendaDateStyle))")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                if let selectedWeek {
+                    Text("Selected date · Week \(selectedWeek)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Events Section
-
-    private var eventsDayTitle: String {
-        let date = store.eventsDate ?? store.selectedDate ?? Date()
-        return store.calendar.isDateInToday(date)
-            ? "Today"
-            : date.formatted(.dateTime.month(.abbreviated).day().year())
-    }
 
     private var calendarAccessMessage: String {
         switch store.calendarAuthorizationStatus {
@@ -735,16 +764,12 @@ struct CalendarPopoverView: View {
                 Image(systemName: "calendar")
                     .font(.subheadline)
                     .foregroundStyle(.tertiary)
-                Text(eventsDayTitle == "Today" ? "No events today" : "No events on \(eventsDayTitle)")
+                Text("No events")
                     .font(.subheadline)
                     .foregroundStyle(.tertiary)
             }
         } else {
             VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
-                Text(eventsDayTitle)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-
                 ForEach(store.events.prefix(5)) { event in
                     HStack(spacing: AppDesign.Spacing.sm) {
                         RoundedRectangle(cornerRadius: 1.5)

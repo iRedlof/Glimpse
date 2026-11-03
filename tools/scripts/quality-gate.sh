@@ -18,6 +18,8 @@ trap 'if [[ -e "$WORK_DIR/retain-keyboard-artifacts" ]]; then
   printf "Keyboard artifact staging retained: %s\n" "$WORK_DIR" >&2
 elif [[ -e "$WORK_DIR/retain-ai-date-search-integration-artifacts" ]]; then
   printf "AI date search artifact staging retained: %s\n" "$WORK_DIR" >&2
+elif [[ -e "$WORK_DIR/retain-agenda-refresh-artifacts" ]]; then
+  printf "Agenda refresh artifact staging retained: %s\n" "$WORK_DIR" >&2
 else
   rm -rf -- "$WORK_DIR"
 fi' EXIT
@@ -157,6 +159,66 @@ else
     --summary-exit "$ai_summary_exit" --tests-exit "$ai_tests_exit" \
     --log-exit "$ai_log_exit" || ai_checker_exit=$?
   for phase_exit in "$ai_exit" "$ai_log_exit" "$ai_summary_exit" "$ai_tests_exit" "$ai_checker_exit" "$ai_artifact_exit"; do
+    if [[ "$phase_exit" != 0 ]]; then exit "$phase_exit"; fi
+  done
+fi
+AGENDA_RECEIPT="$RESULT_DIR/agenda-refresh-acceptance.json"
+AGENDA_SUITE="GlimpseTests/CalendarAgendaRefreshTests.swift"
+AGENDA_MANIFEST="$ROOT/tools/scripts/agenda-refresh-methods.json"
+if [[ ! -e "$AGENDA_SUITE" && ! -L "$AGENDA_SUITE" && ! -e "$AGENDA_MANIFEST" && ! -L "$AGENDA_MANIFEST" ]]; then
+  printf '%s\n' '{"status":"NotApplicable","reason":"Legacy archive: both agenda refresh suite and method manifest absent"}' > "$AGENDA_RECEIPT"
+elif [[ ! -f "$AGENDA_SUITE" || -L "$AGENDA_SUITE" || ! -f "$AGENDA_MANIFEST" || -L "$AGENDA_MANIFEST" ]]; then
+  printf '%s\n' '{"status":"Failed","reason":"Agenda refresh suite and method manifest must both be regular files"}' > "$AGENDA_RECEIPT"
+  exit 1
+else
+  HOST_ARCH="$(uname -m)"
+  mkdir -p "$WORK_DIR/agenda-refresh-artifacts"
+  # Agenda assertions own activation state: execute after AI in a separate host.
+  if GLIMPSE_CALENDAR_KEYBOARD_ACCEPTANCE=1 TEST_RUNNER_GLIMPSE_CALENDAR_KEYBOARD_ACCEPTANCE=1 \
+    GLIMPSE_KEYBOARD_ARTIFACT_DIR="$WORK_DIR/agenda-refresh-artifacts" \
+    TEST_RUNNER_GLIMPSE_KEYBOARD_ARTIFACT_DIR="$WORK_DIR/agenda-refresh-artifacts" \
+    GLIMPSE_AGENDA_ARTIFACT_DIR="$WORK_DIR/agenda-refresh-artifacts" \
+    TEST_RUNNER_GLIMPSE_AGENDA_ARTIFACT_DIR="$WORK_DIR/agenda-refresh-artifacts" \
+    xcodebuild -project Glimpse.xcodeproj -scheme Glimpse -configuration Debug \
+      -destination "platform=macOS,arch=$HOST_ARCH" -derivedDataPath "$WORK_DIR/DerivedData" \
+      -skipMacroValidation -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile \
+      -parallel-testing-enabled NO -test-timeouts-enabled YES \
+      -default-test-execution-time-allowance 30 -maximum-test-execution-time-allowance 30 \
+      -only-testing:GlimpseTests/CalendarAgendaRefreshTests \
+      -resultBundlePath "$RESULT_DIR/AgendaRefreshTests.xcresult" \
+      "ARCHS=$HOST_ARCH" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO test \
+      2>&1 | tee "$RESULT_DIR/agenda-refresh-tests.log"; then
+    agenda_pipeline=("${PIPESTATUS[@]}")
+  else
+    agenda_pipeline=("${PIPESTATUS[@]}")
+  fi
+  agenda_exit="${agenda_pipeline[0]}"
+  agenda_log_exit="${agenda_pipeline[1]}"
+  # A successful Agenda run must retain every declared context image after host absence.
+  touch "$WORK_DIR/retain-agenda-refresh-artifacts"
+  agenda_artifact_exit=0
+  python3 "$SCRIPT_DIR/collect-keyboard-artifacts.py" \
+    --staging "$WORK_DIR/agenda-refresh-artifacts" \
+    --destination "$RESULT_DIR/agenda-refresh-artifacts" \
+    --host-executable "$WORK_DIR/DerivedData/Build/Products/Debug/Glimpse.app/Contents/MacOS/Glimpse" \
+    --manifest "$AGENDA_MANIFEST" \
+    --native-exit "$agenda_exit" --retain-marker "$WORK_DIR/retain-agenda-refresh-artifacts" \
+    --receipt "$RESULT_DIR/agenda-refresh-artifact-collection.json" \
+    > "$RESULT_DIR/agenda-refresh-artifact-collection.log" 2>&1 || agenda_artifact_exit=$?
+  agenda_summary_exit=0
+  xcrun xcresulttool get test-results summary --path "$RESULT_DIR/AgendaRefreshTests.xcresult" \
+    > "$RESULT_DIR/agenda-refresh-summary.json" 2> "$RESULT_DIR/agenda-refresh-xcresult.log" || agenda_summary_exit=$?
+  agenda_tests_exit=0
+  xcrun xcresulttool get test-results tests --path "$RESULT_DIR/AgendaRefreshTests.xcresult" \
+    > "$RESULT_DIR/agenda-refresh-tests.json" 2>> "$RESULT_DIR/agenda-refresh-xcresult.log" || agenda_tests_exit=$?
+  agenda_checker_exit=0
+  python3 "$SCRIPT_DIR/check-keyboard-xcresult.py" --suite CalendarAgendaRefreshTests \
+    --manifest "$AGENDA_MANIFEST" \
+    --summary "$RESULT_DIR/agenda-refresh-summary.json" --tests "$RESULT_DIR/agenda-refresh-tests.json" \
+    --receipt "$AGENDA_RECEIPT" --xcodebuild-exit "$agenda_exit" \
+    --summary-exit "$agenda_summary_exit" --tests-exit "$agenda_tests_exit" \
+    --log-exit "$agenda_log_exit" || agenda_checker_exit=$?
+  for phase_exit in "$agenda_exit" "$agenda_log_exit" "$agenda_summary_exit" "$agenda_tests_exit" "$agenda_checker_exit" "$agenda_artifact_exit"; do
     if [[ "$phase_exit" != 0 ]]; then exit "$phase_exit"; fi
   done
 fi

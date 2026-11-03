@@ -68,6 +68,7 @@
 		DD00000000000000000060 /* GlobalHotkeyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000061 /* GlobalHotkeyTests.swift */; };
 		DD00000000000000000062 /* HotkeyPreferencesModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000063 /* HotkeyPreferencesModelTests.swift */; };
 		DD00000000000000000064 /* HotkeyPreferencesModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000065 /* HotkeyPreferencesModel.swift */; };
+		DD00000000000000000000A0 /* CalendarAgendaRefreshTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000A1 /* CalendarAgendaRefreshTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -145,6 +146,7 @@
 		DD00000000000000000061 /* GlobalHotkeyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotkeyTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000063 /* HotkeyPreferencesModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyPreferencesModelTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000065 /* HotkeyPreferencesModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyPreferencesModel.swift; sourceTree = "<group>"; };
+		DD00000000000000000000A1 /* CalendarAgendaRefreshTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAgendaRefreshTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -248,6 +250,7 @@
 				DD00000000000000000041 /* MenuBarItemRendererTests.swift */,
 				BB00000000000000000014 /* AppDesignTests.swift */,
 				BB00000000000000000015 /* CalendarStatusItemTests.swift */,
+				DD00000000000000000000A1 /* CalendarAgendaRefreshTests.swift */,
 				BB00000000000000000016 /* DateParserTests.swift */,
 				DD0000000000000000000094 /* AIDateQueryClientTests.swift */,
 				DD0000000000000000000098 /* AIDateQueryModelTests.swift */,
@@ -407,6 +410,7 @@
 				DD00000000000000000040 /* MenuBarItemRendererTests.swift in Sources */,
 				BB00000000000000000024 /* AppDesignTests.swift in Sources */,
 				BB00000000000000000025 /* CalendarStatusItemTests.swift in Sources */,
+				DD00000000000000000000A0 /* CalendarAgendaRefreshTests.swift in Sources */,
 				BB00000000000000000026 /* DateParserTests.swift in Sources */,
 				DD0000000000000000000093 /* AIDateQueryClientTests.swift in Sources */,
 				DD0000000000000000000097 /* AIDateQueryModelTests.swift in Sources */,
@@ -490,7 +494,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -498,7 +502,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.21;
+				MARKETING_VERSION = 1.4.22;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -515,7 +519,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -523,7 +527,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.21;
+				MARKETING_VERSION = 1.4.22;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -538,9 +542,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.21;
+				MARKETING_VERSION = 1.4.22;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -555,9 +559,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.21;
+				MARKETING_VERSION = 1.4.22;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
