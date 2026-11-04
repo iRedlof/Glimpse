@@ -10,6 +10,7 @@ struct CalendarPresentationSnapshot: Equatable, Sendable {
 
 struct CalendarPopoverView: View {
     @Bindable var store: StoreOf<CalendarFeature>
+    @Environment(\.self) private var environment
     weak var panel: CalendarPanel?
 
     let layout: PanelLayoutState
@@ -107,7 +108,7 @@ struct CalendarPopoverView: View {
                 }
                 .background(
                     RoundedRectangle(cornerRadius: AppDesign.CornerRadius.lg)
-                        .fill(.regularMaterial)
+                        .fill(AppDesign.Colors.calendarSurface)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: AppDesign.CornerRadius.lg))
             }
@@ -427,7 +428,7 @@ struct CalendarPopoverView: View {
                 path.addLine(to: CGPoint(x: xOffset + caretWidth / 2, y: caretHeight))
                 path.closeSubpath()
             }
-            .fill(.regularMaterial)
+            .fill(AppDesign.Colors.calendarSurface)
         }
     }
 
@@ -519,14 +520,14 @@ struct CalendarPopoverView: View {
             HStack(spacing: 0) {
                 Text("Wk")
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppDesign.Colors.calendarContextText)
                     .frame(width: AppDesign.Grid.weekNumberWidth)
 
                 ForEach(orderedDays, id: \.index) { day in
                     let isWeekend = day.index == 1 || day.index == 7
                     Text(shortNames[day.index - 1])
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(isWeekend ? .primary : .secondary)
+                        .foregroundStyle(isWeekend ? Color.primary : AppDesign.Colors.calendarContextText)
                         .frame(maxWidth: .infinity)
                         .accessibilityLabel(Self.fullWeekdaySymbols[day.index - 1])
                 }
@@ -539,7 +540,7 @@ struct CalendarPopoverView: View {
                             let weekDate = days[row * 7].date
                             Text("\(cal.component(.weekOfYear, from: weekDate))")
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppDesign.Colors.calendarContextText)
                                 .frame(
                                     width: AppDesign.Grid.weekNumberWidth,
                                     height: AppDesign.Grid.cellHeight
@@ -621,14 +622,14 @@ struct CalendarPopoverView: View {
                 .background {
                     if isToday {
                         Circle()
-                            .fill(Color.accentColor)
+                            .fill(AppDesign.Colors.calendarSolidFill(.accentColor, in: environment))
                             .frame(
                                 width: AppDesign.Grid.todayCircleSize,
                                 height: AppDesign.Grid.todayCircleSize
                             )
                     } else if isSelected {
                         Circle()
-                            .strokeBorder(Color.accentColor, lineWidth: 2)
+                            .strokeBorder(AppDesign.Colors.calendarEssentialAccent(in: environment), lineWidth: 2)
                             .frame(
                                 width: AppDesign.Grid.todayCircleSize,
                                 height: AppDesign.Grid.todayCircleSize
@@ -652,7 +653,8 @@ struct CalendarPopoverView: View {
                         cal.isDate($0, inSameDayAs: day.date)
                     }) == true {
                         RoundedRectangle(cornerRadius: AppDesign.Control.focusCornerRadius)
-                            .strokeBorder(Color.accentColor, lineWidth: AppDesign.Control.focusLineWidth)
+                            .strokeBorder(AppDesign.Colors.calendarEssentialAccent(in: environment),
+                                          lineWidth: AppDesign.Control.focusLineWidth)
                             .padding(AppDesign.Control.focusInset)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
@@ -689,8 +691,8 @@ struct CalendarPopoverView: View {
         for day: GlimpseCore.CalendarDay, isToday: Bool, isSelected: Bool = false
     ) -> Color {
         if isToday { return .white }
-        if isSelected { return Color.accentColor }
-        if !day.isCurrentMonth { return .secondary }
+        if isSelected { return .primary }
+        if !day.isCurrentMonth { return AppDesign.Colors.calendarContextText }
         return .primary
     }
 
@@ -714,16 +716,16 @@ struct CalendarPopoverView: View {
         return HStack(alignment: .top, spacing: AppDesign.Spacing.sm) {
             Image(systemName: "calendar.circle")
                 .font(.subheadline)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(AppDesign.Colors.calendarEssentialAccent(in: environment))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
                 Text("Events · \(isToday ? "Today" : date.formatted(Self.agendaDateStyle))")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
                 if let selectedWeek {
                     Text("Selected date · Week \(selectedWeek)")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppDesign.Colors.calendarContextText)
                 }
             }
             Spacer(minLength: 0)
@@ -760,7 +762,7 @@ struct CalendarPopoverView: View {
                 } else {
                     Text(calendarAccessMessage)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary)
                     if store.calendarAuthorizationStatus != .restricted {
                         Button("Open Calendar Privacy Settings") {
                             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
@@ -773,17 +775,17 @@ struct CalendarPopoverView: View {
                     }
                 }
                 if let error = store.calendarAccessError {
-                    Text(error).font(.caption).foregroundStyle(.red)
+                    Text(error).font(.caption).foregroundStyle(.primary)
                 }
             }
         } else if store.isLoadingEvents {
             HStack(spacing: AppDesign.Spacing.sm) {
                 ProgressView().controlSize(.small)
-                Text("Loading events…").font(.subheadline).foregroundStyle(.secondary)
+                Text("Loading events…").font(.subheadline).foregroundStyle(.primary)
             }
         } else if store.eventsError != nil {
             VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
-                Text("Couldn’t load events.").font(.caption).foregroundStyle(.red)
+                Text("Couldn’t load events.").font(.caption).foregroundStyle(.primary)
                 Button("Retry") { store.send(.retryEvents) }
                     .buttonStyle(.plain)
                     .focusable(false)
@@ -793,10 +795,10 @@ struct CalendarPopoverView: View {
             HStack {
                 Image(systemName: "calendar")
                     .font(.subheadline)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                 Text("No events")
                     .font(.subheadline)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.primary)
             }
         } else {
             VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
@@ -812,7 +814,7 @@ struct CalendarPopoverView: View {
                                 .lineLimit(1)
                             Text(event.timeString)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppDesign.Colors.calendarContextText)
                         }
                     }
                     .accessibilityElement(children: .combine)
@@ -822,7 +824,7 @@ struct CalendarPopoverView: View {
                 if store.events.count > 5 {
                     Text("+\(store.events.count - 5) more")
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(AppDesign.Colors.calendarContextText)
                 }
             }
             .padding(AppDesign.Spacing.sm)
@@ -905,10 +907,10 @@ struct CalendarPopoverView: View {
                     .frame(height: AppDesign.Control.iconTargetSize)
                     .background(
                         RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
-                            .fill(Color.red)
+                            .fill(AppDesign.Colors.calendarSolidFill(.red, in: environment))
                     )
                     .contentShape(Rectangle())
-                    .overlay { CalendarKeyboardFocusOutline() }
+                    .overlay { CalendarKeyboardFocusOutline(color: .white) }
             }
             .buttonStyle(.plain)
             .modifier(CalendarControlReturn(
@@ -1005,7 +1007,7 @@ struct CalendarHeaderControls: View {
                 Button(action: today) {
                     Text("Today")
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(todayIsDisabled ? Color.secondary : Color.accentColor)
+                        .foregroundStyle(todayIsDisabled ? Color.secondary : Color.primary)
                         .frame(minWidth: AppDesign.Control.todayTargetWidth)
                         .frame(height: AppDesign.Control.iconTargetSize)
                         .background(
@@ -1047,6 +1049,7 @@ struct CalendarHeaderControls: View {
 
 @MainActor
 struct CalendarFooterControls: View {
+    @Environment(\.self) private var environment
     let isPinned: Bool
     let quit: () -> Void
     let about: () -> Void
@@ -1104,7 +1107,7 @@ struct CalendarFooterControls: View {
             HStack(spacing: AppDesign.Spacing.xs) {
                 Image(systemName: isPinned ? "pin.fill" : "pin")
                     .font(.body)
-                    .foregroundStyle(isPinned ? Color.accentColor : Color.primary)
+                    .foregroundStyle(isPinned ? AppDesign.Colors.calendarEssentialAccent(in: environment) : Color.primary)
                     .rotationEffect(.degrees(isPinned ? 0 : 45))
                 Text(isPinned ? "Pinned" : "Pin")
                     .font(.subheadline)
@@ -1181,7 +1184,7 @@ struct CalendarDateSearchRow: View {
                 .foregroundStyle(
                     isProcessing ? Color.accentColor :
                     isActive ? Color.accentColor :
-                    Color.secondary.opacity(0.4)
+                    Color.secondary
                 )
 
             if isActive {
@@ -1202,7 +1205,7 @@ struct CalendarDateSearchRow: View {
                     Button(action: dismissSearch) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.primary)
                             .frame(width: AppDesign.Control.dismissTargetSize,
                                    height: AppDesign.Control.dismissTargetSize)
                             .contentShape(Rectangle())
@@ -1220,8 +1223,10 @@ struct CalendarDateSearchRow: View {
                 Button(action: openSearch) {
                     Text("Go to date...  ⌘G")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, AppDesign.Spacing.xs + 2)
+                        .padding(.horizontal, AppDesign.Spacing.xs + 2)
                         .overlay { CalendarKeyboardFocusOutline() }
                 }
                 .buttonStyle(.plain)
@@ -1233,7 +1238,7 @@ struct CalendarDateSearchRow: View {
             }
         }
         .padding(.horizontal, AppDesign.Spacing.sm)
-        .padding(.vertical, AppDesign.Spacing.xs + 2)
+        .padding(.vertical, isActive ? AppDesign.Spacing.xs + 2 : 0)
         .background(
             RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
                 .fill(Color.secondary.opacity(isActive ? 0.10 : 0.06))
@@ -1255,7 +1260,7 @@ struct CalendarDateSearchRow: View {
         if let error = error {
             Text(error)
                 .font(.caption)
-                .foregroundStyle(.red)
+                .foregroundStyle(.primary)
         }
     }
 

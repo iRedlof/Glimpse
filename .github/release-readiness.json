@@ -1,23 +1,23 @@
 {
-  "version": "1.4.24",
-  "build": "31",
-  "scope": "Single-page Settings release: local product, UX, code and whole Quality acceptance passed. Final exact-staged quality, protected integration, signed/public artifacts and installation remain pending.",
+  "version": "1.4.25",
+  "build": "32",
+  "scope": "Calendar readability: opaque adaptive body/caret, stronger text, readable Today/selection/Quit, clear search focus and legible Light accent marks, preserving one-page Settings and existing interactions. Product, UX, code and QA accept the bounded final source after whole working-source Quality, 46 fresh render cases and six actual desktop active/inactive cases. Broader document/application backdrop coverage remains explicitly pending and unclaimed. Normal exact-staged checks, protected integration, terminal release, signed public verification, official installation and installed after-capture remain mandatory delivery gates.",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/product-inventory.md"
+      "evidence": "docs/superpowers/reviews/2026-11-04-calendar-readability-acceptance.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/product-inventory.md"
+      "evidence": "docs/superpowers/reviews/2026-11-04-calendar-readability-acceptance.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/product-inventory.md"
+      "evidence": "docs/superpowers/reviews/2026-11-04-calendar-readability-acceptance.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/product-inventory.md"
+      "evidence": "docs/superpowers/reviews/2026-11-04-calendar-readability-acceptance.md"
     }
   }
 }
