@@ -507,15 +507,19 @@ final class AboutUpdateHost: CustomTestStringConvertible {
         window.close()
     }
 
-    func settle() async {
+    func settle(ownsKey: Bool = false) async {
         for _ in 0..<8 {
             hosting.layoutSubtreeIfNeeded()
             hosting.displayIfNeeded()
             pumpAppKitRunLoop()
             await Task.yield()
         }
-        #expect(!window.isKeyWindow)
-        #expect(!window.isMainWindow)
+        #expect(window.isKeyWindow == ownsKey)
+        if ownsKey {
+            #expect(NSApp.keyWindow === window && window.isVisible)
+        } else {
+            #expect(!window.isMainWindow)
+        }
     }
 
     private func pumpAppKitRunLoop() {
@@ -566,8 +570,15 @@ final class AboutUpdateHost: CustomTestStringConvertible {
     }
 
     func saveRender(named name: String) throws {
-        guard let token = ProcessInfo.processInfo.environment["GLIMPSE_UPD03_RENDER_TOKEN"] else { return }
-        let destination = FileManager.default.temporaryDirectory.appendingPathComponent(token, isDirectory: true)
+        let environment = ProcessInfo.processInfo.environment
+        let destination: URL
+        if let path = environment["GLIMPSE_ABOUT_ARTIFACT_DIR"] {
+            destination = URL(fileURLWithPath: path, isDirectory: true)
+        } else if let token = environment["GLIMPSE_UPD03_RENDER_TOKEN"] {
+            destination = FileManager.default.temporaryDirectory.appendingPathComponent(token, isDirectory: true)
+        } else {
+            return
+        }
         print("UPD03_RENDER_DIRECTORY \(destination.path)")
         try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
         let bitmap = try #require(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
@@ -581,6 +592,7 @@ final class AboutUpdateHost: CustomTestStringConvertible {
                 "label": $0.accessibilityLabel() ?? "",
                 "value": ($0.accessibilityValue() as? String) ?? "",
                 "enabled": $0.isAccessibilityEnabled(),
+                "focused": $0.object.isAccessibilityFocused?() == true,
                 "frame": [frame.minX, frame.minY, frame.width, frame.height]
             ]
         }
@@ -588,6 +600,8 @@ final class AboutUpdateHost: CustomTestStringConvertible {
             "fitting": [fittingSize.width, fittingSize.height],
             "content": [contentBounds.width, contentBounds.height],
             "appearance": window.effectiveAppearance.name.rawValue,
+            "keyWindow": window.isKeyWindow,
+            "qualification": "Production About view in owned hosting fixture; not an installed-app or compositor capture",
             "elements": measurements
         ]
         try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys])
