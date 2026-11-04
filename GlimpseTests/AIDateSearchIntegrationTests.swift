@@ -116,16 +116,13 @@ struct AIDateSearchIntegrationTests {
             let settings = SettingsAIIntegrationHost(root: root)
             defer { settings.close() }
             try await settings.open()
-            for section in [.general, .menuBar, .calendar, .aiDateSearch] as [SettingsSection] {
-                settings.controller.select(section)
-                await settings.settle()
-            }
+            try await settings.revealControl(named: "AI provider", role: .popUpButton)
             try settings.loadAccessibilityWindowTree()
             #expect(root.aiModel.currentRequestID == requestID && root.aiModel.isProcessing)
             #expect(root.submissions.count == 1 && request.cancelCount.value == 0)
             switch action {
             case .disable:
-                let toggle = try settings.control(named: "AI date search", role: .checkBox)
+                let toggle = try settings.control(named: "Enable AI date search", role: .checkBox)
                 #expect(toggle.press())
                 #expect(!root.preferences.showAISearch && !root.aiSettings.value.enabled)
                 // No yield/redraw/delayed notification between setter and assertions.
@@ -465,8 +462,10 @@ private final class SettingsAIIntegrationHost {
 
     func open() async throws {
         let placement = root.showOwner.prepareForSettingsPresentation()
-        controller.show(visibleFrame: placement.visibleFrame, avoiding: placement.avoiding)
-        controller.select(.aiDateSearch)
+        controller.show(
+            visibleFrame: placement.visibleFrame, avoiding: placement.avoiding,
+            calendar: placement.calendar
+        )
         let window = try #require(controller.window)
         let hosting = try #require(window.contentView as? NSHostingView<SettingsRootView>)
         window.contentView = NSHostingView(rootView: AnyView(
@@ -476,6 +475,21 @@ private final class SettingsAIIntegrationHost {
         try loadAccessibilityWindowTree()
         try #require(window.isVisible && window.isKeyWindow && NSApp.keyWindow === window)
         try #require(root.panel.isVisible && !root.panel.isKeyWindow)
+    }
+
+    func revealControl(named name: String, role: NSAccessibility.Role) async throws {
+        let node = try control(named: name, role: role)
+        let window = try #require(controller.window)
+        let hosting = try #require(window.contentView)
+        let scroll = try #require(accessibilityScrollView(in: hosting))
+        let document = try #require(scroll.documentView)
+        let rect = document.convert(window.convertFromScreen(node.frame), from: nil)
+        document.scrollToVisible(rect)
+        await settle()
+        let current = try control(named: name, role: role)
+        #expect(scroll.contentView.bounds.intersects(
+            scroll.contentView.convert(window.convertFromScreen(current.frame), from: nil)
+        ))
     }
 
     func loadAccessibilityWindowTree() throws {

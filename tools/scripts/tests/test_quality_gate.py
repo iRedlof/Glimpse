@@ -530,7 +530,7 @@ if '-resultBundlePath' in sys.argv:
         self.assertTrue(receipt["owned_host_absence_confirmed"])
         self.assert_workspace_cleanup(root, runner_temp, workspace, observed)
 
-    def test_checked_in_manifest_requires_twenty_eight_methods_and_forty_six_cases(self):
+    def test_checked_in_manifest_requires_forty_one_methods_and_ninety_four_cases(self):
         required, result_summary, result_tests = settings_suite()
         expected = json.loads((SCRIPTS / "keyboard-ownership-methods.json").read_text())
         self.assertEqual(expected, required)
@@ -540,8 +540,8 @@ if '-resultBundlePath' in sys.argv:
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         receipt = json.loads((results / "keyboard-ownership-acceptance.json").read_text())
-        self.assertEqual(len(receipt["methods"]), 28)
-        self.assertEqual(receipt["executed_cases"], 46)
+        self.assertEqual(len(receipt["methods"]), 41)
+        self.assertEqual(receipt["executed_cases"], 94)
         for method in ("heldHeaderSpaceActivatesOnceAndConsumesRepeat()",
                        "todayBecomingDisabledHasNoExtraTodayAction()"):
             self.assertEqual(receipt["methods"]["CalendarKeyboardOwnershipTests/" + method], 1)
@@ -553,7 +553,7 @@ if '-resultBundlePath' in sys.argv:
             ("nativeSettingsMenuHasOneRetainedDestination()", 1),
             ("settingsSectionsKeepWindowAndCalendarStable(constrained:)", 2),
             ("settingsNativeCloseLeavesCalendarUntouched(boundary:)", 4),
-            ("settingsPanesAndRecoveryRemainReachable(constrained:dark:)", 4),
+            ("settingsCategoriesAndRecoveryRemainReachable(constrained:dark:)", 4),
         ):
             self.assertEqual(receipt["methods"]["CalendarKeyboardOwnershipTests/" + method], count)
 

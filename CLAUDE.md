@@ -57,8 +57,8 @@ open Glimpse.xcodeproj
 | `StatusItemPreview.swift` | NSViewRepresentable rendering the same MenuBarItemRenderer image for the SwiftUI preferences preview |
 | `CalendarPopoverView.swift` | Main calendar UI, date selection, AI field, events, footer with quit confirm |
 | `SettingsWindow.swift` | Retained native Settings controller, exact shortcut owner, refresh and bounded placement |
-| `SettingsRootView.swift` | Four-section sidebar with native focus and independently scrolling detail |
-| `PreferencesView.swift` | Selected-section controls and existing preference setters |
+| `SettingsRootView.swift` | One full-width Settings scroll viewport with native control focus |
+| `PreferencesView.swift` | One categorized Settings page, shared lifecycle and existing preference setters |
 | `MonthBorderShape.swift` | Contoured month border (SwiftUI Shape) |
 | `DateIconRenderer.swift` | Date number + red accent menu bar icon, configurable text color |
 | `GlobalHotkey.swift` | Carbon EventHotKey, configurable combo with persistence |

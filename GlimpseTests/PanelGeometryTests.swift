@@ -180,13 +180,13 @@ struct SettingsWindowGeometryTests {
     ])
     func outerFrameFitsVisibleBounds(visible: CGRect) {
         let result = SettingsWindowGeometry.placement(
-            frame: CGRect(x: -5000, y: 4000, width: 600, height: 502),
+            frame: CGRect(x: -5000, y: 4000, width: 600, height: 622),
             visibleFrame: visible
         )
         #expect(visible.insetBy(dx: 10, dy: 10).contains(result))
         #expect(result.width > 0 && result.height > 0)
-        if visible.width >= 620 && visible.height >= 522 {
-            #expect(result.size == CGSize(width: 600, height: 502))
+        if visible.width >= 620 && visible.height >= 642 {
+            #expect(result.size == CGSize(width: 600, height: 622))
         }
     }
 
@@ -195,7 +195,7 @@ struct SettingsWindowGeometryTests {
         let visible = CGRect(x: -1920, y: 0, width: 1920, height: 1080)
         let calendar = CGRect(x: -1090, y: 500, width: 300, height: 420)
         let result = SettingsWindowGeometry.placement(
-            frame: CGRect(x: -1220, y: 300, width: 600, height: 502),
+            frame: CGRect(x: -1220, y: 300, width: 600, height: 622),
             visibleFrame: visible, avoiding: calendar
         )
         #expect(visible.insetBy(dx: 10, dy: 10).contains(result))

@@ -2,6 +2,8 @@ import Foundation
 
 enum CalendarKeyboardOwner: String, CaseIterable, Hashable, Sendable {
     case grid, previousMonth, today, nextMonth, searchPrompt, searchDismiss, editor
+    case footerQuit, footerAbout, footerPin, footerCalendar, footerSettings
+    case quitCancel, quitConfirm
 }
 
 enum CalendarKeyboardKey: Sendable {

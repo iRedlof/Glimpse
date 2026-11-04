@@ -160,6 +160,9 @@ struct CalendarAgendaRefreshTests {
             fixture.aiModel.setDraft("next Friday")
             try await fixture.settle()
             let settings = try await fixture.openSettings()
+            let settingsRoot = try #require(settings.contentView)
+            let settingsScroll = try #require(accessibilityScrollView(in: settingsRoot))
+            let settingsOrigin = settingsScroll.contentView.bounds.origin
             let responder = try #require(settings.firstResponder)
             let calendarResponder = fixture.panel.firstResponder
             let actions = fixture.actions.value
@@ -169,7 +172,8 @@ struct CalendarAgendaRefreshTests {
             try await fixture.complete(refresh, with: [])
             #expect(settings.isVisible && settings.isKeyWindow && NSApp.keyWindow === settings)
             #expect(fixture.settingsController.window === settings)
-            #expect(fixture.settingsController.selection.section == .aiDateSearch)
+            #expect(settings.contentView === settingsRoot)
+            #expect(settingsScroll.contentView.bounds.origin == settingsOrigin)
             #expect(fixture.panel.isVisible && fixture.panel.isPinned && fixture.store.isPinned)
             #expect(fixture.aiModel.isEditorOpen)
             #expect(fixture.aiModel.draft == "next Friday")
@@ -744,8 +748,7 @@ private final class AgendaRefreshFixture {
         settingsController.show(visibleFrame: NSRect(
             x: panel.frame.minX - 800, y: panel.frame.minY,
             width: 760, height: 650
-        ))
-        settingsController.select(.aiDateSearch)
+        ), calendar: panel)
         let owner = try #require(settingsController.window)
         try await settle(until: {
             owner.isVisible && owner.isKeyWindow && NSApp.keyWindow === owner && self.panel.isVisible

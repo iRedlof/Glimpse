@@ -19,7 +19,15 @@ final class CalendarPanel: NSPanel {
             )
         }
     }
-    var isPinned = false
+    var isPinned = false {
+        didSet {
+            guard isPinned != oldValue else { return }
+            settingsCalendarPriority?.reconcile()
+        }
+    }
+    weak var settingsCalendarPriority: SettingsCalendarPriority?
+    var settingsPriorityCleanup: SettingsCalendarPriority.Cleanup?
+    var settingsPriorityLevelToken: UUID?
     var isTextInputActive = false
     var aiSettingsDidChange: (@MainActor (Bool, AIProvider) -> Void)?
     var requestSettings: (@MainActor () -> Void)?
@@ -180,6 +188,7 @@ final class CalendarPanel: NSPanel {
     }
 
     override func orderOut(_ sender: Any?) {
+        settingsCalendarPriority?.calendarWillHide(self)
         NotificationCenter.default.post(name: .calendarPanelWillHide, object: self)
         makeFirstResponder(nil)
         pendingReopenPresentation = false
@@ -187,6 +196,54 @@ final class CalendarPanel: NSPanel {
         isTextInputActive = false
         deactivateTextInput()
         super.orderOut(sender)
+    }
+
+    override func close() {
+        settingsCalendarPriority?.calendarWillHide(self)
+        super.close()
+    }
+
+    override func miniaturize(_ sender: Any?) {
+        settingsCalendarPriority?.calendarWillHide(self)
+        super.miniaturize(sender)
+    }
+
+    override func deminiaturize(_ sender: Any?) {
+        guard settingsCalendarPriority?.calendarMayBecomeFront(self) != false else { return }
+        super.deminiaturize(sender)
+        settingsCalendarPriority?.calendarDidShow(self)
+    }
+
+    override func orderFront(_ sender: Any?) {
+        guard settingsCalendarPriority?.calendarMayBecomeFront(self) != false else { return }
+        super.orderFront(sender)
+        settingsCalendarPriority?.calendarDidShow(self)
+    }
+
+    override func makeKeyAndOrderFront(_ sender: Any?) {
+        guard settingsCalendarPriority?.calendarMayBecomeFront(self) != false else { return }
+        super.makeKeyAndOrderFront(sender)
+        settingsCalendarPriority?.calendarDidShow(self)
+    }
+
+    override func makeKey() {
+        guard settingsCalendarPriority?.calendarMayBecomeFront(self) != false else { return }
+        super.makeKey()
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        let priority = settingsCalendarPriority
+        let bindingID = settingsPriorityCleanup?.bindingID
+        super.sendEvent(event)
+        guard let priority, priority === settingsCalendarPriority,
+              bindingID == settingsPriorityCleanup?.bindingID,
+              event.window === self, isVisible,
+              [.leftMouseDown, .rightMouseDown, .otherMouseDown].contains(event.type),
+              (isKeyWindow && NSApp.keyWindow === self)
+                || (isMainWindow && NSApp.mainWindow === self) else { return }
+        // Only delivered input can transfer ownership. Native menu tracking can
+        // consume its dismissal click without ever dispatching it to this panel.
+        _ = priority.calendarRequestsPriority(self)
     }
 
     func prepareForSettingsPresentation() {
@@ -201,6 +258,7 @@ final class CalendarPanel: NSPanel {
 
     /// Activate the app so TextField can receive focus
     func activateForTextInput() {
+        guard settingsCalendarPriority?.calendarMayBecomeFront(self) != false else { return }
         previousApp = capturePreviousApp()
         NSApp.activate(ignoringOtherApps: true)
         makeKey()

@@ -37,7 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
         let placement = calendarStatusItem.prepareForSettingsPresentation()
-        settingsController?.show(visibleFrame: placement.visibleFrame, avoiding: placement.avoiding)
+        settingsController?.show(
+            visibleFrame: placement.visibleFrame, avoiding: placement.avoiding,
+            calendar: placement.calendar
+        )
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

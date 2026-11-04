@@ -123,9 +123,22 @@ def settings_suite():
         ("nativeSettingsMenuHasOneRetainedDestination()", 1),
         ("settingsSectionsKeepWindowAndCalendarStable(constrained:)", 2),
         ("settingsNativeCloseLeavesCalendarUntouched(boundary:)", 4),
-        ("settingsPanesAndRecoveryRemainReachable(constrained:dark:)", 4),
+        ("settingsCategoriesAndRecoveryRemainReachable(constrained:dark:)", 4),
         ("settingsNativeTraversalAndActivation()", 1),
         ("settingsPopupEscapePreservesSelectionAndWindow()", 1),
+        ("composedFooterEntryRetainsExactPairAndContext(entry:pinned:)", 6),
+        ("scrollingWhileRecordingKeepsMountedOwnerAndFootprint()", 1),
+        ("exactPairPriorityReleasesWithoutContextReset(boundary:)", 6),
+        ("attachedSheetBlocksCurrentFrontKeyTextAndHiddenReopenBeforeEffects()", 1),
+        ("deliveredCalendarClickTransfersPriorityAndReturningSettingsKeepsContext(overlap:)", 3),
+        ("keyResignationDuringOwnedPopupCancelsRecordingAndRetainsPriority()", 1),
+        ("onePageControllerKeepsNativeGeometryAndSingleDocument(size:)", 2),
+        ("footerLifecycleDiscardsHeldEditorAndConfirmationIntent(boundary:)", 2),
+        ("cleanupCannotOverwriteNewOwnership(boundary:)", 5),
+        ("disposalAloneRestoresPriorityWithoutReplacementOrManualInvalidation()", 1),
+        ("injectedFooterActionsHonorNativeDownRepeatUpAndAXAfterKeyboard(owner:key:)", 15),
+        ("quitConfirmationOwnsHeldActivationAndRecordsOnlyDeliberateTermination(key:)", 3),
+        ("olderAIRequestCannotReclaimCancelOrReturnedQuit(cancelFirst:)", 2),
     ]
     for method, count in additions:
         identifier = "CalendarKeyboardOwnershipTests/" + method
@@ -145,6 +158,6 @@ def settings_suite():
                 for index in range(1, count + 1)
             ]
         cases(tests).append(case)
-    result.update(totalTestCount=28, passedTests=28)
-    result["devicesAndConfigurations"][0]["passedTests"] = 46
+    result.update(totalTestCount=41, passedTests=41)
+    result["devicesAndConfigurations"][0]["passedTests"] = 94
     return expected, result, tests
