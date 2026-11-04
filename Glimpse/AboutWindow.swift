@@ -267,7 +267,8 @@ struct AboutUpdateSection: View {
                     }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.accentColor)
-                    .buttonStyle(.plain)
+                    .buttonStyle(AboutActionButtonStyle())
+                    .focusEffectDisabled()
                     .accessibilityLabel("Install update")
                     .disabled(id == nil)
 
@@ -278,7 +279,8 @@ struct AboutUpdateSection: View {
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .buttonStyle(.plain)
+                    .buttonStyle(AboutActionButtonStyle())
+                    .focusEffectDisabled()
                     .accessibilityLabel("Skip this update")
                     .disabled(id == nil)
                 }
@@ -309,7 +311,8 @@ struct AboutUpdateSection: View {
             }
             .font(.caption.weight(.semibold))
             .foregroundStyle(Color.accentColor)
-            .buttonStyle(.plain)
+            .buttonStyle(AboutActionButtonStyle())
+            .focusEffectDisabled()
             .accessibilityLabel("Install update and relaunch Glimpse")
             .disabled(id == nil)
         }
@@ -355,7 +358,8 @@ struct AboutUpdateSection: View {
         } label: {
             actionLabel(title)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AboutActionButtonStyle())
+        .focusEffectDisabled()
         .font(.caption)
         .foregroundStyle(Color.accentColor)
         .accessibilityLabel(accessibilityLabel)
@@ -368,7 +372,8 @@ struct AboutUpdateSection: View {
             Link(destination: destination) {
                 actionLabel("View Releases")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(AboutActionButtonStyle())
+            .focusEffectDisabled()
             .font(.caption)
             .foregroundStyle(Color.accentColor)
             .accessibilityLabel("View Glimpse releases on GitHub")
@@ -387,5 +392,35 @@ struct AboutUpdateSection: View {
             .font(.caption)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct AboutActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: AppDesign.Control.focusCornerRadius)
+                    .fill(Color.primary.opacity(
+                        configuration.isPressed ? AppDesign.Footer.pressedBackgroundOpacity : 0
+                    ))
+            )
+            .overlay { AboutActionFocusOutline() }
+    }
+}
+
+private struct AboutActionFocusOutline: View {
+    @Environment(\.isFocused) private var isFocused
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.self) private var environment
+
+    var body: some View {
+        if isFocused && controlActiveState == .key {
+            RoundedRectangle(cornerRadius: AppDesign.Control.focusCornerRadius)
+                .strokeBorder(AppDesign.Colors.calendarEssentialAccent(in: environment),
+                              lineWidth: AppDesign.Control.aboutFocusLineWidth)
+                .padding(AppDesign.Control.focusInset)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 }

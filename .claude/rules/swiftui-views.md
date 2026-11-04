@@ -2,6 +2,7 @@
 paths:
   - "Glimpse/**/*View.swift"
   - "Glimpse/CalendarPopoverView.swift"
+  - "Glimpse/AboutWindow.swift"
 ---
 
 # SwiftUI View Rules
@@ -14,6 +15,7 @@ paths:
 - Calendar/footer buttons use `.buttonStyle(.plain)` and `.focusable(false)` except for the calendar keyboard controls below.
 - Settings uses one non-lazy categorized page in a vertical scroll viewport. Controls preserve native keyboard focus, traversal and activation in document order; do not suppress their focus rings or add a second focus layer. Any local activation handler must prove the Settings window owns the current event.
 - Calendar keyboard slice exception: month-header/search/footer and Quit-confirmation controls retain intrinsic Button focus (no extra `.focusable(true)` layer), with one inset focus outline. The calendar grid has one stable editing-focus container and a separate logical date outline; all 42 native date Buttons remain `.focusable(false)`. Local focused handlers and native editor submission own activation; focus requests and cached hierarchy absence never authorize shared-key consumption.
+- Footer actions use their scoped button style for full-cell hover/pressed/pinned appearance; About update actions use their scoped style for one inset focus outline. Preserve intrinsic native Button/Link focus and activation in both styles.
 - Use `.contentShape()` to expand tap targets beyond visible content
 - Avoid force unwraps in views — use `guard let` or `if let`
 - Log errors in catch blocks — never use empty `catch {}`

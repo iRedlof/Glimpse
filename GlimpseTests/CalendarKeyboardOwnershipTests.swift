@@ -1280,6 +1280,8 @@ struct CalendarKeyboardOwnershipTests {
     @Test
     func nativeEditorSubmitEscapeAndHiddenReopen() async throws {
         try await withAIDateKeyboardRootFixture { fixture in
+            logCalendarKeyboardTarget(fixture.panel, stage: "editor-fixture-before-activation")
+            NSApp.activate(ignoringOtherApps: true)
             try await fixture.openThroughShowOwner()
             for _ in 0..<4 { try fixture.send(.tab) }
             // The focused prompt locally handles Space; no AX action or panel-wide activation.
@@ -1802,6 +1804,7 @@ struct CalendarKeyboardOwnershipTests {
         let settings = SettingsWindowTestFixture()
         defer { settings.close(); calendar.close() }
         try await calendar.openThroughShowOwner()
+        try calendar.loadOwnedAccessibilityTree()
         calendar.aiModel.setEditorOpen(true)
         calendar.aiModel.setDraft("Held lifecycle draft")
         await calendar.settleRendering()
@@ -1962,6 +1965,7 @@ struct CalendarKeyboardOwnershipTests {
         let sender = try CalendarKeyboardRootFixture()
         let footer = CalendarFooterOwnedHost()
         defer { footer.close(); sender.close() }
+        logCalendarKeyboardTarget(footer.window, stage: "footer-case-\(owner.rawValue)-\(key.rawValue)")
         try await footer.open()
         for _ in 0..<12 {
             if footer.owner == owner { break }
@@ -2000,6 +2004,7 @@ struct CalendarKeyboardOwnershipTests {
         let fixture = try CalendarKeyboardRootFixture(maximumHeight: 300)
         defer { fixture.close() }
         try await fixture.openThroughShowOwner()
+        try fixture.loadOwnedAccessibilityTree()
         try await fixture.focusOwner(.footerQuit)
         let normal = try fixture.ownedControl("Quit Glimpse").frame
         let phasesBefore = fixture.ownedPhaseReceipts.count
@@ -2013,6 +2018,12 @@ struct CalendarKeyboardOwnershipTests {
         let confirm = try fixture.ownedControl("Confirm quitting Glimpse")
         #expect(abs(cancel.frame.height - 28) < 0.5 && abs(confirm.frame.height - 28) < 0.5)
         #expect(abs(cancel.frame.midY - normal.midY) < 0.5)
+        if ProcessInfo.processInfo.environment["GLIMPSE_KEYBOARD_ARTIFACT_DIR"] != nil {
+            try fixture.saveFocusedDateBitmap(
+                fixture.panel.convertToScreen(fixture.hosting.convert(fixture.hosting.bounds, to: nil)),
+                name: "footer-quit-confirmation-\(key.rawValue)"
+            )
+        }
         for _ in 0..<3 {
             let count = fixture.callbackRows.count
             try fixture.sendPhase(key, phase: .repeatPress)
@@ -2139,6 +2150,48 @@ struct CalendarKeyboardOwnershipTests {
         #expect(fixture.actions.value == ["previousMonth"])
         #expect(fixture.actionCurrentEvents.value == [true])
     }
+
+    @Test(arguments: [false, true])
+    func focusedUpdateActionKeepsNativeKeyboardActivation(dark: Bool) async throws {
+        let fixture = UpdaterFixture()
+        let sender = try CalendarKeyboardRootFixture()
+        let host = AboutUpdateHost(
+            updater: fixture.updater,
+            fullAbout: true,
+            appearance: NSAppearance(named: dark ? .darkAqua : .aqua)
+        )
+        defer { host.close(); sender.close(); fixture.delay.drain() }
+        await host.settle()
+        try host.saveRender(named: "update-nonkey-\(dark ? "dark" : "light")")
+        host.window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        try #require(host.window.makeFirstResponder(nil))
+        await host.settle(ownsKey: true)
+        try sender.loadOwnedAccessibilityTree()
+        for _ in 0..<6 {
+            if host.control("Check for updates")?.object.isAccessibilityFocused?() == true { break }
+            try sender.send(.tab, toWindow: host.window)
+            await host.settle(ownsKey: true)
+        }
+        let check = try #require(host.control("Check for updates"))
+        try #require(check.object.isAccessibilityFocused?() == true)
+        #expect(check.accessibilityRole() == .button && check.isAccessibilityEnabled())
+        #expect(fixture.backend.checkCount == 0 && fixture.driver.status == .idle)
+        try host.saveRender(named: "update-focused-\(dark ? "dark" : "light")")
+        try sender.send(.space, toWindow: host.window)
+        await host.settle(ownsKey: true)
+        #expect(fixture.backend.checkCount == 1 && fixture.driver.status == .checking)
+    }
+}
+
+/// Observe the selected owned target without changing presentation or admission.
+@MainActor
+private func logCalendarKeyboardTarget(
+    _ window: NSWindow, stage: String, file: StaticString = #fileID, line: UInt = #line
+) {
+    let appKey = NSApp.keyWindow
+    let appKeyIdentity = appKey.map { "\(ObjectIdentifier($0))/\($0.windowNumber)" } ?? "nil"
+    print("GLIMPSE_KEYBOARD_TARGET stage=\(stage) caller=\(file):\(line) target=\(ObjectIdentifier(window))/\(window.windowNumber) targetClass=\(String(reflecting: type(of: window))) visible=\(window.isVisible) key=\(window.isKeyWindow) canBecomeKey=\(window.canBecomeKey) canBecomeMain=\(window.canBecomeMain) appActivationPolicy=\(NSApp.activationPolicy().rawValue) appKeyWindow=\(appKeyIdentity) appKeyMatchesTarget=\(appKey === window) appActive=\(NSApp.isActive)")
 }
 
 /// Real production footer with injected external actions and current native context.
@@ -2188,10 +2241,14 @@ private final class CalendarFooterOwnedHost {
         }
     }
 
-    func open() async throws {
+    func open(file: StaticString = #fileID, line: UInt = #line) async throws {
+        logCalendarKeyboardTarget(window, stage: "footer-open-before", file: file, line: line)
         window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
         try #require(window.makeFirstResponder(nil))
+        logCalendarKeyboardTarget(window, stage: "footer-open-presented", file: file, line: line)
         await settle()
+        logCalendarKeyboardTarget(window, stage: "footer-open-settled", file: file, line: line)
         try #require(NSApp.keyWindow === window)
     }
 
@@ -3070,11 +3127,14 @@ final class CalendarKeyboardRootFixture {
 
     func openThroughShowOwner() async throws {
         let before = completions
+        logCalendarKeyboardTarget(panel, stage: "show-owner-before-presentation")
         try showOwner.showCalendar()
+        logCalendarKeyboardTarget(panel, stage: "show-owner-after-presentation")
         #expect(completions == before + 1)
         let responderIsWindow = panel.firstResponder === panel
         #expect(responderIsWindow)
         await settleRendering()
+        logCalendarKeyboardTarget(panel, stage: "show-owner-after-settle")
         try #require(panel.isVisible && panel.isKeyWindow && NSApp.keyWindow === panel)
         clearActionReceipts()
     }
@@ -3128,8 +3188,11 @@ final class CalendarKeyboardRootFixture {
         completion()
     }
 
-    func ownedControl(_ name: String) throws -> AccessibilityTestNode {
+    func ownedControl(
+        _ name: String, file: StaticString = #fileID, line: UInt = #line
+    ) throws -> AccessibilityTestNode {
         let matches = accessibilityNodes().filter { $0.role == .button && $0.label == name }
+        logCalendarKeyboardTarget(panel, stage: "owned-control-\(name)-matches-\(matches.count)", file: file, line: line)
         try #require(matches.count == 1)
         let node = try #require(matches.first)
         try #require(node.object.accessibilityWindow?() as? NSWindow === panel)
@@ -3363,10 +3426,11 @@ final class CalendarKeyboardRootFixture {
     func send(
         _ key: CalendarOwnedKey, repeatPress: Bool = false,
         modifiers: NSEvent.ModifierFlags? = nil, to ownedPeer: CalendarKeyboardOwnedPeer? = nil,
-        toWindow: NSWindow? = nil
+        toWindow: NSWindow? = nil, file: StaticString = #fileID, line: UInt = #line
     ) throws {
         let window = toWindow ?? ownedPeer?.panel ?? panel
         try #require(ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil)
+        logCalendarKeyboardTarget(window, stage: "send-\(key.rawValue)-repeat-\(repeatPress)", file: file, line: line)
         try #require(window.isVisible && window.isKeyWindow && NSApp.keyWindow === window)
         // Preserve the original complete-cycle admission: a handled down may
         // hand off key status or hide this window before its owned release.
@@ -3378,10 +3442,12 @@ final class CalendarKeyboardRootFixture {
     /// changes by sending down, repeat downs, then a single final up.
     func sendPhase(
         _ key: CalendarOwnedKey, phase: CalendarKeyboardPhase,
-        modifiers: NSEvent.ModifierFlags? = nil, toWindow: NSWindow? = nil
+        modifiers: NSEvent.ModifierFlags? = nil, toWindow: NSWindow? = nil,
+        file: StaticString = #fileID, line: UInt = #line
     ) throws {
         let window = toWindow ?? panel
         try #require(ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil)
+        logCalendarKeyboardTarget(window, stage: "send-phase-\(key.rawValue)-\(String(describing: phase))", file: file, line: line)
         try #require(window.isVisible && window.isKeyWindow && NSApp.keyWindow === window)
         try dispatchOwnedPhase(key, phase: phase, modifiers: modifiers, window: window)
     }

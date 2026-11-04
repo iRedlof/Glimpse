@@ -178,11 +178,14 @@ struct CalendarKeyboardInvocation: Sendable {
 
 struct CalendarKeyboardFocusOutline: View {
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.self) private var environment
+    var color: Color? = nil
 
     var body: some View {
         if isFocused {
             RoundedRectangle(cornerRadius: AppDesign.Control.focusCornerRadius)
-                .strokeBorder(Color.accentColor, lineWidth: AppDesign.Control.focusLineWidth)
+                .strokeBorder(color ?? AppDesign.Colors.calendarEssentialAccent(in: environment),
+                              lineWidth: AppDesign.Control.focusLineWidth)
                 .padding(AppDesign.Control.focusInset)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)

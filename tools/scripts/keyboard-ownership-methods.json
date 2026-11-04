@@ -41,6 +41,7 @@
     "CalendarKeyboardOwnershipTests/disposalAloneRestoresPriorityWithoutReplacementOrManualInvalidation()": 1,
     "CalendarKeyboardOwnershipTests/injectedFooterActionsHonorNativeDownRepeatUpAndAXAfterKeyboard(owner:key:)": 15,
     "CalendarKeyboardOwnershipTests/quitConfirmationOwnsHeldActivationAndRecordsOnlyDeliberateTermination(key:)": 3,
-    "CalendarKeyboardOwnershipTests/olderAIRequestCannotReclaimCancelOrReturnedQuit(cancelFirst:)": 2
+    "CalendarKeyboardOwnershipTests/olderAIRequestCannotReclaimCancelOrReturnedQuit(cancelFirst:)": 2,
+    "CalendarKeyboardOwnershipTests/focusedUpdateActionKeepsNativeKeyboardActivation(dark:)": 2
   }
 }

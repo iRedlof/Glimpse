@@ -42,6 +42,7 @@ enum AppDesign {
         static let todayBackgroundOpacity: Double = 0.10
         static let dismissTargetSize: CGFloat = 24
         static let focusLineWidth: CGFloat = 2
+        static let aboutFocusLineWidth: CGFloat = 1
         static let focusInset: CGFloat = 2
         static let focusCornerRadius: CGFloat = 4
 
@@ -81,9 +82,20 @@ enum AppDesign {
     }
 
     enum Footer {
-        static let pinTargetWidth: CGFloat = 64
-        static let settingsTargetWidth: CGFloat = 84
+        static let height: CGFloat = 44
+        static let iconSize: CGFloat = 14
+        static let labelSize: CGFloat = 12
+        static let labelSpacing: CGFloat = 2
+        static let dividerHeight: CGFloat = 20
+        static let confirmationInset: CGFloat = 12
+        static let hoverBackgroundOpacity: Double = 0.08
+        static let pressedBackgroundOpacity: Double = 0.14
         static let pinnedBackgroundOpacity: Double = 0.14
+
+        @MainActor
+        static var scrollbarClearance: CGFloat {
+            NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
+        }
     }
 
     // MARK: - Calendar Grid
@@ -115,8 +127,42 @@ enum AppDesign {
     // MARK: - Colors
 
     enum Colors {
+        static let calendarSurface = Color(nsColor: .windowBackgroundColor)
+        static let calendarContextText = Color.primary.opacity(0.80)
         static let accentRed = Color(nsColor: NSColor(red: 0.91, green: 0.25, blue: 0.25, alpha: 1.0))
         static let accentRedNS = NSColor(red: 0.91, green: 0.25, blue: 0.25, alpha: 1.0)
+
+        /// Bounds opaque calendar fills for white labels using the current resolved hue.
+        static func calendarSolidFill(_ color: Color, in environment: EnvironmentValues) -> Color {
+            let resolved = color.resolve(in: environment)
+            var red = Double(resolved.linearRed)
+            var green = Double(resolved.linearGreen)
+            var blue = Double(resolved.linearBlue)
+            let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+            let minimumLuminance = 0.170
+            let maximumLuminance = 0.175
+
+            if luminance > maximumLuminance {
+                let scale = maximumLuminance / luminance
+                red *= scale
+                green *= scale
+                blue *= scale
+            } else if luminance < minimumLuminance {
+                let whiteMix = (minimumLuminance - luminance) / (1 - luminance)
+                red += (1 - red) * whiteMix
+                green += (1 - green) * whiteMix
+                blue += (1 - blue) * whiteMix
+            } else {
+                return color
+            }
+            return Color(.sRGBLinear, red: red, green: green, blue: blue, opacity: 1)
+        }
+
+        /// Functional marks keep native dark accents and bound their light-appearance luminance.
+        static func calendarEssentialAccent(in environment: EnvironmentValues) -> Color {
+            guard environment.colorScheme == .light else { return .accentColor }
+            return calendarSolidFill(.accentColor, in: environment)
+        }
 
         static let menuBarText = NSColor.labelColor
         static let menuBarBorder = NSColor.secondaryLabelColor

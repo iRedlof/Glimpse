@@ -7,12 +7,12 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct CalendarIconTargetTests {
-    @Test(arguments: [CGFloat(264), 248], [false, true])
+    @Test(arguments: [CGFloat(316), 300, 264, 248], [false, true])
     func footerExposesOneRowAtBothFitWidths(width: CGFloat, pinned: Bool) async throws {
         let fixture = CalendarControlFixture(togglePinOnAction: false)
         fixture.isPinned = pinned
         let host = AccessibilityTestHost(
-            width: width + AppDesign.Control.iconTrailingClearance, height: 40
+            width: width, height: 44
         ) { fixture.footer }
         defer { host.close() }
         try await host.settle()
@@ -22,24 +22,30 @@ struct CalendarIconTargetTests {
         let frames = try CalendarControlAction.footer.map {
             try host.control(named: fixture.name(for: $0)).frame
         }
-        let spacing: CGFloat = width == 264 ? 8 : 4
         for (action, frame) in zip(CalendarControlAction.footer, frames) {
             expectCalendarControlTarget(frame, action: action)
             #expect(host.hosting.bounds.contains(host.rect(frame, in: host.hosting)))
+            #expect(abs(frame.width - width / 5) < 0.5)
         }
+        let first = try #require(frames.first)
+        let last = try #require(frames.last)
+        #expect(abs(host.rect(first, in: host.hosting).minX) < 0.5)
+        #expect(abs(host.rect(last, in: host.hosting).maxX - width) < 0.5)
         for pair in zip(frames, frames.dropFirst()) {
-            #expect(abs(pair.1.minX - pair.0.maxX - spacing) < 0.5)
+            #expect(abs(pair.1.minX - pair.0.maxX) < 0.5)
             #expect(abs(pair.1.minY - pair.0.minY) < 0.5)
-            let before = fixture.receipts
-            try await host.click(atScreenPoint: NSPoint(
-                x: (pair.0.maxX + pair.1.minX) / 2, y: pair.0.midY
-            ))
-            #expect(fixture.receipts == before)
         }
         let pin = try host.control(named: fixture.name(for: .pin))
         #expect(pin.value as? String == (pinned ? "Pinned" : "Not pinned"))
         #expect(pin.help == (pinned ? "Unpin calendar window" : "Pin calendar window to keep it open"))
         #expect(try host.control(named: "Open Glimpse Settings").help == "Open Glimpse Settings (⌘,)")
+        for dark in [false, true] {
+            host.window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+            try await host.settle()
+            try saveFooterControlRender(
+                host, name: "footer-\(Int(width))-\(pinned ? "pinned" : "unpinned")-\(dark ? "dark" : "light")"
+            )
+        }
     }
 
     @Test(arguments: [false, true])
@@ -160,9 +166,9 @@ struct CalendarIconTargetTests {
         }
         defer { host.close() }
         try await host.settle()
-        for row in [CalendarControlAction.header, CalendarControlAction.footer] {
+        for row in [CalendarControlAction.header] {
             let frames = try row.map { try host.control(named: fixture.name(for: $0)).frame }
-            expectDisjointIconRow(frames, minimumGap: row == CalendarControlAction.footer ? 4 : 8)
+            expectDisjointIconRow(frames)
             for pair in zip(frames, frames.dropFirst()) {
                 try await host.click(atScreenPoint: NSPoint(
                     x: (pair.0.maxX + pair.1.minX) / 2, y: pair.0.midY
@@ -180,6 +186,32 @@ struct CalendarIconTargetTests {
         }
         #expect(fixture.receipts.isEmpty)
     }
+}
+
+@MainActor
+private func saveFooterControlRender(_ host: AccessibilityTestHost, name: String) throws {
+    guard let path = ProcessInfo.processInfo.environment["GLIMPSE_FOOTER_ARTIFACT_DIR"] else { return }
+    let destination = URL(fileURLWithPath: path, isDirectory: true)
+    let bounds = host.hosting.bounds
+    let bitmap = try #require(host.hosting.bitmapImageRepForCachingDisplay(in: bounds))
+    host.hosting.cacheDisplay(in: bounds, to: bitmap)
+    let png = try #require(bitmap.representation(using: .png, properties: [:]))
+    try png.write(to: destination.appendingPathComponent(name + ".png"), options: .atomic)
+    let nodes = host.elements().filter { $0.role == .button }
+    let receipt: [String: Any] = [
+        "source": "Glimpse/CalendarPopoverView.swift", "testSource": #filePath,
+        "qualification": "Production footer in owned offscreen hosting view; not an installed-app or compositor capture",
+        "appearance": host.hosting.effectiveAppearance.name.rawValue,
+        "hostingBounds": NSStringFromRect(bounds),
+        "keyWindow": host.window.isKeyWindow,
+        "buttons": nodes.map { [
+            "label": $0.label ?? "", "frame": NSStringFromRect(host.rect($0.frame, in: host.hosting)),
+            "enabled": $0.enabled
+        ] as [String: Any] }
+    ]
+    try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys])
+        .write(to: destination.appendingPathComponent(name + ".json"), options: .atomic)
+    print("GLIMPSE_FOOTER_RENDER \(destination.appendingPathComponent(name + ".png").path)")
 }
 
 @MainActor
@@ -214,11 +246,13 @@ enum IconClickPosition: CaseIterable {
 func expectCalendarControlTarget(_ frame: NSRect, action: CalendarControlAction) {
     if action == .today {
         #expect(frame.width >= 47.5, "Measured Today target \(frame)")
+    } else if CalendarControlAction.footer.contains(action) {
+        #expect(frame.width >= 44, "The whole footer cell must remain a usable target \(frame)")
     } else {
-        let width: CGFloat = action == .pin ? 64 : action == .settings ? 84 : 28
-        #expect(abs(frame.width - width) < 0.5, "Measured command target \(frame)")
+        #expect(abs(frame.width - 28) < 0.5, "Measured header target \(frame)")
     }
-    #expect(abs(frame.height - 28) < 0.5, "Measured target \(frame)")
+    let height: CGFloat = CalendarControlAction.footer.contains(action) ? 44 : 28
+    #expect(abs(frame.height - height) < 0.5, "Measured target \(frame)")
 }
 
 @MainActor
@@ -257,11 +291,15 @@ final class CalendarControlFixture {
     }
 
     var footer: some View {
+        footer(trailingInset: 0)
+    }
+
+    func footer(trailingInset: CGFloat) -> some View {
         CalendarFooterControls(
             isPinned: isPinned,
             quit: { self.record(.quit) }, about: { self.record(.about) },
             togglePin: { self.record(.pin) }, openCalendar: { self.record(.calendar) },
-            openSettings: { self.record(.settings) }
+            openSettings: { self.record(.settings) }, trailingInset: trailingInset
         )
     }
 
