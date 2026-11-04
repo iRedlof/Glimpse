@@ -19,6 +19,7 @@ struct CalendarPopoverView: View {
     let loadAISettings: @MainActor () -> (enabled: Bool, preference: AIProvider)
     let presentationObservation: ((CalendarPresentationSnapshot) -> Void)?
     private let eventChangeNotificationCenter: NotificationCenter
+    private let quitApplication: @MainActor () -> Void
 
     @State private var scrollRouter = CalendarScrollRouter()
     @State private var scrollMonitor: Any?
@@ -35,6 +36,8 @@ struct CalendarPopoverView: View {
     @State private var keyboardSession = 0
     @State private var keyboardOwnerRelay = CalendarKeyboardOwnerRelay()
     @State private var showQuitConfirm: Bool = false
+    @State private var pendingFooterFocus: CalendarKeyboardOwner?
+    @State private var consumesQuitEscapeRepeats = false
     private let caretHeight = CalendarPanel.caretHeight
 
     init(store: StoreOf<CalendarFeature>, panel: CalendarPanel? = nil,
@@ -48,7 +51,8 @@ struct CalendarPopoverView: View {
          },
          eventChangeNotificationCenter: NotificationCenter = .default,
          querySubmissionObservation: (@MainActor (String, Task<Void, Never>) -> Void)? = nil,
-         presentationObservation: ((CalendarPresentationSnapshot) -> Void)? = nil) {
+         presentationObservation: ((CalendarPresentationSnapshot) -> Void)? = nil,
+         quitApplication: @escaping @MainActor () -> Void = { NSApplication.shared.terminate(nil) }) {
         self.store = store
         self.panel = panel
         self.layout = layout ?? panel?.layoutState ?? PanelLayoutState()
@@ -58,6 +62,7 @@ struct CalendarPopoverView: View {
         self.eventChangeNotificationCenter = eventChangeNotificationCenter
         self.querySubmissionObservation = querySubmissionObservation
         self.presentationObservation = presentationObservation
+        self.quitApplication = quitApplication
         let settings = loadAISettings()
         self._aiQueryModel = State(initialValue: aiQueryModel ?? AIDateQueryModel(
             client: .live, enabled: settings.enabled, preference: settings.preference,
@@ -95,7 +100,7 @@ struct CalendarPopoverView: View {
                             }
                         agendaDateContext
                         eventsSection
-                        footerView
+                        footerView.id("panel-footer")
                     }
                     .padding()
                     .id("panel-content-top")
@@ -128,6 +133,8 @@ struct CalendarPopoverView: View {
                 editorFocusGeneration += 1
                 aiQueryModel.setPanelVisible(false)
                 removeMonitors()
+                pendingFooterFocus = nil
+                consumesQuitEscapeRepeats = false
                 store.send(.onDisappear)
             }
             .onChange(of: layout.isOverflowing) { _, _ in
@@ -161,6 +168,9 @@ struct CalendarPopoverView: View {
                         reader.scrollTo("panel-header", anchor: .center)
                     case .searchPrompt, .searchDismiss, .editor:
                         reader.scrollTo("panel-ai-input", anchor: .center)
+                    case .footerQuit, .footerAbout, .footerPin, .footerCalendar, .footerSettings,
+                         .quitCancel, .quitConfirm:
+                        reader.scrollTo("panel-footer", anchor: .bottom)
                     default: break
                     }
                 }
@@ -170,6 +180,8 @@ struct CalendarPopoverView: View {
                 let settings = loadAISettings()
                 synchronizeAISettings(settings.enabled, settings.preference)
                 showQuitConfirm = false
+                pendingFooterFocus = nil
+                consumesQuitEscapeRepeats = false
             }
             .onReceive(NotificationCenter.default.publisher(for: .calendarPanelWillHide)) { notification in
                 guard notification.object as? CalendarPanel === panel else { return }
@@ -183,6 +195,8 @@ struct CalendarPopoverView: View {
                 keyboardOwnerRelay.reset()
                 isRecordingHotkey = false
                 showQuitConfirm = false
+                pendingFooterFocus = nil
+                consumesQuitEscapeRepeats = false
                 isMouseOverCalendar = false
                 hoveredDate = nil
                 store.send(.onDisappear)
@@ -191,6 +205,8 @@ struct CalendarPopoverView: View {
                 guard notification.object as? CalendarPanel === panel else { return }
                 editorFocusGeneration += 1
                 aiFieldFocused = false
+                pendingFooterFocus = nil
+                consumesQuitEscapeRepeats = false
                 scrollRouter.suspendNavigation()
             }
             .onReceive(NotificationCenter.default.publisher(for: .calendarPanelDidShow)) { notification in
@@ -201,6 +217,8 @@ struct CalendarPopoverView: View {
                 controlFocus = nil
                 aiFieldFocused = false
                 keyboardOwnerRelay.reset()
+                pendingFooterFocus = nil
+                consumesQuitEscapeRepeats = false
                 scrollRouter.reset()
                 keyboardSession += 1
                 reconcileLogicalDate()
@@ -213,6 +231,8 @@ struct CalendarPopoverView: View {
                 aiQueryModel.setPanelVisible(panel?.isVisible == true)
                 // Re-observe the real hierarchy after the native post-key reset.
                 // Session changes never manufacture an ownerless observation.
+                pendingFooterFocus = nil
+                consumesQuitEscapeRepeats = false
                 keyboardSession += 1
             }
             .onReceive(NotificationCenter.default.publisher(for: .hotkeyRecordingDidChange)) { notification in
@@ -261,6 +281,7 @@ struct CalendarPopoverView: View {
                   !isRecordingHotkey else { return event }
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
             let editingText = panel.firstResponder is NSTextView
+            if !event.isARepeat { consumesQuitEscapeRepeats = false }
             // Cmd+G — activate inline AI input (if enabled)
             if event.keyCode == 5 && modifiers == .command && store.showAISearch {
                 aiQueryModel.setEditorOpen(true)
@@ -269,6 +290,15 @@ struct CalendarPopoverView: View {
 
             switch event.keyCode {
             case 53:
+                if showQuitConfirm {
+                    guard modifiers.isEmpty else { return event }
+                    if !event.isARepeat {
+                        consumesQuitEscapeRepeats = true
+                        cancelQuitConfirmation()
+                    }
+                    return nil
+                }
+                if consumesQuitEscapeRepeats, event.isARepeat, modifiers.isEmpty { return nil }
                 if aiQueryModel.isEditorOpen {
                     aiQueryModel.discardEditor()
                     panel.deactivateTextInput()
@@ -820,19 +850,20 @@ struct CalendarPopoverView: View {
     private var footerButtons: some View {
         CalendarFooterControls(
             isPinned: store.isPinned,
-            quit: {
-                withAnimation(AppDesign.Animation.standard) {
-                    showQuitConfirm = true
-                }
-            },
+            quit: beginQuitConfirmation,
             about: { AboutWindow.show() },
             togglePin: {
                 store.send(.togglePin)
                 panel?.isPinned = store.isPinned
             },
             openCalendar: openAppleCalendar,
-            openSettings: { panel?.requestSettings?() }
+            openSettings: { panel?.requestSettings?() },
+            keyboardContext: keyboardContext,
+            keyboardObservation: keyboardObservation,
+            controlFocus: $controlFocus
         )
+        .onAppear { applyPendingFooterFocus(.footerQuit) }
+        .transition(.identity)
     }
 
     private var quitConfirmation: some View {
@@ -846,40 +877,82 @@ struct CalendarPopoverView: View {
 
             Spacer()
 
-            Button {
-                withAnimation(AppDesign.Animation.standard) {
-                    showQuitConfirm = false
-                }
-            } label: {
+            Button(action: cancelQuitConfirmation) {
                 Text("Cancel")
                     .font(.caption.weight(.medium))
                     .padding(.horizontal, AppDesign.Spacing.sm + 2)
-                    .padding(.vertical, AppDesign.Spacing.xs)
+                    .frame(height: AppDesign.Control.iconTargetSize)
                     .background(
                         RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
                             .fill(Color.secondary.opacity(0.12))
                     )
+                    .contentShape(Rectangle())
+                    .overlay { CalendarKeyboardFocusOutline() }
             }
             .buttonStyle(.plain)
-            .focusable(false)
+            .modifier(CalendarControlReturn(
+                owner: .quitCancel, context: keyboardContext, action: cancelQuitConfirmation,
+                observe: keyboardObservation, focus: $controlFocus
+            ))
+            .accessibilityLabel("Cancel quitting Glimpse")
+            .help("Cancel quitting Glimpse")
 
-            Button {
-                NSApplication.shared.terminate(nil)
-            } label: {
+            Button(action: confirmQuit) {
                 Text("Quit")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, AppDesign.Spacing.sm + 2)
-                    .padding(.vertical, AppDesign.Spacing.xs)
+                    .frame(height: AppDesign.Control.iconTargetSize)
                     .background(
                         RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
                             .fill(Color.red)
                     )
+                    .contentShape(Rectangle())
+                    .overlay { CalendarKeyboardFocusOutline() }
             }
             .buttonStyle(.plain)
-            .focusable(false)
+            .modifier(CalendarControlReturn(
+                owner: .quitConfirm, context: keyboardContext, action: confirmQuit,
+                observe: keyboardObservation, focus: $controlFocus
+            ))
+            .accessibilityLabel("Confirm quitting Glimpse")
+            .help("Quit Glimpse")
         }
-        .transition(.opacity.combined(with: .move(edge: .bottom)))
+        .frame(height: AppDesign.Control.iconTargetSize)
+        .onAppear { applyPendingFooterFocus(.quitCancel) }
+        .transition(.identity)
+    }
+
+    private func beginQuitConfirmation() {
+        guard !showQuitConfirm else { return }
+        editorFocusGeneration += 1
+        pendingFooterFocus = .quitCancel
+        controlFocus = nil
+        showQuitConfirm = true
+    }
+
+    private func cancelQuitConfirmation() {
+        guard showQuitConfirm else { return }
+        editorFocusGeneration += 1
+        pendingFooterFocus = .footerQuit
+        controlFocus = nil
+        showQuitConfirm = false
+    }
+
+    private func confirmQuit() {
+        guard showQuitConfirm else { return }
+        quitApplication()
+    }
+
+    private func applyPendingFooterFocus(_ owner: CalendarKeyboardOwner) {
+        guard pendingFooterFocus == owner else { return }
+        pendingFooterFocus = nil
+        // This is a presentation request. Only the focused local handler and
+        // its current event context can authorize keyboard activation.
+        guard let panel, panel.isVisible, NSApp.keyWindow === panel,
+              !isRecordingHotkey,
+              showQuitConfirm == (owner == .quitCancel) else { return }
+        controlFocus = owner
     }
 
     private func openAppleCalendar() {
@@ -980,81 +1053,109 @@ struct CalendarFooterControls: View {
     let togglePin: () -> Void
     let openCalendar: () -> Void
     let openSettings: () -> Void
+    var keyboardContext: () -> CalendarKeyboardContext = { .init(visible: false) }
+    var keyboardObservation: ((CalendarKeyboardInvocation) -> Void)? = nil
+    var controlFocus: FocusState<CalendarKeyboardOwner?>.Binding? = nil
 
     var body: some View {
-        HStack(spacing: AppDesign.Spacing.sm) {
-            Button {
-                quit()
-            } label: {
-                Image(systemName: "power")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .frame(width: AppDesign.Control.iconTargetSize,
-                           height: AppDesign.Control.iconTargetSize)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .accessibilityLabel("Quit Glimpse")
+        ViewThatFits(in: .horizontal) {
+            buttons(spacing: AppDesign.Spacing.sm)
+            buttons(spacing: AppDesign.Spacing.xs)
+        }
+        .frame(height: AppDesign.Control.iconTargetSize)
+        .padding(.trailing, AppDesign.Control.iconTrailingClearance)
+    }
 
-            Spacer()
+    private func buttons(spacing: CGFloat) -> some View {
+        HStack(spacing: spacing) {
+            iconButton("power", owner: .footerQuit, name: "Quit Glimpse", action: quit)
+                .accessibilityHint("Shows confirmation before quitting")
+            iconButton("info.circle", owner: .footerAbout, name: "About Glimpse", action: about)
+            pinButton
+            iconButton("calendar", owner: .footerCalendar, name: "Open Calendar app", action: openCalendar)
+            settingsButton
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
 
-            Button {
-                about()
-            } label: {
-                Image(systemName: "info.circle")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .frame(width: AppDesign.Control.iconTargetSize,
-                           height: AppDesign.Control.iconTargetSize)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .accessibilityLabel("About Glimpse")
+    private func iconButton(
+        _ symbol: String, owner: CalendarKeyboardOwner, name: String, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.body)
+                .foregroundStyle(.primary)
+                .frame(width: AppDesign.Control.iconTargetSize,
+                       height: AppDesign.Control.iconTargetSize)
+                .contentShape(Rectangle())
+                .overlay { CalendarKeyboardFocusOutline() }
+        }
+        .buttonStyle(.plain)
+        .modifier(CalendarControlReturn(
+            owner: owner, context: keyboardContext, action: action,
+            observe: keyboardObservation, focus: controlFocus
+        ))
+        .accessibilityLabel(name)
+        .help(name)
+    }
 
-            Button {
-                togglePin()
-            } label: {
+    private var pinButton: some View {
+        Button(action: togglePin) {
+            HStack(spacing: AppDesign.Spacing.xs) {
                 Image(systemName: isPinned ? "pin.fill" : "pin")
                     .font(.body)
-                    .foregroundStyle(isPinned ? Color.accentColor : .secondary)
+                    .foregroundStyle(isPinned ? Color.accentColor : Color.primary)
                     .rotationEffect(.degrees(isPinned ? 0 : 45))
-                    .frame(width: AppDesign.Control.iconTargetSize,
-                           height: AppDesign.Control.iconTargetSize)
-                    .contentShape(Rectangle())
+                Text(isPinned ? "Pinned" : "Pin")
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
             }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .accessibilityLabel(isPinned ? "Unpin window" : "Pin window")
+            .frame(width: AppDesign.Footer.pinTargetWidth,
+                   height: AppDesign.Control.iconTargetSize)
+            .background(
+                RoundedRectangle(cornerRadius: AppDesign.Control.focusCornerRadius)
+                    .fill(Color.accentColor.opacity(
+                        isPinned ? AppDesign.Footer.pinnedBackgroundOpacity : 0
+                    ))
+            )
+            .contentShape(Rectangle())
+            .overlay { CalendarKeyboardFocusOutline() }
+        }
+        .buttonStyle(.plain)
+        .modifier(CalendarControlReturn(
+            owner: .footerPin, context: keyboardContext, action: togglePin,
+            observe: keyboardObservation, focus: controlFocus
+        ))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(isPinned ? "Unpin calendar window" : "Pin calendar window")
+        .accessibilityValue(isPinned ? "Pinned" : "Not pinned")
+        .help(isPinned ? "Unpin calendar window" : "Pin calendar window to keep it open")
+    }
 
-            Button(action: openCalendar) {
-                Image(systemName: "calendar")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .frame(width: AppDesign.Control.iconTargetSize,
-                           height: AppDesign.Control.iconTargetSize)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .accessibilityLabel("Open Calendar app")
-
-            Button {
-                openSettings()
-            } label: {
+    private var settingsButton: some View {
+        Button(action: openSettings) {
+            HStack(spacing: AppDesign.Spacing.xs) {
                 Image(systemName: "gearshape")
                     .font(.body)
-                    .foregroundStyle(.secondary)
-                    .frame(width: AppDesign.Control.iconTargetSize,
-                           height: AppDesign.Control.iconTargetSize)
-                    .contentShape(Rectangle())
+                Text("Settings")
+                    .font(.subheadline)
+                    .lineLimit(1)
             }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .accessibilityLabel("Open Settings")
+            .foregroundStyle(.primary)
+            .frame(width: AppDesign.Footer.settingsTargetWidth,
+                   height: AppDesign.Control.iconTargetSize)
+            .contentShape(Rectangle())
+            .overlay { CalendarKeyboardFocusOutline() }
         }
-        .padding(.trailing, AppDesign.Control.iconTrailingClearance)
+        .buttonStyle(.plain)
+        .modifier(CalendarControlReturn(
+            owner: .footerSettings, context: keyboardContext, action: openSettings,
+            observe: keyboardObservation, focus: controlFocus
+        ))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Open Glimpse Settings")
+        .help("Open Glimpse Settings (⌘,)")
     }
 
 }

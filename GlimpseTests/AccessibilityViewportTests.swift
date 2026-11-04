@@ -130,7 +130,7 @@ struct AccessibilityViewportTests {
                 scroll.contentView.convert(scroll.contentView.bounds, to: nil)
             )
             let rowFrames = try row.map { try host.control(named: controls.name(for: $0)).frame }
-            expectDisjointIconRow(rowFrames)
+            expectDisjointIconRow(rowFrames, minimumGap: row == CalendarControlAction.footer ? 4 : 8)
             for action in row {
                 let node = try host.control(named: controls.name(for: action))
                 expectCalendarControlTarget(node.frame, action: action)
@@ -171,7 +171,7 @@ struct AccessibilityViewportTests {
             try await applyFixtureScrollerStyle(style, scroll: scroll, host: host)
             #expect(accessibilityScrollView(in: host.hosting) === scroll)
             #expect(scroll.documentView === document)
-            #expect(try host.control(named: "Open Settings").role == .button)
+            #expect(try host.control(named: "Open Glimpse Settings").role == .button)
         }
         let height = layout.naturalContentHeight
         let size = host.hosting.intrinsicContentSize
@@ -210,8 +210,8 @@ struct AccessibilityViewportTests {
         #expect(Set(dateNames).count == 42)
         let controls = [
             "Previous month", "Go to today", "Next month",
-            "Quit Glimpse", "About Glimpse", "Pin window",
-            "Open Calendar app", "Open Settings",
+            "Quit Glimpse", "About Glimpse", "Pin calendar window",
+            "Open Calendar app", "Open Glimpse Settings",
         ]
         var dateFrames: [NSRect] = []
         for name in dateNames + controls {

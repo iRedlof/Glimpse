@@ -7,6 +7,41 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct CalendarIconTargetTests {
+    @Test(arguments: [CGFloat(264), 248], [false, true])
+    func footerExposesOneRowAtBothFitWidths(width: CGFloat, pinned: Bool) async throws {
+        let fixture = CalendarControlFixture(togglePinOnAction: false)
+        fixture.isPinned = pinned
+        let host = AccessibilityTestHost(
+            width: width + AppDesign.Control.iconTrailingClearance, height: 40
+        ) { fixture.footer }
+        defer { host.close() }
+        try await host.settle()
+        let buttons = host.elements().filter { $0.role == .button }
+        #expect(buttons.compactMap(\.label) == CalendarControlAction.footer.map { fixture.name(for: $0) })
+        #expect(buttons.count == 5)
+        let frames = try CalendarControlAction.footer.map {
+            try host.control(named: fixture.name(for: $0)).frame
+        }
+        let spacing: CGFloat = width == 264 ? 8 : 4
+        for (action, frame) in zip(CalendarControlAction.footer, frames) {
+            expectCalendarControlTarget(frame, action: action)
+            #expect(host.hosting.bounds.contains(host.rect(frame, in: host.hosting)))
+        }
+        for pair in zip(frames, frames.dropFirst()) {
+            #expect(abs(pair.1.minX - pair.0.maxX - spacing) < 0.5)
+            #expect(abs(pair.1.minY - pair.0.minY) < 0.5)
+            let before = fixture.receipts
+            try await host.click(atScreenPoint: NSPoint(
+                x: (pair.0.maxX + pair.1.minX) / 2, y: pair.0.midY
+            ))
+            #expect(fixture.receipts == before)
+        }
+        let pin = try host.control(named: fixture.name(for: .pin))
+        #expect(pin.value as? String == (pinned ? "Pinned" : "Not pinned"))
+        #expect(pin.help == (pinned ? "Unpin calendar window" : "Pin calendar window to keep it open"))
+        #expect(try host.control(named: "Open Glimpse Settings").help == "Open Glimpse Settings (⌘,)")
+    }
+
     @Test(arguments: [false, true])
     func headerAndFooterTargetsHaveSingleEdgeActions(pinned: Bool) async throws {
         let fixture = CalendarControlFixture()
@@ -36,7 +71,7 @@ struct CalendarIconTargetTests {
         }
         #expect(fixture.isPinned == !pinned)
         #expect(try host.control(named: fixture.name(for: .pin)).role == .button)
-        #expect(try host.control(named: "Open Settings").role == .button)
+        #expect(try host.control(named: "Open Glimpse Settings").role == .button)
 
         if !pinned {
             let calendar = Calendar(identifier: .gregorian)
@@ -101,7 +136,7 @@ struct CalendarIconTargetTests {
         try await host.settle()
         let names = CalendarControlAction.allCases.map { fixture.name(for: $0) }
         let frames = try names.map { try host.control(named: $0).frame }
-        let settings = try host.control(named: "Open Settings")
+        let settings = try host.control(named: "Open Glimpse Settings")
         #expect(settings.role == .button && settings.enabled)
         #expect(settings.press())
         try await host.settle()
@@ -109,7 +144,7 @@ struct CalendarIconTargetTests {
         #expect(fixture.isPinned == pinned)
         #expect(fixture.monthYearString == "September 9999")
         #expect(try names.map { try host.control(named: $0).frame } == frames)
-        #expect(try host.control(named: "Open Settings").press())
+        #expect(try host.control(named: "Open Glimpse Settings").press())
         try await host.settle()
         #expect(fixture.receipts == [.settings: 2])
         #expect(fixture.isPinned == pinned)
@@ -127,7 +162,7 @@ struct CalendarIconTargetTests {
         try await host.settle()
         for row in [CalendarControlAction.header, CalendarControlAction.footer] {
             let frames = try row.map { try host.control(named: fixture.name(for: $0)).frame }
-            expectDisjointIconRow(frames)
+            expectDisjointIconRow(frames, minimumGap: row == CalendarControlAction.footer ? 4 : 8)
             for pair in zip(frames, frames.dropFirst()) {
                 try await host.click(atScreenPoint: NSPoint(
                     x: (pair.0.maxX + pair.1.minX) / 2, y: pair.0.midY
@@ -180,20 +215,21 @@ func expectCalendarControlTarget(_ frame: NSRect, action: CalendarControlAction)
     if action == .today {
         #expect(frame.width >= 47.5, "Measured Today target \(frame)")
     } else {
-        #expect(abs(frame.width - 28) < 0.5, "Measured icon target \(frame)")
+        let width: CGFloat = action == .pin ? 64 : action == .settings ? 84 : 28
+        #expect(abs(frame.width - width) < 0.5, "Measured command target \(frame)")
     }
     #expect(abs(frame.height - 28) < 0.5, "Measured target \(frame)")
 }
 
 @MainActor
-func expectDisjointIconRow(_ frames: [NSRect]) {
+func expectDisjointIconRow(_ frames: [NSRect], minimumGap: CGFloat = 8) {
     for (index, frame) in frames.enumerated() {
         for other in frames.dropFirst(index + 1) {
             #expect(!frame.intersects(other))
         }
     }
     for pair in zip(frames, frames.dropFirst()) {
-        #expect(pair.1.minX - pair.0.maxX >= 7.5)
+        #expect(pair.1.minX - pair.0.maxX >= minimumGap - 0.5)
     }
 }
 
@@ -236,9 +272,9 @@ final class CalendarControlFixture {
         case .next: "Next month"
         case .quit: "Quit Glimpse"
         case .about: "About Glimpse"
-        case .pin: isPinned ? "Unpin window" : "Pin window"
+        case .pin: isPinned ? "Unpin calendar window" : "Pin calendar window"
         case .calendar: "Open Calendar app"
-        case .settings: "Open Settings"
+        case .settings: "Open Glimpse Settings"
         }
     }
 

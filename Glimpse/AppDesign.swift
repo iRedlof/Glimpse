@@ -52,12 +52,38 @@ enum AppDesign {
     }
 
     enum Settings {
-        static let contentSize = CGSize(width: 600, height: 480)
+        static let contentSize = CGSize(width: 600, height: 600)
         static let minimumContentSize = CGSize(width: 520, height: 360)
-        static let sidebarWidth: CGFloat = 164
-        static let detailInset: CGFloat = 24
+        static let contentInset: CGFloat = 20
+        static let sectionSpacing: CGFloat = 20
+        static let headingSpacing: CGFloat = 8
+        static let headingFontSize: CGFloat = 17
+        static let labelFontSize: CGFloat = 13
+        static let supportingFontSize: CGFloat = 12
+        static let groupHorizontalInset: CGFloat = 12
+        static let groupVerticalInset: CGFloat = 8
+        static let groupCornerRadius: CGFloat = 8
+        static let groupBorderWidth: CGFloat = 1
+        static let increasedContrastBorderWidth: CGFloat = 2
+        static let dividerInset: CGFloat = 4
+        static let rowSpacing: CGFloat = 8
+        static let statusSpacing: CGFloat = 4
+        static let minimumRowHeight: CGFloat = 28
+        static let previewHeight: CGFloat = 44
+        static let recorderWidth: CGFloat = 196
+        static let weekdayPickerWidth: CGFloat = 160
+        static let providerPickerWidth: CGFloat = 160
+        static let workdayMinimumWidth: CGFloat = 56
+        static let checkboxSpacing: CGFloat = 8
+        static let layoutTolerance: CGFloat = 0.5
         static let screenInset: CGFloat = 10
         static let windowGap: CGFloat = 12
+    }
+
+    enum Footer {
+        static let pinTargetWidth: CGFloat = 64
+        static let settingsTargetWidth: CGFloat = 84
+        static let pinnedBackgroundOpacity: Double = 0.14
     }
 
     // MARK: - Calendar Grid

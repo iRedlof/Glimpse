@@ -30,7 +30,8 @@ struct CalendarKeyboardRouterTests {
     }
 
     @Test(arguments: [
-        CalendarKeyboardOwner.previousMonth, .today, .nextMonth, .searchPrompt, .searchDismiss
+        CalendarKeyboardOwner.previousMonth, .today, .nextMonth, .searchPrompt, .searchDismiss,
+        .footerQuit, .footerAbout, .footerPin, .footerCalendar, .footerSettings, .quitCancel, .quitConfirm
     ])
     func fixedControlReturnAndSpaceActivateOnceWithRepeatConsumed(owner: CalendarKeyboardOwner) {
         #expect(CalendarKeyboardRouter.local(
@@ -58,7 +59,8 @@ struct CalendarKeyboardRouterTests {
     @Test
     func disabledFixedControlsCannotActivate() {
         let activationKeys: [CalendarKeyboardKey] = [.returnKey, .keypadEnter, .space]
-        for owner in [CalendarKeyboardOwner.previousMonth, .today, .nextMonth, .searchPrompt, .searchDismiss] {
+        for owner in [CalendarKeyboardOwner.previousMonth, .today, .nextMonth, .searchPrompt, .searchDismiss,
+                      .footerQuit, .footerAbout, .footerPin, .footerCalendar, .footerSettings, .quitCancel, .quitConfirm] {
             for key in activationKeys {
                 for phase in [CalendarKeyboardPhase.down, .repeatPress] {
                     #expect(CalendarKeyboardRouter.local(
@@ -216,6 +218,34 @@ struct CalendarKeyboardRouterTests {
         #expect(CalendarKeyboardKey(nativeCode: 48) == .tab)
         #expect(CalendarKeyboardKey(nativeCode: 124) == .right)
         #expect(CalendarKeyboardKey(nativeCode: 0) == .other)
+    }
+
+    @Test(arguments: [
+        CalendarKeyboardOwner.footerQuit, .footerAbout, .footerPin, .footerCalendar,
+        .footerSettings, .quitCancel, .quitConfirm
+    ], [CalendarKeyboardKey.returnKey, .keypadEnter, .space])
+    func footerAndConfirmationRequireCurrentContext(
+        owner: CalendarKeyboardOwner, key: CalendarKeyboardKey
+    ) {
+        for phase in [CalendarKeyboardPhase.down, .repeatPress, .up] {
+            let expected: CalendarKeyboardRoute = phase == .down ? .activate
+                : phase == .repeatPress ? .consume : .yield
+            #expect(CalendarKeyboardRouter.local(
+                key, phase: phase, owner: owner, context: .eligible
+            ) == expected)
+            #expect(CalendarKeyboardRouter.browse(
+                key, phase: phase, ownership: .designated(owner), context: .eligible
+            ) == .yield)
+            for context in [
+                CalendarKeyboardContext(visible: false), .init(key: false),
+                .init(eventForPanel: false), .init(recording: true),
+                .init(preferences: true), .init(modified: true), .init(editingText: true)
+            ] {
+                #expect(CalendarKeyboardRouter.local(
+                    key, phase: phase, owner: owner, context: context
+                ) == .yield)
+            }
+        }
     }
 
     @Test

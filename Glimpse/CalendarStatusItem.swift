@@ -265,6 +265,7 @@ final class CalendarStatusItem {
     /// Explicit Show preserves an ordered-in panel even when another window occludes it.
     func showCalendar() throws {
         pendingCrossScreenShow = nil
+        if let panel, panel.settingsCalendarPriority?.calendarRequestsPriority(panel) == false { return }
         if let panel, panel.isVisible {
             if let anchor = currentPanelAnchor() {
                 panel.updatePlacement(
@@ -277,11 +278,14 @@ final class CalendarStatusItem {
         try presentHiddenPanel()
     }
 
-    func prepareForSettingsPresentation() -> (visibleFrame: NSRect?, avoiding: NSRect?) {
+    func prepareForSettingsPresentation() -> (
+        visibleFrame: NSRect?, avoiding: NSRect?, calendar: CalendarPanel?
+    ) {
         pendingCrossScreenShow = nil
         let placement = (
             currentPanelAnchor()?.visibleFrame,
-            panel?.isVisible == true && panel?.isPinned == true ? panel?.frame : nil
+            panel?.isVisible == true && panel?.isPinned == true ? panel?.frame : nil,
+            panel
         )
         panel?.prepareForSettingsPresentation()
         return placement
@@ -349,6 +353,7 @@ final class CalendarStatusItem {
             panel = calendarPanel
             calendarPanel.requestSettings = { [weak self] in self?.requestSettings?() }
         }
+        guard calendarPanel.settingsCalendarPriority?.calendarRequestsPriority(calendarPanel) != false else { return }
         calendarPanel.prepareForReopen()
         calendarPanel.updatePlacement(
             statusItemFrame: anchor.statusItemFrame, visibleFrame: anchor.visibleFrame

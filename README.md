@@ -1,6 +1,6 @@
 # Glimpse
 
-[![Version](https://img.shields.io/badge/version-1.4.23-green)](https://github.com/iRedlof/Glimpse/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.4.24-green)](https://github.com/iRedlof/Glimpse/releases/latest)
 [![Download](https://img.shields.io/badge/download-DMG-brightgreen)](https://github.com/iRedlof/Glimpse/releases/latest)
 
 [![Release](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml/badge.svg)](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml)
@@ -9,6 +9,8 @@
 [![Swift](https://img.shields.io/badge/Swift-6.0-orange)]()
 
 A lightweight macOS menu bar calendar app. Click the date icon to see the current month at a glance.
+
+Next release candidate: **v1.4.24/build31** brings one scrollable Settings page with Opening Glimpse, Menu bar, Calendar, and AI date search categories; visible Pin/Pinned and Settings footer actions; and coordinated Settings/calendar focus. Source is reviewed; build, native acceptance, protected delivery, and signed/public artifact verification remain pending. The accepted public release remains v1.4.23/build30.
 
 ## Features
 
@@ -22,7 +24,7 @@ A lightweight macOS menu bar calendar app. Click the date icon to see the curren
 - **Filled background mode** — solid pill style for the menu bar item
 - **Workday highlighting** — configure which days are workdays
 - **Pin window** — keep the calendar visible while working
-- **Settings window** — General, Menu bar, Calendar, and AI date search sections, without resizing the calendar
+- **Settings window** — one scrollable page with Opening Glimpse, Menu bar, Calendar, and AI date search categories, reached from the labeled Settings footer action or ⌘,
 - **Auto-updates** — inline status in About, guarded retry after failed checks, and an official release link when updating is unavailable
 - **Shortcuts.app** — "Show Glimpse Calendar" available via Siri and Shortcuts
 - **Launch at login** — actual macOS registration status, with a shortcut to approve it in Login Items
@@ -32,7 +34,7 @@ A lightweight macOS menu bar calendar app. Click the date icon to see the curren
 1. Download the latest release from [GitHub Releases](https://github.com/iRedlof/Glimpse/releases/latest)
 2. Move `Glimpse.app` to `/Applications`
 3. Launch — the date icon appears in the menu bar
-4. Click it to see the calendar; click the gear icon or press ⌘, for settings
+4. Click it to see the calendar; click Settings or press ⌘, for settings
 
 ## Architecture
 
@@ -105,8 +107,8 @@ Glimpse/                             # App target
 ├── StatusItemPreview.swift          # Shared renderer preview in the current appearance
 ├── CalendarPopoverView.swift        # SwiftUI calendar, date selection, AI field
 ├── SettingsWindow.swift             # Retained native Settings window and bounded placement
-├── SettingsRootView.swift           # Settings sidebar and independently scrolling detail
-├── PreferencesView.swift            # Controls for the selected Settings section
+├── SettingsRootView.swift           # One Settings scroll viewport with native control focus
+├── PreferencesView.swift            # Categorized Settings page and existing preference setters
 ├── MonthBorderShape.swift           # Contoured month border (SwiftUI Shape)
 ├── DateIconRenderer.swift           # Date number + red accent menu bar icon
 ├── GlobalHotkey.swift               # Carbon EventHotKey, configurable combo

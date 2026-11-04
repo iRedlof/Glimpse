@@ -20,7 +20,7 @@ struct PreferencesAccessibilityTests {
         try await host.settle()
         switch section {
         case .menuBar, .aiDateSearch:
-            let name = section == .menuBar ? "Filled background" : "AI date search"
+            let name = section == .menuBar ? "Filled background" : "Enable AI date search"
             let node = try host.control(named: name)
             #expect(node.role == .checkBox)
             #expect((node.value as? NSNumber)?.intValue == 1)
@@ -34,12 +34,12 @@ struct PreferencesAccessibilityTests {
             #expect(weekday.role == .popUpButton)
             #expect(weekday.value as? String == Calendar.current.weekdaySymbols[1])
         case .general:
-            Issue.record("This role matrix covers the three panes with selected preference values")
+                Issue.record("This role matrix covers the three categories with selected preference values")
         }
     }
 
-    @Test(arguments: ["Icon", "Day", "Mon", "Date", "Year"], [false, true])
-    func displayPillPressChangesOnlyItsOwnValue(pill: String, initial: Bool) async throws {
+    @Test(arguments: ["Icon", "Day of week", "Month", "Date", "Year"], [false, true])
+    func displayCheckboxPressChangesOnlyItsOwnValue(pill: String, initial: Bool) async throws {
         let (name, keyPath) = pillContract(pill)
         var state = PreferencesFeature.State()
         state.displayOptions = .init(
@@ -55,9 +55,9 @@ struct PreferencesAccessibilityTests {
         let node = try #require(
             host.controls(named: name).first ?? host.controls(named: pill).first
         )
-        #expect(node.role == .button)
+        #expect(node.role == .checkBox)
         #expect(node.label == name)
-        #expect(node.value as? String == (initial ? "On" : "Off"))
+        #expect((node.value as? NSNumber)?.boolValue == initial)
         #expect(node.press())
         try await host.settle(until: { fixture.receipts.value.menuNotifications == 1 })
         var changed = before
@@ -68,7 +68,7 @@ struct PreferencesAccessibilityTests {
             host.controls(named: name).first ?? host.controls(named: pill).first
         )
         #expect(after.label == name)
-        #expect(after.value as? String == (initial ? "Off" : "On"))
+        #expect((after.value as? NSNumber)?.boolValue == !initial)
         #expect(after.press())
         try await host.settle(until: { fixture.receipts.value.menuNotifications == 2 })
         #expect(fixture.store.displayOptions == before)
@@ -86,11 +86,11 @@ struct PreferencesAccessibilityTests {
         defer { host.close(); fixture.close() }
         try await host.settle()
         #expect(try host.control(named: "AI provider").value as? String == "Cloud AI")
-        #expect(try host.control(named: "AI date search").press())
+        #expect(try host.control(named: "Enable AI date search").press())
         try await host.settle(until: { !fixture.store.showAISearch })
         #expect(host.controls(named: "AI provider").isEmpty)
         #expect(fixture.store.aiProvider == .proxy)
-        #expect(try host.control(named: "AI date search").press())
+        #expect(try host.control(named: "Enable AI date search").press())
         try await host.settle(until: { fixture.store.showAISearch })
         #expect(try host.control(named: "AI provider").value as? String == "Cloud AI")
         #expect(fixture.receipts.value.aiSaves == [false, true])
@@ -168,13 +168,158 @@ struct PreferencesAccessibilityTests {
         }
     }
 
+    @Test(arguments: [CGFloat(600), 520], [false, true])
+    func categorizedDocumentHasOrderedReachableNativeControls(width: CGFloat, showAI: Bool) async throws {
+        var state = PreferencesFeature.State()
+        state.showAISearch = showAI
+        let fixture = PreferencesAccessibilityFixture(state: state)
+        let host = fixture.documentHost(width: width, height: width == 600 ? 600 : 360)
+        defer { host.close(); fixture.close() }
+        try await host.settle()
+        try host.loadAccessibilityWindowTree()
+        try await host.settle()
+        let headings = host.elements().filter { $0.role?.rawValue == "AXHeading" }
+        #expect(headings.map { $0.label ?? ($0.value as? String) ?? "" } ==
+                ["Opening Glimpse", "Menu bar", "Calendar", "AI date search"])
+        let scroll = try #require(accessibilityScrollView(in: host.hosting))
+        let document = try #require(scroll.documentView)
+        #expect(document.frame.height > scroll.contentView.bounds.height)
+        #expect(!scroll.hasHorizontalScroller)
+        let names = ["Launch at login", "Set and enable shortcut",
+                     "Show icon in menu bar", "Show day of week in menu bar",
+                     "Show month in menu bar", "Show date in menu bar", "Show year in menu bar",
+                     "Filled background", "Week starts on"] +
+            Calendar.current.weekdaySymbols.map { "\($0) workday" } +
+            ["Enable AI date search"] + (showAI ? ["AI provider"] : [])
+        for name in names {
+            let node = try host.control(named: name)
+            document.scrollToVisible(host.rect(node.frame, in: document))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            try await host.settle()
+            let current = try host.control(named: name)
+            let clip = host.window.convertToScreen(
+                scroll.contentView.convert(scroll.contentView.bounds, to: nil)
+            )
+            #expect(clip.contains(current.frame), "\(name) must be fully reachable")
+            #expect(current.frame.width > 0 && current.frame.height >= 20)
+            #expect(accessibilityScrollView(in: host.hosting) === scroll)
+            #expect(scroll.documentView === document)
+        }
+        #expect(fixture.receipts.value.forbidden == 0)
+        #expect(fixture.hotkey.backend.operations.isEmpty)
+    }
+
+    @Test(arguments: [
+        LaunchAtLoginClient.Status.enabled, .notRegistered, .requiresApproval, .notFound, .unavailable
+    ], [false, true])
+    func startupStatusAndUpdatingKeepTruthfulRecovery(status: LaunchAtLoginClient.Status, updating: Bool) async throws {
+        var state = PreferencesFeature.State()
+        state.launchAtLoginStatus = status
+        state.isUpdatingLaunchAtLogin = updating
+        let fixture = PreferencesAccessibilityFixture(state: state)
+        let host = fixture.host()
+        defer { host.close(); fixture.close() }
+        try await host.settle()
+        let toggle = try host.control(named: "Launch at login")
+        let recovery = [LaunchAtLoginClient.Status.requiresApproval, .notFound, .unavailable].contains(status)
+        #expect(toggle.role == .checkBox)
+        #expect(toggle.enabled == (!updating && !recovery))
+        let recoveryNodes = host.controls(named: "Open Login Items in System Settings")
+        #expect(recoveryNodes.count == (recovery ? 1 : 0))
+        if recovery { #expect(recoveryNodes.first?.enabled == !updating) }
+        let copy: String
+        switch status {
+        case .enabled: copy = "Enabled for your next login."
+        case .notRegistered: copy = "Off. Glimpse won’t open automatically when you log in."
+        case .requiresApproval: copy = "Approval required. Allow Glimpse in Login Items to launch at login."
+        case .notFound: copy = "macOS couldn’t find Glimpse’s login item. Check that Glimpse is installed in Applications."
+        case .unavailable: copy = "macOS couldn’t determine Glimpse’s login item status."
+        }
+        #expect((toggle.value as? NSNumber)?.boolValue == (status == .enabled))
+        #expect(toggle.object.accessibilityValueDescription?() == copy)
+        #expect(host.elements().contains {
+            let text = $0.label ?? ($0.value as? String) ?? ""
+            return text.contains(updating ? "Updating login item…" : copy)
+        })
+        #expect(fixture.receipts.value.forbidden == 0)
+    }
+
+    @Test(arguments: [false, true])
+    func emptyAndAllWorkdaysPersistOneCheckboxAtATime(all: Bool) async throws {
+        var state = PreferencesFeature.State()
+        state.workdays = all ? Set(1...7) : []
+        let fixture = PreferencesAccessibilityFixture(state: state, allowWorkdayWrites: true)
+        let host = fixture.host(section: .calendar)
+        defer { host.close(); fixture.close() }
+        try await host.settle()
+        let before = state.workdays
+        for weekday in 1...7 {
+            let name = "\(Calendar.current.weekdaySymbols[weekday - 1]) workday"
+            let node = try host.control(named: name)
+            #expect(node.role == .checkBox)
+            #expect(node.help == Calendar.current.weekdaySymbols[weekday - 1])
+            #expect((node.value as? NSNumber)?.boolValue == all)
+            #expect(node.press())
+            try await host.settle(until: { fixture.receipts.value.calendarNotifications == weekday })
+            var expected = before
+            for changed in 1...weekday {
+                if all { expected.remove(changed) } else { expected.insert(changed) }
+            }
+            #expect(fixture.store.workdays == expected)
+            #expect(fixture.receipts.value.workdaySaves.last == expected)
+            #expect(fixture.receipts.value.workdaySaves.count == weekday)
+        }
+        #expect(fixture.store.workdays == (all ? [] : Set(1...7)))
+        #expect(fixture.receipts.value.menuNotifications == 0)
+        #expect(fixture.receipts.value.forbidden == 0)
+    }
+
+    @Test(arguments: [false, true])
+    func actualPreviewRetainsAllFieldsOffIconFallback(filled: Bool) async throws {
+        var state = PreferencesFeature.State()
+        state.displayOptions = .init(
+            showIcon: false, showDayOfWeek: false, showMonth: false,
+            showDate: false, showYear: false, showFilledBackground: filled
+        )
+        let fixture = PreferencesAccessibilityFixture(state: state)
+        let host = fixture.host(section: .menuBar)
+        defer { host.close(); fixture.close() }
+        try await host.settle()
+        let previews = host.elements().filter { $0.label == "Menu bar preview" }
+        try #require(previews.count == 1)
+        let preview = try #require(previews.first)
+        let rawValue = preview.value
+        let diagnostic: [String: Any] = [
+            "method": "actualPreviewRetainsAllFieldsOffIconFallback", "filled": filled, "index": 0,
+            "role": String((preview.role?.rawValue ?? "<nil>").prefix(200)),
+            "class": String(String(reflecting: type(of: preview.object)).prefix(200)),
+            "rawAXValue": String((rawValue.map { String(reflecting: $0) } ?? "<nil>").prefix(200)),
+            "rawAXValueType": String((rawValue.map { String(reflecting: type(of: $0)) } ?? "<nil>").prefix(200)),
+            "label": String((preview.label ?? "<nil>").prefix(200)),
+            "help": String((preview.help ?? "<nil>").prefix(200)),
+            "AXValueDescription": String((preview.object.accessibilityValueDescription?() ?? "<nil>").prefix(200))
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: diagnostic, options: [.sortedKeys]) {
+            print("GLIMPSE_AX_DIAGNOSTIC \(String(decoding: data, as: UTF8.self))")
+        }
+        #expect(preview.role == .image)
+        #expect(preview.label == "Menu bar preview")
+        #expect((preview.value as? String) == "Calendar icon, \(filled ? "filled" : "bordered") background")
+        func images(in view: NSView) -> [NSImageView] {
+            (view as? NSImageView).map { [$0] } ?? view.subviews.flatMap { images(in: $0) }
+        }
+        let image = try #require(images(in: host.hosting).first?.image)
+        #expect(image.size.width > 0 && image.size.height > 0)
+        #expect(fixture.receipts.value.displaySaves.isEmpty)
+    }
+
     private func pillContract(
         _ pill: String
     ) -> (String, WritableKeyPath<MenuBarDisplayOptions, Bool>) {
         switch pill {
         case "Icon": ("Show icon in menu bar", \.showIcon)
-        case "Day": ("Show day of week in menu bar", \.showDayOfWeek)
-        case "Mon": ("Show month in menu bar", \.showMonth)
+        case "Day of week": ("Show day of week in menu bar", \.showDayOfWeek)
+        case "Month": ("Show month in menu bar", \.showMonth)
         case "Date": ("Show date in menu bar", \.showDate)
         default: ("Show year in menu bar", \.showYear)
         }
@@ -305,6 +450,7 @@ struct PreferencesActionReceipts: Sendable {
     var aiSaves: [Bool] = []
     var providerSaves: [AIProvider] = []
     var weekdaySaves: [Int] = []
+    var workdaySaves: [Set<Int>] = []
     var menuNotifications = 0
     var calendarNotifications = 0
     var forbidden = 0
@@ -320,14 +466,19 @@ final class PreferencesAccessibilityFixture {
     let receipts = LockIsolated(PreferencesActionReceipts())
     private var observers: [NSObjectProtocol] = []
 
-    init(state: PreferencesFeature.State) {
+    init(state: PreferencesFeature.State, allowWorkdayWrites: Bool = false) {
         let receipts = receipts
         store = Store(initialState: state) { PreferencesFeature() } withDependencies: {
             $0.preferencesClient = .init(
                 loadStartOfWeekday: { state.startOfWeekday },
                 saveStartOfWeekday: { value in receipts.withValue { $0.weekdaySaves.append(value) } },
                 loadWorkdays: { state.workdays },
-                saveWorkdays: { _ in receipts.withValue { $0.forbidden += 1 } },
+                saveWorkdays: { value in
+                    receipts.withValue {
+                        $0.workdaySaves.append(value)
+                        if !allowWorkdayWrites { $0.forbidden += 1 }
+                    }
+                },
                 loadDisplayOptions: { state.displayOptions },
                 saveDisplayOptions: { value in receipts.withValue { $0.displaySaves.append(value) } },
                 loadShowAISearch: { state.showAISearch },
@@ -336,7 +487,7 @@ final class PreferencesAccessibilityFixture {
                 saveAIProvider: { value in receipts.withValue { $0.providerSaves.append(value) } }
             )
             $0.launchAtLoginClient = .init(
-                status: { .notRegistered },
+                status: { state.launchAtLoginStatus },
                 setEnabled: { _ in receipts.withValue { $0.forbidden += 1 } }
             )
         }
@@ -355,13 +506,25 @@ final class PreferencesAccessibilityFixture {
     }
 
     func host(section: SettingsSection = .general) -> AccessibilityTestHost {
-        AccessibilityTestHost(width: 600, height: 480) {
+        AccessibilityTestHost(width: 600, height: 600) {
             PreferencesView(
                 store: store, hotkeyPreferences: hotkeyModel,
                 notificationCenter: notifications, section: section
             )
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    func documentHost(width: CGFloat, height: CGFloat) -> AccessibilityTestHost {
+        AccessibilityTestHost(width: width, height: height) {
+            ScrollView(.vertical) {
+                PreferencesView(
+                    store: store, hotkeyPreferences: hotkeyModel,
+                    notificationCenter: notifications
+                )
+                .padding(AppDesign.Settings.contentInset)
+            }
         }
     }
 

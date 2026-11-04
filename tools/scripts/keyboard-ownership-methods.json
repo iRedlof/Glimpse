@@ -26,8 +26,21 @@
     "CalendarKeyboardOwnershipTests/nativeSettingsMenuHasOneRetainedDestination()": 1,
     "CalendarKeyboardOwnershipTests/settingsSectionsKeepWindowAndCalendarStable(constrained:)": 2,
     "CalendarKeyboardOwnershipTests/settingsNativeCloseLeavesCalendarUntouched(boundary:)": 4,
-    "CalendarKeyboardOwnershipTests/settingsPanesAndRecoveryRemainReachable(constrained:dark:)": 4,
+    "CalendarKeyboardOwnershipTests/settingsCategoriesAndRecoveryRemainReachable(constrained:dark:)": 4,
     "CalendarKeyboardOwnershipTests/settingsNativeTraversalAndActivation()": 1,
-    "CalendarKeyboardOwnershipTests/settingsPopupEscapePreservesSelectionAndWindow()": 1
+    "CalendarKeyboardOwnershipTests/settingsPopupEscapePreservesSelectionAndWindow()": 1,
+    "CalendarKeyboardOwnershipTests/composedFooterEntryRetainsExactPairAndContext(entry:pinned:)": 6,
+    "CalendarKeyboardOwnershipTests/scrollingWhileRecordingKeepsMountedOwnerAndFootprint()": 1,
+    "CalendarKeyboardOwnershipTests/exactPairPriorityReleasesWithoutContextReset(boundary:)": 6,
+    "CalendarKeyboardOwnershipTests/attachedSheetBlocksCurrentFrontKeyTextAndHiddenReopenBeforeEffects()": 1,
+    "CalendarKeyboardOwnershipTests/deliveredCalendarClickTransfersPriorityAndReturningSettingsKeepsContext(overlap:)": 3,
+    "CalendarKeyboardOwnershipTests/keyResignationDuringOwnedPopupCancelsRecordingAndRetainsPriority()": 1,
+    "CalendarKeyboardOwnershipTests/onePageControllerKeepsNativeGeometryAndSingleDocument(size:)": 2,
+    "CalendarKeyboardOwnershipTests/footerLifecycleDiscardsHeldEditorAndConfirmationIntent(boundary:)": 2,
+    "CalendarKeyboardOwnershipTests/cleanupCannotOverwriteNewOwnership(boundary:)": 5,
+    "CalendarKeyboardOwnershipTests/disposalAloneRestoresPriorityWithoutReplacementOrManualInvalidation()": 1,
+    "CalendarKeyboardOwnershipTests/injectedFooterActionsHonorNativeDownRepeatUpAndAXAfterKeyboard(owner:key:)": 15,
+    "CalendarKeyboardOwnershipTests/quitConfirmationOwnsHeldActivationAndRecordsOnlyDeliberateTermination(key:)": 3,
+    "CalendarKeyboardOwnershipTests/olderAIRequestCannotReclaimCancelOrReturnedQuit(cancelFirst:)": 2
   }
 }

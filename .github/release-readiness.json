@@ -1,22 +1,23 @@
 {
-  "version": "1.4.23",
-  "build": "30",
+  "version": "1.4.24",
+  "build": "31",
+  "scope": "Single-page Settings release: local product, UX, code and whole Quality acceptance passed. Final exact-staged quality, protected integration, signed/public artifacts and installation remain pending.",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-calendar-query-feedback-acceptance.md"
+      "evidence": "docs/product-inventory.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-calendar-query-feedback-acceptance.md"
+      "evidence": "docs/product-inventory.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-calendar-query-feedback-acceptance.md"
+      "evidence": "docs/product-inventory.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-03-calendar-query-feedback-acceptance.md"
+      "evidence": "docs/product-inventory.md"
     }
   }
 }
