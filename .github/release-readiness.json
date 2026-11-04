@@ -4,19 +4,19 @@
   "scope": "Reported UX bug bundle: readable opaque calendar, five equal footer actions, compact stable-height Quit confirmation, About-only 1pt focus styling gated to its key window, and overflow scrollbar clearance. New features are paused. Bounded product/UX/code/QA implementation reviews accept the relevant ordinary geometry/semantics, native footer/Quit/lifecycle actions and refined full-About light/dark focus captures with native activation. Mandatory keyboard manifest is42methods/96products. Earlier rejected captures, admission failures and the final wrapper cleanup error remain retained; historical failure causes are unproved. Exact-staged whole Quality, required hosted checks, protected integration, signed public verification and installed native hover/after-captures remain mandatory.",
   "checks": {
     "product": {
-      "status": "accepted",
+      "status": "passed",
       "evidence": "docs/superpowers/reviews/2026-11-04-footer-bug-bundle.md"
     },
     "ux": {
-      "status": "accepted",
+      "status": "passed",
       "evidence": "docs/superpowers/reviews/2026-11-04-footer-bug-bundle.md"
     },
     "code": {
-      "status": "accepted",
+      "status": "passed",
       "evidence": "docs/superpowers/reviews/2026-11-04-footer-bug-bundle.md"
     },
     "qa": {
-      "status": "accepted",
+      "status": "passed",
       "evidence": "docs/superpowers/reviews/2026-11-04-footer-bug-bundle.md"
     }
   }
