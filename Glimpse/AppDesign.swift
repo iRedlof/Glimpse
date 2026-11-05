@@ -53,28 +53,27 @@ enum AppDesign {
     }
 
     enum Settings {
-        static let contentSize = CGSize(width: 600, height: 600)
+        static let contentSize = CGSize(width: 560, height: 620)
         static let minimumContentSize = CGSize(width: 520, height: 360)
         static let contentInset: CGFloat = 20
-        static let sectionSpacing: CGFloat = 20
-        static let headingSpacing: CGFloat = 8
-        static let headingFontSize: CGFloat = 17
+        static let sectionSpacing: CGFloat = 16
+        static let headingSpacing: CGFloat = 7
+        static let headingFontSize: CGFloat = 13
         static let labelFontSize: CGFloat = 13
         static let supportingFontSize: CGFloat = 12
-        static let groupHorizontalInset: CGFloat = 12
-        static let groupVerticalInset: CGFloat = 8
-        static let groupCornerRadius: CGFloat = 8
+        static let groupHorizontalInset: CGFloat = 10
+        static let groupVerticalInset: CGFloat = 5
+        static let groupCornerRadius: CGFloat = 7
         static let groupBorderWidth: CGFloat = 1
         static let increasedContrastBorderWidth: CGFloat = 2
-        static let dividerInset: CGFloat = 4
+        static let dividerInset: CGFloat = 0
         static let rowSpacing: CGFloat = 8
         static let statusSpacing: CGFloat = 4
-        static let minimumRowHeight: CGFloat = 28
-        static let previewHeight: CGFloat = 44
-        static let recorderWidth: CGFloat = 196
-        static let weekdayPickerWidth: CGFloat = 160
-        static let providerPickerWidth: CGFloat = 160
-        static let workdayMinimumWidth: CGFloat = 56
+        static let minimumRowHeight: CGFloat = 34
+        static let previewHeight: CGFloat = 40
+        static let recorderWidth: CGFloat = 112
+        static let workdayMinimumWidth: CGFloat = 44
+        static let workdaySpacing: CGFloat = 4
         static let checkboxSpacing: CGFloat = 8
         static let layoutTolerance: CGFloat = 0.5
         static let screenInset: CGFloat = 10
@@ -83,9 +82,9 @@ enum AppDesign {
 
     enum Footer {
         static let height: CGFloat = 44
-        static let iconSize: CGFloat = 14
-        static let labelSize: CGFloat = 12
-        static let labelSpacing: CGFloat = 2
+        static let iconSize: CGFloat = 15
+        static let labelSize: CGFloat = 13
+        static let labelSpacing: CGFloat = 7
         static let dividerHeight: CGFloat = 20
         static let confirmationInset: CGFloat = 12
         static let hoverBackgroundOpacity: Double = 0.08
@@ -127,6 +126,18 @@ enum AppDesign {
     // MARK: - Colors
 
     enum Colors {
+        static func settingsSurface(in environment: EnvironmentValues) -> Color {
+            environment.colorScheme == .dark
+                ? Color(red: 36 / 255, green: 36 / 255, blue: 38 / 255)
+                : Color(red: 247 / 255, green: 247 / 255, blue: 248 / 255)
+        }
+
+        static func settingsGroup(in environment: EnvironmentValues) -> Color {
+            environment.colorScheme == .dark
+                ? Color(red: 48 / 255, green: 48 / 255, blue: 50 / 255)
+                : .white
+        }
+
         static let calendarSurface = Color(nsColor: .windowBackgroundColor)
         static let calendarContextText = Color.primary.opacity(0.80)
         static let accentRed = Color(nsColor: NSColor(red: 0.91, green: 0.25, blue: 0.25, alpha: 1.0))

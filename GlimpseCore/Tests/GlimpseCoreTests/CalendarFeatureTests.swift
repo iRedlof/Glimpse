@@ -214,6 +214,33 @@ struct CalendarFeatureTests {
     }
 
     @Test
+    func hiddenPreservingContext_keepsMonthAndDateButEndsEventLoad() async {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let browsedMonth = Date(timeIntervalSince1970: 5_000_000)
+        let selected = Date(timeIntervalSince1970: 5_100_000)
+        var state = CalendarFeature.State()
+        state.displayedMonth = browsedMonth
+        state.selectedDate = selected
+        state.showingPreferences = true
+        state.isLoadingEvents = true
+        state.eventsRequestID = UUID()
+
+        let store = TestStore(initialState: state) {
+            CalendarFeature()
+        } withDependencies: {
+            $0.date = .constant(now)
+        }
+
+        await store.send(.hiddenPreservingContext) {
+            $0.showingPreferences = false
+            $0.isLoadingEvents = false
+            $0.eventsRequestID = nil
+        }
+        #expect(store.state.displayedMonth == browsedMonth)
+        #expect(store.state.selectedDate == selected)
+    }
+
+    @Test
     func goToToday_resetsMonthAndSelection() async {
         let now = Date(timeIntervalSince1970: 1_000_000)
         let oldMonth = Date(timeIntervalSince1970: 0)

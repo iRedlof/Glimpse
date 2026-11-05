@@ -6,17 +6,20 @@ import SwiftUI
 struct PreferencesView: View {
     @Bindable var store: StoreOf<PreferencesFeature>
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.self) private var environment
     @State private var hotkeyPreferences: HotkeyPreferencesModel
     private let notificationCenter: NotificationCenter
     private let onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)?
     private let recordingWindow: @MainActor () -> NSWindow?
     private let section: SettingsSection?
+    private let calendarActions: SettingsCalendarActions?
 
     init(
         store: StoreOf<PreferencesFeature>,
         hotkeyPreferences: HotkeyPreferencesModel? = nil,
         notificationCenter: NotificationCenter = .default,
         onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)? = nil,
+        calendarActions: SettingsCalendarActions? = nil,
         section: SettingsSection? = nil,
         recordingWindow: @escaping @MainActor () -> NSWindow? = { nil }
     ) {
@@ -26,6 +29,7 @@ struct PreferencesView: View {
         self.onAISettingsChange = onAISettingsChange
         self.recordingWindow = recordingWindow
         self.section = section
+        self.calendarActions = calendarActions
     }
 
     private let allWeekdays = Array(1...7)
@@ -72,7 +76,7 @@ struct PreferencesView: View {
         }
         .font(.system(size: AppDesign.Settings.labelFontSize))
         .foregroundStyle(.primary)
-        .controlSize(.regular)
+        .controlSize(.small)
         .onAppear { store.send(.onAppear) }
         .onReceive(notificationCenter.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             store.send(.refreshLaunchAtLogin)
@@ -91,6 +95,10 @@ struct PreferencesView: View {
                     launchAtLoginRow
                     settingsDivider
                     hotkeyRow
+                    if let calendarActions {
+                        settingsDivider
+                        pinCalendarRow(calendarActions)
+                    }
                 case .menuBar:
                     menuBarSettings
                 case .calendar:
@@ -103,17 +111,15 @@ struct PreferencesView: View {
             .padding(.vertical, AppDesign.Settings.groupVerticalInset)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                Color(nsColor: .controlBackgroundColor),
+                AppDesign.Colors.settingsGroup(in: environment),
                 in: RoundedRectangle(cornerRadius: AppDesign.Settings.groupCornerRadius)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: AppDesign.Settings.groupCornerRadius)
-                    .strokeBorder(
-                        Color(nsColor: contrast == .increased ? .labelColor : .separatorColor),
-                        lineWidth: contrast == .increased
-                            ? AppDesign.Settings.increasedContrastBorderWidth
-                            : AppDesign.Settings.groupBorderWidth
-                    )
+                if contrast == .increased {
+                    RoundedRectangle(cornerRadius: AppDesign.Settings.groupCornerRadius)
+                        .strokeBorder(Color(nsColor: .labelColor),
+                                      lineWidth: AppDesign.Settings.increasedContrastBorderWidth)
+                }
             }
         }
     }
@@ -122,14 +128,9 @@ struct PreferencesView: View {
 
     private var menuBarSettings: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: AppDesign.Settings.rowSpacing) {
-                Text("Live preview")
-                Spacer(minLength: AppDesign.Settings.rowSpacing)
-                menuBarPreview
-            }
+            menuBarPreview
+            .frame(maxWidth: .infinity)
             .frame(height: AppDesign.Settings.previewHeight)
-            .padding(.bottom, AppDesign.Settings.rowSpacing)
-            .background(Color(nsColor: .controlBackgroundColor))
 
             displayToggleRow
 
@@ -219,7 +220,6 @@ struct PreferencesView: View {
                     }
                 }
                 .labelsHidden()
-                .frame(minWidth: AppDesign.Settings.weekdayPickerWidth)
                 .fixedSize()
             }
 
@@ -228,7 +228,7 @@ struct PreferencesView: View {
             VStack(alignment: .leading, spacing: AppDesign.Settings.statusSpacing) {
                 Text("Workdays")
                 SettingsCheckboxFlow(
-                    spacing: AppDesign.Settings.checkboxSpacing,
+                    spacing: AppDesign.Settings.workdaySpacing,
                     minimumCellWidth: AppDesign.Settings.workdayMinimumWidth
                 ) {
                     ForEach(allWeekdays, id: \.self) { weekday in
@@ -237,18 +237,16 @@ struct PreferencesView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text("Selected days are highlighted in the calendar.")
-                    .font(.system(size: AppDesign.Settings.supportingFontSize))
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
     private func workdayCheckbox(_ weekday: Int) -> some View {
         let shortNames = Calendar.current.shortWeekdaySymbols
-        let shortName = shortNames[weekday - 1]
+        let compactNames = shortNames.map { String($0.prefix(2)) }
+        let shortName = compactNames[weekday - 1]
         let fullName = Calendar.current.weekdaySymbols[weekday - 1]
-        let label = shortNames.filter { $0 == shortName }.count > 1 ? fullName : shortName
+        let label = compactNames.filter { $0 == shortName }.count > 1 ? fullName : shortName
 
         return Toggle(isOn: Binding(
             get: { store.workdays.contains(weekday) },
@@ -259,9 +257,10 @@ struct PreferencesView: View {
             }
         )) {
             Text(label)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
         }
-        .toggleStyle(.checkbox)
+        .toggleStyle(.button)
         .frame(minHeight: AppDesign.Settings.minimumRowHeight, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityLabel("\(fullName) workday")
@@ -273,7 +272,7 @@ struct PreferencesView: View {
     @ViewBuilder
     private var aiSettingsRows: some View {
         settingsRow {
-            Text("Enable AI date search")
+            Text("Enabled")
             Spacer()
             Toggle("Enable AI date search", isOn: Binding(
                 get: { store.showAISearch },
@@ -285,11 +284,6 @@ struct PreferencesView: View {
             .toggleStyle(.switch)
             .labelsHidden()
         }
-
-        Text("Find dates with phrases such as “next Friday”.")
-            .font(.system(size: AppDesign.Settings.supportingFontSize))
-            .padding(.top, AppDesign.Settings.statusSpacing)
-            .fixedSize(horizontal: false, vertical: true)
 
         if store.showAISearch {
             settingsDivider
@@ -309,7 +303,6 @@ struct PreferencesView: View {
                     }
                 }
                 .labelsHidden()
-                .frame(minWidth: AppDesign.Settings.providerPickerWidth)
                 .fixedSize()
             }
         }
@@ -339,7 +332,7 @@ struct PreferencesView: View {
                 }
                 .font(.system(size: AppDesign.Settings.labelFontSize))
                 .accessibilityElement(children: .combine)
-            } else {
+            } else if launchAtLoginNeedsRecovery {
                 Text(launchAtLoginStatusText)
                     .font(.system(size: AppDesign.Settings.labelFontSize))
                     .fixedSize(horizontal: false, vertical: true)
@@ -362,6 +355,7 @@ struct PreferencesView: View {
                 .accessibilityLabel("Open Login Items in System Settings")
             }
         }
+        .help(launchAtLoginStatusText)
     }
 
     private var launchAtLoginNeedsRecovery: Bool {
@@ -405,9 +399,12 @@ struct PreferencesView: View {
                 .accessibilityValue(hotkeyPreferences.isEnabled ? "On" : "Off")
             }
 
-            Text(hotkeyStatusText)
-                .font(.system(size: AppDesign.Settings.labelFontSize))
-                .fixedSize(horizontal: false, vertical: true)
+            if hotkeyPreferences.isRecording ||
+                (!hotkeyPreferences.isEnabled && hotkeyPreferences.isRequested) {
+                Text(hotkeyStatusText)
+                    .font(.system(size: AppDesign.Settings.supportingFontSize))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if !hotkeyPreferences.isEnabled && hotkeyPreferences.isRequested {
                 Button("Keep shortcut off") {
@@ -425,6 +422,7 @@ struct PreferencesView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .help(hotkeyStatusText)
         .onDisappear { hotkeyPreferences.cancelRecording() }
     }
 
@@ -437,7 +435,8 @@ struct PreferencesView: View {
             }
         } label: {
             Text(hotkeyRecorderLabel)
-                .font(.system(size: AppDesign.Settings.labelFontSize, design: .monospaced))
+                .font(.system(size: AppDesign.Settings.labelFontSize))
+                .lineLimit(1)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
@@ -451,9 +450,7 @@ struct PreferencesView: View {
     }
 
     private var hotkeyRecorderLabel: String {
-        if hotkeyPreferences.isRecording { return "Press shortcut…" }
-        return hotkeyPreferences.isEnabled
-            ? hotkeyPreferences.displayedCombo.displayString : "Set and enable shortcut"
+        hotkeyPreferences.isRecording ? "Press shortcut…" : hotkeyPreferences.displayedCombo.displayString
     }
 
     private var hotkeyRecorderHint: String {
@@ -484,6 +481,22 @@ struct PreferencesView: View {
     }
 
     // MARK: - Shared Components
+
+    private func pinCalendarRow(_ actions: SettingsCalendarActions) -> some View {
+        settingsRow {
+            Text("Pin calendar")
+            Spacer()
+            Toggle("Pin calendar", isOn: Binding(
+                get: { actions.isPinned },
+                set: { actions.isPinned = $0 }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .disabled(actions.calendar == nil)
+            .accessibilityLabel("Pin calendar")
+            .help("Keep the calendar open when you switch to another app.")
+        }
+    }
 
     private var settingsDivider: some View {
         Rectangle()

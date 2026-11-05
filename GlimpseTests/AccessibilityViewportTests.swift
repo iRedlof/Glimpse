@@ -18,7 +18,7 @@ struct AccessibilityViewportTests {
         maximumHeight: CGFloat, presentation: (Bool, NSScroller.Style)
     ) async throws {
         let (processing, style) = presentation
-        let controls = CalendarControlFixture(togglePinOnAction: false)
+        let controls = CalendarControlFixture()
         let search = DateSearchFixture()
         let query = String(repeating: "synthetic next Friday ", count: 20)
         let error = String(repeating: "Synthetic date search error. ", count: 12)
@@ -104,7 +104,7 @@ struct AccessibilityViewportTests {
         maximumHeight: CGFloat, presentation: (Bool, NSScroller.Style)
     ) async throws {
         let (pinned, style) = presentation
-        let controls = CalendarControlFixture(togglePinOnAction: false)
+        let controls = CalendarControlFixture()
         controls.isPinned = pinned
         let layout = PanelLayoutState()
         layout.updatePlacement(maximumHeight: maximumHeight, caretXOffset: 158)
@@ -164,7 +164,7 @@ struct AccessibilityViewportTests {
                 }
             }
         }
-        #expect(documentFrames.count == 8)
+        #expect(documentFrames.count == CalendarControlAction.header.count + CalendarControlAction.footer.count)
         let allocations = Array(documentFrames.values)
         for (index, frame) in allocations.enumerated() {
             for other in allocations.dropFirst(index + 1) {
@@ -217,8 +217,7 @@ struct AccessibilityViewportTests {
         #expect(Set(dateNames).count == 42)
         let controls = [
             "Previous month", "Go to today", "Next month",
-            "Quit Glimpse", "About Glimpse", "Pin calendar window",
-            "Open Calendar app", "Open Glimpse Settings",
+            "Open Glimpse Settings", "Quit Glimpse",
         ]
         var dateFrames: [NSRect] = []
         for name in dateNames + controls {
@@ -1238,7 +1237,7 @@ private final class CalendarViewportFixture {
     }
 
     func revealContrastFooter() async throws {
-        for name in ["Quit Glimpse", "About Glimpse", "Unpin calendar window", "Open Calendar app", "Open Glimpse Settings"] {
+        for name in ["Open Glimpse Settings", "Quit Glimpse"] {
             let node = try #require(contrastNodes().first { $0.label == name && $0.role == .button })
             try await revealContrastRole(node)
         }

@@ -39,7 +39,10 @@
     "CalendarKeyboardOwnershipTests/footerLifecycleDiscardsHeldEditorAndConfirmationIntent(boundary:)": 2,
     "CalendarKeyboardOwnershipTests/cleanupCannotOverwriteNewOwnership(boundary:)": 5,
     "CalendarKeyboardOwnershipTests/disposalAloneRestoresPriorityWithoutReplacementOrManualInvalidation()": 1,
-    "CalendarKeyboardOwnershipTests/injectedFooterActionsHonorNativeDownRepeatUpAndAXAfterKeyboard(owner:key:)": 15,
+    "CalendarKeyboardOwnershipTests/injectedFooterActionsHonorNativeDownRepeatUpAndAXAfterKeyboard(owner:key:)": 6,
+    "CalendarKeyboardOwnershipTests/settingsPinFollowsBoundPanelAndHidesNonkeyUnpinWithoutReset()": 1,
+    "CalendarKeyboardOwnershipTests/settingsMovedAboutAndCalendarActionsDispatchOnce()": 1,
+    "CalendarKeyboardOwnershipTests/settingsQuitSheetUsesNativeCancelAndRestoresOwnedFocus(dismissal:)": 4,
     "CalendarKeyboardOwnershipTests/quitConfirmationOwnsHeldActivationAndRecordsOnlyDeliberateTermination(key:)": 3,
     "CalendarKeyboardOwnershipTests/olderAIRequestCannotReclaimCancelOrReturnedQuit(cancelFirst:)": 2,
     "CalendarKeyboardOwnershipTests/focusedUpdateActionKeepsNativeKeyboardActivation(dark:)": 2

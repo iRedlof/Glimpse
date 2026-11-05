@@ -14,6 +14,145 @@ import Testing
 @MainActor
 struct CalendarKeyboardOwnershipTests {
     @Test
+    func settingsPinFollowsBoundPanelAndHidesNonkeyUnpinWithoutReset() async throws {
+        let calendar = try CalendarKeyboardRootFixture(maximumHeight: 300)
+        let replacement = try CalendarKeyboardRootFixture(maximumHeight: 300)
+        let settings = SettingsWindowTestFixture()
+        defer { settings.close(); replacement.close(); calendar.close() }
+        try await calendar.openThroughShowOwner()
+        calendar.panel.setPinned(true)
+        calendar.store.send(.goToNextMonth)
+        await calendar.settleRendering()
+        let scroll = try #require(accessibilityScrollView(in: calendar.hosting))
+        let snapshot = (
+            frame: calendar.panel.frame, month: calendar.store.displayedMonth,
+            date: calendar.store.selectedDate, scroll: scroll.contentView.bounds.origin,
+            reopens: calendar.reopenActions.value
+        )
+        try await settings.open(calendar: calendar.panel)
+        let owner = try #require(settings.controller.window)
+        let saved = settings.saved.value
+        func pin() throws -> AccessibilityTestNode {
+            let matches = settings.nodes().filter { $0.role == .checkBox && $0.label == "Pin calendar" }
+            try #require(matches.count == 1)
+            return try #require(matches.first)
+        }
+        try #require(calendar.panel.isVisible && !calendar.panel.isKeyWindow && owner.isKeyWindow)
+        #expect((try pin().value as? NSNumber)?.boolValue == true)
+        #expect(calendar.panel.frame == snapshot.frame)
+        try #require(try pin().press())
+        await settings.settle()
+        #expect(!calendar.store.isPinned && !calendar.panel.isPinned)
+        #expect(!calendar.panel.isVisible, "Unpin must dismiss the already non-key calendar")
+        #expect((try pin().value as? NSNumber)?.boolValue == false)
+        try #require(try pin().press())
+        await settings.settle()
+        #expect(calendar.store.isPinned && calendar.panel.isPinned)
+        #expect(!calendar.panel.isVisible, "Pinning a hidden panel must not reopen it")
+        #expect(calendar.panel.frame == snapshot.frame)
+        #expect(calendar.store.displayedMonth == snapshot.month && calendar.store.selectedDate == snapshot.date)
+        #expect(scroll.contentView.bounds.origin == snapshot.scroll)
+        #expect(calendar.reopenActions.value == snapshot.reopens)
+        replacement.panel.setPinned(false)
+        try await settings.open(calendar: replacement.panel)
+        #expect(settings.controller.window === owner)
+        #expect(settings.controller.calendarActions.calendar === replacement.panel)
+        #expect((try pin().value as? NSNumber)?.boolValue == false)
+        try #require(try pin().press())
+        await settings.settle()
+        #expect(replacement.store.isPinned && replacement.panel.isPinned)
+        #expect(calendar.store.isPinned && !calendar.panel.isVisible && !replacement.panel.isVisible)
+        try await settings.open()
+        let unboundPin = try pin()
+        #expect(!settings.controller.calendarActions.isPinned && !unboundPin.enabled)
+        #expect(settings.saved.value == saved)
+        #expect(calendar.reopenActions.value == snapshot.reopens)
+    }
+
+    @Test
+    func settingsMovedAboutAndCalendarActionsDispatchOnce() async throws {
+        let settings = SettingsWindowTestFixture()
+        defer { settings.close() }
+        try await settings.open()
+        let saved = settings.saved.value
+        for name in ["About Glimpse", "Open Calendar app"] {
+            let matches = settings.nodes().filter {
+                ($0.role == .button || $0.role == .link) && $0.label == name
+            }
+            print("GLIMPSE_SETTINGS_ACTION name=\(name) roles=\(settings.nodes().filter { $0.label == name }.compactMap { $0.role?.rawValue })")
+            try #require(matches.count == 1)
+            let node = try #require(matches.first)
+            try #require(node.object.accessibilityWindow?() as? NSWindow === settings.controller.window)
+            try #require(node.press())
+            await settings.settle()
+        }
+        #expect(settings.actionReceipts.value == ["about": 1, "calendar": 1])
+        #expect(settings.saved.value == saved)
+    }
+
+    @Test(arguments: ["return", "escape", "escapeHeld", "explicitQuit"])
+    func settingsQuitSheetUsesNativeCancelAndRestoresOwnedFocus(dismissal: String) async throws {
+        let calendar = try CalendarKeyboardRootFixture(maximumHeight: 300)
+        let settings = SettingsWindowTestFixture()
+        defer { settings.close(); calendar.close() }
+        try await calendar.openThroughShowOwner()
+        calendar.panel.setPinned(true)
+        await calendar.settleRendering()
+        let frame = calendar.panel.frame
+        let month = calendar.store.displayedMonth
+        let reopens = calendar.reopenActions.value
+        try await settings.open(calendar: calendar.panel)
+        let owner = try #require(settings.controller.window)
+        func quit() throws -> AccessibilityTestNode {
+            try #require(settings.nodes().first {
+                ($0.role == .button || $0.role == .link) && $0.label == "Quit Glimpse"
+            })
+        }
+        try #require(owner.makeFirstResponder(nil))
+        for _ in 0..<40 {
+            if try quit().object.isAccessibilityFocused?() == true { break }
+            try calendar.send(.tab, toWindow: owner)
+            await settings.settle()
+        }
+        try #require(try quit().object.isAccessibilityFocused?() == true)
+        try #require(try quit().press())
+        await settings.settle()
+        let sheet = try #require(owner.attachedSheet)
+        try #require(sheet.isVisible && sheet.isKeyWindow && NSApp.keyWindow === sheet)
+        #expect(settings.actionReceipts.value["quit", default: 0] == 0)
+        #expect(sheet.defaultButtonCell?.title == "Cancel")
+        switch dismissal {
+        case "return": try calendar.send(.returnKey, toWindow: sheet)
+        case "escape": try calendar.send(.escape, toWindow: sheet)
+        case "escapeHeld":
+            // A held Escape: its repeats after the sheet ends must not close Settings.
+            try calendar.sendPhase(.escape, phase: .down, toWindow: sheet)
+            await settings.settle()
+            #expect(owner.attachedSheet == nil)
+            try calendar.sendPhase(.escape, phase: .repeatPress, toWindow: owner)
+            try calendar.sendPhase(.escape, phase: .repeatPress, toWindow: owner)
+            await settings.settle()
+            try calendar.sendPhase(.escape, phase: .up, toWindow: owner)
+        default:
+            var views = sheet.contentView.map { [$0] } ?? []
+            var buttons: [NSButton] = []
+            while let view = views.popLast() {
+                if let button = view as? NSButton { buttons.append(button) }
+                views.append(contentsOf: view.subviews)
+            }
+            let button = try #require(buttons.first { $0.title == "Quit" })
+            button.performClick(nil)
+        }
+        await settings.settle()
+        #expect(owner.attachedSheet == nil)
+        #expect(settings.actionReceipts.value["quit", default: 0] == (dismissal == "explicitQuit" ? 1 : 0))
+        #expect(owner.isVisible && owner.isKeyWindow && NSApp.keyWindow === owner)
+        #expect(try quit().object.isAccessibilityFocused?() == true)
+        #expect(calendar.panel.isPinned && calendar.panel.isVisible && calendar.panel.frame == frame)
+        #expect(calendar.store.displayedMonth == month && calendar.reopenActions.value == reopens)
+    }
+
+    @Test
     func settingsNativeTraversalAndActivation() async throws {
         let calendar = try CalendarKeyboardRootFixture()
         let settings = SettingsWindowTestFixture()
@@ -56,6 +195,7 @@ struct CalendarKeyboardOwnershipTests {
         var ordinaryLowerRowObserved = false
         for step in 0..<40 {
             let ordinaryClipXBeforeTab = ordinaryInitialViewport.contentView.bounds.origin.x
+            let ordinaryClipYBeforeTab = ordinaryInitialViewport.contentView.bounds.origin.y
             try calendar.send(.tab, toWindow: ordinaryOwner)
             await settings.settle()
             let nativeFocused = ordinaryRoot.accessibilityFocusedUIElement
@@ -87,6 +227,15 @@ struct CalendarKeyboardOwnershipTests {
                 document.map { view.isDescendant(of: $0) }
             } ?? false
             let responderDescendsFromRoot = responderView?.isDescendant(of: ordinaryRoot) ?? false
+            let responderDescendsFromScrollView = responderView.flatMap { view in
+                viewport.map { view.isDescendant(of: $0) }
+            } ?? false
+            // The utility links sit in fixed window chrome below the scroll document.
+            let fixedFooterLabels: Set<String> = ["About Glimpse", "Open Calendar app", "Quit Glimpse"]
+            let isFixedFooterTarget = !responderDescendsFromScrollView && !responderDescendsFromDocument
+                && fixedFooterLabels.contains(ownedNativeTarget?.label ?? "")
+            var admittedFixed: NSRect?
+            var fixedVisible = false
             let rawDocumentControl = responderView.flatMap { view -> NSRect? in
                 guard view.window === ordinaryOwner, ordinaryOwner.firstResponder === view,
                       settings.controller.window === ordinaryOwner, ordinaryOwner.contentView === ordinaryRoot,
@@ -95,7 +244,7 @@ struct CalendarKeyboardOwnershipTests {
                 }
                 return document.convert(view.bounds, from: view)
             }
-            if let responderView, let viewport, let document,
+            if !isFixedFooterTarget, let responderView, let viewport, let document,
                let control = rawDocumentControl,
                settings.controller.window === ordinaryOwner, ordinaryOwner.contentView === ordinaryRoot,
                ordinaryRoot.window === ordinaryOwner, ordinaryOwner.firstResponder === responderView,
@@ -124,12 +273,32 @@ struct CalendarKeyboardOwnershipTests {
                     ordinaryLowerRowObserved = ordinaryLowerRowObserved || lowerRow
                 }
             }
-            print("GLIMPSE_SETTINGS_ORDINARY_ROOT step=\(step) providerAXPresent=\(provider != nil) providerFocused=\(providerFocused) providerAXFrame=\(String(describing: provider?.frame)) rowLabelAXPresent=\(rowLabel != nil) rowLabelAXFrame=\(String(describing: rowLabel?.frame)) responderClass=\(ordinaryOwner.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil") responderViewOwned=\(responderView?.window === ordinaryOwner) responderBounds=\(String(describing: responderView?.bounds)) responderDescendsFromDocument=\(responderDescendsFromDocument) responderDescendsFromRoot=\(responderDescendsFromRoot) rawDocumentControl=\(String(describing: rawDocumentControl)) proxyFrame=\(String(describing: proxyFrame)) admittedControl=\(String(describing: admittedControl)) admittedRow28Plus8=\(String(describing: admittedRow)) controlVisible=\(controlVisible) rowVisible=\(rowVisible) nativeTargetOwned=\(ownedNativeTarget != nil) nativeTargetClass=\(ownedNativeTarget.map { String(reflecting: type(of: $0.object)) } ?? "nil") nativeTargetLabel=\(String((ownedNativeTarget?.label ?? "<nil>").prefix(200))) nativeTargetFrame=\(String(describing: ownedNativeTarget?.frame)) contentMinSize=\(ordinaryOwner.contentMinSize) rootBounds=\(ordinaryRoot.bounds) documentBounds=\(String(describing: document?.bounds)) clipBounds=\(String(describing: viewport?.contentView.bounds)) clipXBeforeTab=\(ordinaryClipXBeforeTab) clipXAfterTab=\(String(describing: viewport?.contentView.bounds.origin.x))")
+            if isFixedFooterTarget, let responderView, let viewport,
+               settings.controller.window === ordinaryOwner, ordinaryOwner.contentView === ordinaryRoot,
+               ordinaryOwner.firstResponder === responderView, responderView.window === ordinaryOwner,
+               responderDescendsFromRoot {
+                let fixed = ordinaryRoot.convert(responderView.bounds, from: responderView)
+                let viewportInRoot = ordinaryRoot.convert(viewport.bounds, from: viewport)
+                let finitePositive = [fixed, viewportInRoot].allSatisfy {
+                    [$0.minX, $0.minY, $0.maxX, $0.maxY].allSatisfy(\.isFinite) && $0.width > 0 && $0.height > 0
+                }
+                if finitePositive {
+                    admittedFixed = fixed
+                    fixedVisible = ordinaryRoot.bounds.contains(fixed) && !fixed.intersects(viewportInRoot)
+                }
+            }
+            print("GLIMPSE_SETTINGS_ORDINARY_ROOT step=\(step) responderDescendsFromScrollView=\(responderDescendsFromScrollView) fixedFooter=\(isFixedFooterTarget) admittedFixed=\(String(describing: admittedFixed)) providerAXPresent=\(provider != nil) providerFocused=\(providerFocused) providerAXFrame=\(String(describing: provider?.frame)) rowLabelAXPresent=\(rowLabel != nil) rowLabelAXFrame=\(String(describing: rowLabel?.frame)) responderClass=\(ordinaryOwner.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil") responderViewOwned=\(responderView?.window === ordinaryOwner) responderBounds=\(String(describing: responderView?.bounds)) responderDescendsFromDocument=\(responderDescendsFromDocument) responderDescendsFromRoot=\(responderDescendsFromRoot) rawDocumentControl=\(String(describing: rawDocumentControl)) proxyFrame=\(String(describing: proxyFrame)) admittedControl=\(String(describing: admittedControl)) admittedRow28Plus8=\(String(describing: admittedRow)) controlVisible=\(controlVisible) rowVisible=\(rowVisible) nativeTargetOwned=\(ownedNativeTarget != nil) nativeTargetClass=\(ownedNativeTarget.map { String(reflecting: type(of: $0.object)) } ?? "nil") nativeTargetLabel=\(String((ownedNativeTarget?.label ?? "<nil>").prefix(200))) nativeTargetFrame=\(String(describing: ownedNativeTarget?.frame)) contentMinSize=\(ordinaryOwner.contentMinSize) rootBounds=\(ordinaryRoot.bounds) documentBounds=\(String(describing: document?.bounds)) clipBounds=\(String(describing: viewport?.contentView.bounds)) clipXBeforeTab=\(ordinaryClipXBeforeTab) clipXAfterTab=\(String(describing: viewport?.contentView.bounds.origin.x))")
             #expect(settings.controller.window === ordinaryOwner && ordinaryOwner.contentView === ordinaryRoot)
-            #expect(admittedControl != nil, "Every completed ordinary Tab target must satisfy owned native document/control admission")
+            #expect((admittedControl != nil) != (admittedFixed != nil),
+                    "Every completed ordinary Tab target must satisfy exactly one owned document or fixed-footer admission")
             #expect(viewport?.contentView.bounds.origin.x == ordinaryClipXBeforeTab)
             if admittedControl != nil {
                 #expect(controlVisible && rowVisible)
+            }
+            if admittedFixed != nil {
+                #expect(fixedVisible, "A fixed footer control stays inside window content, outside the document clip")
+                #expect(viewport?.contentView.bounds.origin.y == ordinaryClipYBeforeTab,
+                        "Fixed footer focus must not scroll the settings document")
             }
             if providerFocused { break }
         }
@@ -204,7 +373,7 @@ struct CalendarKeyboardOwnershipTests {
                 case "Set and enable shortcut": rowLabel = "Global shortcut"
                 case "Show icon in menu bar": rowLabel = nil
                 case "Week starts on": rowLabel = "Week starts on"
-                case "Enable AI date search": rowLabel = "Enable AI date search"
+                case "Enable AI date search": rowLabel = "Enabled"
                 case "AI provider": rowLabel = "Provider"
                 default: continue
                 }
@@ -252,7 +421,7 @@ struct CalendarKeyboardOwnershipTests {
                 let rowLabel: String?
                 switch target.label {
                 case "AI provider": rowLabel = "Provider"
-                case "Enable AI date search": rowLabel = "Enable AI date search"
+                case "Enable AI date search": rowLabel = "Enabled"
                 case "Week starts on": rowLabel = "Week starts on"
                 case "Show icon in menu bar": rowLabel = nil
                 case "Set and enable shortcut": rowLabel = "Global shortcut"
@@ -560,7 +729,7 @@ struct CalendarKeyboardOwnershipTests {
         let saved = settings.saved.value
         #expect(visible.insetBy(dx: 10, dy: 10).contains(frame))
         if !constrained {
-            #expect(owner.contentRect(forFrameRect: frame).size == NSSize(width: 600, height: 600))
+            #expect(owner.contentRect(forFrameRect: frame).size == NSSize(width: 560, height: 620))
         }
         for section in SettingsSection.allCases {
             try await settings.reveal(section)
@@ -1957,7 +2126,7 @@ struct CalendarKeyboardOwnershipTests {
     }
 
     @Test(arguments: [
-        CalendarKeyboardOwner.footerQuit, .footerAbout, .footerPin, .footerCalendar, .footerSettings
+        CalendarKeyboardOwner.footerSettings, .footerQuit
     ], [CalendarOwnedKey.returnKey, .keypadEnter, .space])
     func injectedFooterActionsHonorNativeDownRepeatUpAndAXAfterKeyboard(
         owner: CalendarKeyboardOwner, key: CalendarOwnedKey
@@ -1996,7 +2165,7 @@ struct CalendarKeyboardOwnershipTests {
         #expect(footer.receipts == [owner: 2])
         try sender.send(.backTab, toWindow: footer.window)
         await footer.settle()
-        if owner != .footerQuit { #expect(footer.owner != owner) }
+        #expect(footer.owner != owner)
     }
 
     @Test(arguments: [CalendarOwnedKey.returnKey, .keypadEnter, .space])
@@ -2234,9 +2403,6 @@ private final class CalendarFooterOwnedHost {
     func name(for owner: CalendarKeyboardOwner) -> String {
         switch owner {
         case .footerQuit: "Quit Glimpse"
-        case .footerAbout: "About Glimpse"
-        case .footerPin: "Pin calendar window"
-        case .footerCalendar: "Open Calendar app"
         default: "Open Glimpse Settings"
         }
     }
@@ -2296,9 +2462,7 @@ private struct CalendarFooterOwnedRow: View {
 
     var body: some View {
         CalendarFooterControls(
-            isPinned: false,
-            quit: { fixture.record(.footerQuit) }, about: { fixture.record(.footerAbout) },
-            togglePin: { fixture.record(.footerPin) }, openCalendar: { fixture.record(.footerCalendar) },
+            quit: { fixture.record(.footerQuit) },
             openSettings: { fixture.record(.footerSettings) },
             keyboardContext: fixture.context, keyboardObservation: fixture.observe,
             controlFocus: $focus
@@ -2318,6 +2482,7 @@ private final class SettingsWindowTestFixture {
     let hotkey = HotkeyFixture()
     let notifications = NotificationCenter()
     let recordingChanges = LockIsolated<[Bool]>([])
+    let actionReceipts = LockIsolated<[String: Int]>([:])
     let preferencesClient: PreferencesClient
     let launchAtLoginClient: LaunchAtLoginClient
     let store: StoreOf<PreferencesFeature>
@@ -2352,8 +2517,12 @@ private final class SettingsWindowTestFixture {
             $0.launchAtLoginClient = launchAtLoginClient
         }
         model = HotkeyPreferencesModel(hotkey: hotkey.hotkey, defaults: hotkey.defaults, handler: {})
+        let actions = actionReceipts
         controller = SettingsWindowController(
-            store: store, hotkeyPreferences: model, notificationCenter: notifications
+            store: store, hotkeyPreferences: model, notificationCenter: notifications,
+            onAbout: { actions.withValue { $0["about", default: 0] += 1 } },
+            onOpenCalendar: { actions.withValue { $0["calendar", default: 0] += 1 } },
+            onQuit: { actions.withValue { $0["quit", default: 0] += 1 } }
         )
         let changes = recordingChanges
         recordingObserver = NotificationCenter.default.addObserver(
@@ -2495,7 +2664,7 @@ private final class SettingsWindowTestFixture {
         case .calendar:
             targets = [("Week starts on", .popUpButton, "Week starts on")]
         case .aiDateSearch:
-            targets = [("Enable AI date search", .checkBox, "Enable AI date search")] +
+            targets = [("Enable AI date search", .checkBox, "Enabled")] +
                 (store.showAISearch ? [("AI provider", .popUpButton, "Provider")] : [])
         }
         let revealFrame = try targets.reduce(node.frame) { frame, target in
@@ -2647,6 +2816,9 @@ private final class SettingsWindowTestFixture {
 
     func close() {
         controller.cancelRecording()
+        if let owner = controller.window, let sheet = owner.attachedSheet {
+            owner.endSheet(sheet)
+        }
         controller.window?.contentView = nil
         controller.window?.close()
         login.finish()

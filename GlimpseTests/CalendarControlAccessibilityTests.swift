@@ -9,7 +9,7 @@ import Testing
 struct CalendarIconTargetTests {
     @Test(arguments: [CGFloat(316), 300, 264, 248], [false, true])
     func footerExposesOneRowAtBothFitWidths(width: CGFloat, pinned: Bool) async throws {
-        let fixture = CalendarControlFixture(togglePinOnAction: false)
+        let fixture = CalendarControlFixture()
         fixture.isPinned = pinned
         let host = AccessibilityTestHost(
             width: width, height: 44
@@ -17,15 +17,15 @@ struct CalendarIconTargetTests {
         defer { host.close() }
         try await host.settle()
         let buttons = host.elements().filter { $0.role == .button }
-        #expect(buttons.compactMap(\.label) == CalendarControlAction.footer.map { fixture.name(for: $0) })
-        #expect(buttons.count == 5)
+        #expect(buttons.compactMap(\.label) == ["Open Glimpse Settings", "Quit Glimpse"])
+        #expect(buttons.count == 2)
         let frames = try CalendarControlAction.footer.map {
             try host.control(named: fixture.name(for: $0)).frame
         }
         for (action, frame) in zip(CalendarControlAction.footer, frames) {
             expectCalendarControlTarget(frame, action: action)
             #expect(host.hosting.bounds.contains(host.rect(frame, in: host.hosting)))
-            #expect(abs(frame.width - width / 5) < 0.5)
+            #expect(abs(frame.width - width / 2) < 0.5)
         }
         let first = try #require(frames.first)
         let last = try #require(frames.last)
@@ -35,9 +35,6 @@ struct CalendarIconTargetTests {
             #expect(abs(pair.1.minX - pair.0.maxX) < 0.5)
             #expect(abs(pair.1.minY - pair.0.minY) < 0.5)
         }
-        let pin = try host.control(named: fixture.name(for: .pin))
-        #expect(pin.value as? String == (pinned ? "Pinned" : "Not pinned"))
-        #expect(pin.help == (pinned ? "Unpin calendar window" : "Pin calendar window to keep it open"))
         #expect(try host.control(named: "Open Glimpse Settings").help == "Open Glimpse Settings (⌘,)")
         for dark in [false, true] {
             host.window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
@@ -75,8 +72,7 @@ struct CalendarIconTargetTests {
                 #expect(fixture.receipts == expected, "Only \(action) at \(position) should act")
             }
         }
-        #expect(fixture.isPinned == !pinned)
-        #expect(try host.control(named: fixture.name(for: .pin)).role == .button)
+        #expect(fixture.isPinned == pinned)
         #expect(try host.control(named: "Open Glimpse Settings").role == .button)
 
         if !pinned {
@@ -223,9 +219,9 @@ private struct CalendarControlFixtureRows: View {
 }
 
 enum CalendarControlAction: String, CaseIterable {
-    case previous, today, next, quit, about, pin, calendar, settings
+    case previous, today, next, settings, quit
     static let header: [Self] = [.previous, .today, .next]
-    static let footer: [Self] = [.quit, .about, .pin, .calendar, .settings]
+    static let footer: [Self] = [.settings, .quit]
 }
 
 enum IconClickPosition: CaseIterable {
@@ -274,11 +270,6 @@ final class CalendarControlFixture {
     var monthYearString = "September 9999"
     var todayIsDisabled = false
     private(set) var receipts: [CalendarControlAction: Int] = [:]
-    private let togglePinOnAction: Bool
-
-    init(togglePinOnAction: Bool = true) {
-        self.togglePinOnAction = togglePinOnAction
-    }
 
     var header: some View {
         CalendarHeaderControls(
@@ -296,9 +287,7 @@ final class CalendarControlFixture {
 
     func footer(trailingInset: CGFloat) -> some View {
         CalendarFooterControls(
-            isPinned: isPinned,
-            quit: { self.record(.quit) }, about: { self.record(.about) },
-            togglePin: { self.record(.pin) }, openCalendar: { self.record(.calendar) },
+            quit: { self.record(.quit) },
             openSettings: { self.record(.settings) }, trailingInset: trailingInset
         )
     }
@@ -309,16 +298,12 @@ final class CalendarControlFixture {
         case .today: "Go to today"
         case .next: "Next month"
         case .quit: "Quit Glimpse"
-        case .about: "About Glimpse"
-        case .pin: isPinned ? "Unpin calendar window" : "Pin calendar window"
-        case .calendar: "Open Calendar app"
         case .settings: "Open Glimpse Settings"
         }
     }
 
     private func record(_ action: CalendarControlAction) {
         receipts[action, default: 0] += 1
-        if action == .pin && togglePinOnAction { isPinned.toggle() }
     }
 }
 

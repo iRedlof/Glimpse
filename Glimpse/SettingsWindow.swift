@@ -1,6 +1,7 @@
 import AppKit
 import ComposableArchitecture
 import GlimpseCore
+import Observation
 import SwiftUI
 
 enum SettingsSection: String, CaseIterable, Identifiable {
@@ -15,6 +16,69 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .calendar: "Calendar"
         case .aiDateSearch: "AI date search"
         }
+    }
+}
+
+/// The retained Settings page always operates on its exact calendar partner.
+@MainActor @Observable
+final class SettingsCalendarActions {
+    private(set) weak var calendar: CalendarPanel?
+
+    var isPinned: Bool {
+        get { calendar?.pinState ?? false }
+        set { calendar?.setPinned(newValue) }
+    }
+
+    func bind(calendar: CalendarPanel?) {
+        self.calendar = calendar
+    }
+}
+
+/// Escape cancels only the Quit sheet it was created for. After the sheet ends, held-Escape
+/// repeats aimed at the owner are consumed until release or a fresh key, so they cannot close Settings.
+@MainActor
+final class QuitSheetEscapeMonitor {
+    private static let escapeKeyCode: UInt16 = 53
+    private var token: Any?
+    private weak var endedOwner: NSWindow?
+
+    init(sheet: NSWindow, cancel: NSButton?) {
+        token = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self, weak sheet, weak cancel] event in
+            guard let self else { return event }
+            if let owner = self.endedOwner {
+                return self.filterAfterSheet(event, owner: owner)
+            }
+            guard let sheet, event.type == .keyDown, event.window === sheet,
+                  Self.isPlainEscape(event) else { return event }
+            if !event.isARepeat { cancel?.performClick(nil) }
+            return nil
+        }
+    }
+
+    /// Called from the sheet completion; keeps swallowing this press's repeats on `owner`.
+    func sheetEnded(owner: NSWindow?) {
+        guard let owner, token != nil else { return remove() }
+        endedOwner = owner
+    }
+
+    func remove() {
+        guard let token else { return }
+        NSEvent.removeMonitor(token)
+        self.token = nil
+        endedOwner = nil
+    }
+
+    private func filterAfterSheet(_ event: NSEvent, owner: NSWindow) -> NSEvent? {
+        if event.type == .keyDown, event.isARepeat, event.window === owner, Self.isPlainEscape(event) {
+            return nil
+        }
+        if event.type == .keyDown || event.keyCode == Self.escapeKeyCode { remove() }
+        return event
+    }
+
+    private static func isPlainEscape(_ event: NSEvent) -> Bool {
+        event.keyCode == escapeKeyCode && event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            .subtracting([.capsLock, .numericPad, .function]).isEmpty
     }
 }
 
@@ -283,9 +347,15 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     let store: StoreOf<PreferencesFeature>
     let hotkeyPreferences: HotkeyPreferencesModel
     let calendarPriority = SettingsCalendarPriority()
+    let calendarActions = SettingsCalendarActions()
     private(set) var window: NSWindow?
     private let notificationCenter: NotificationCenter
     private let onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)?
+    private let onAbout: @MainActor () -> Void
+    private let onOpenCalendar: @MainActor () -> Void
+    private let onQuit: @MainActor () -> Void
+    /// Retained here: the sheet completion closure is released once it runs.
+    private var quitEscapeMonitor: QuitSheetEscapeMonitor?
     private weak var minimumSizedContentView: NSView?
     private var minimumContentSizeConstraints: [NSLayoutConstraint] = []
     // Assigned once during initialization; NotificationCenter removal is thread-safe.
@@ -295,7 +365,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         store: StoreOf<PreferencesFeature>? = nil,
         hotkeyPreferences: HotkeyPreferencesModel? = nil,
         notificationCenter: NotificationCenter = .default,
-        onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)? = nil
+        onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)? = nil,
+        onAbout: @escaping @MainActor () -> Void = { AboutWindow.show() },
+        onOpenCalendar: @escaping @MainActor () -> Void = {
+            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.iCal") else { return }
+            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        },
+        onQuit: @escaping @MainActor () -> Void = { NSApp.terminate(nil) }
     ) {
         self.store = store ?? Store(initialState: PreferencesFeature.State.live()) {
             PreferencesFeature()
@@ -303,6 +379,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         self.hotkeyPreferences = hotkeyPreferences ?? HotkeyPreferencesModel()
         self.notificationCenter = notificationCenter
         self.onAISettingsChange = onAISettingsChange
+        self.onAbout = onAbout
+        self.onOpenCalendar = onOpenCalendar
+        self.onQuit = onQuit
         super.init()
         applicationObservers = [
             notificationCenter.addObserver(
@@ -325,6 +404,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     func show(visibleFrame: NSRect? = nil, avoiding: NSRect? = nil, calendar: CalendarPanel? = nil) {
+        calendarActions.bind(calendar: calendar)
         if window == nil {
             let owner = SettingsWindow(
                 contentRect: NSRect(origin: .zero, size: AppDesign.Settings.contentSize),
@@ -339,7 +419,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             let hosting = NSHostingView(rootView: SettingsRootView(
                 store: store, hotkeyPreferences: hotkeyPreferences,
                 notificationCenter: notificationCenter, onAISettingsChange: onAISettingsChange,
-                recordingWindow: { [weak self] in self?.window }
+                recordingWindow: { [weak self] in self?.window },
+                calendarActions: calendarActions,
+                about: { [weak self] in self?.onAbout() },
+                openCalendar: { [weak self] in self?.onOpenCalendar() },
+                requestQuit: { [weak self] in self?.requestQuit() }
             ))
             hosting.sizingOptions = []
             owner.contentView = hosting
@@ -363,6 +447,28 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
         calendarPriority.settingsWasPresented()
+    }
+
+    func requestQuit() {
+        guard let owner = window, owner.isVisible, owner.attachedSheet == nil else { return }
+        cancelRecording()
+        let alert = NSAlert()
+        alert.messageText = "Quit Glimpse?"
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Quit")
+        alert.buttons.last?.keyEquivalent = ""
+        // Assigning defaultButtonCell rebinds Cancel's key equivalent to Return,
+        // so Escape is routed by a monitor scoped to this sheet's window.
+        alert.window.defaultButtonCell = alert.buttons.first?.cell as? NSButtonCell
+        quitEscapeMonitor?.remove()
+        let escape = QuitSheetEscapeMonitor(sheet: alert.window, cancel: alert.buttons.first)
+        quitEscapeMonitor = escape
+        alert.beginSheetModal(for: owner) { [weak self, weak owner] response in
+            escape.sheetEnded(owner: owner)
+            guard let self, let owner, self.window === owner,
+                  response == .alertSecondButtonReturn else { return }
+            self.onQuit()
+        }
     }
 
     private func fit(_ owner: NSWindow, within bounds: NSRect, avoiding: NSRect? = nil) {
@@ -419,6 +525,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         guard notification.object as? NSWindow === window else { return }
         calendarPriority.settingsWillHide()
         cancelRecording()
+        quitEscapeMonitor?.remove()
+        quitEscapeMonitor = nil
     }
 
     func windowDidDeminiaturize(_ notification: Notification) {
@@ -513,6 +621,8 @@ final class SettingsWindow: NSWindow {
               focused.window === self, focused.isDescendant(of: content),
               isUsableRevealRect(focused.bounds),
               let scrollView = settingsScrollView(in: content),
+              // Fixed chrome outside the scroll view (the utility footer) never scrolls settings.
+              focused.isDescendant(of: scrollView),
               let document = scrollView.documentView,
               document.window === self, document.isDescendant(of: content),
               isUsableRevealRect(document.bounds) else { return }
@@ -533,7 +643,8 @@ final class SettingsWindow: NSWindow {
               isUsableRevealRect(target), isUsableRevealRect(clip.bounds),
               focusRevealGeneration == generation, ownsRevealFocus(responder),
               contentView === content, content.window === self,
-              focused.window === self, focused.isDescendant(of: content) else { return }
+              focused.window === self, focused.isDescendant(of: content),
+              focused.isDescendant(of: scrollView) else { return }
         var proposed = clip.bounds
         if target.minY < proposed.minY {
             proposed.origin.y = target.minY
