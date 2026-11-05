@@ -81,11 +81,11 @@ enum AppDesign {
     }
 
     enum Footer {
-        static let height: CGFloat = 44
+        static let height: CGFloat = 32
         static let iconSize: CGFloat = 15
         static let labelSize: CGFloat = 13
         static let labelSpacing: CGFloat = 7
-        static let dividerHeight: CGFloat = 20
+        static let dividerHeight: CGFloat = 16
         static let confirmationInset: CGFloat = 12
         static let hoverBackgroundOpacity: Double = 0.08
         static let pressedBackgroundOpacity: Double = 0.14

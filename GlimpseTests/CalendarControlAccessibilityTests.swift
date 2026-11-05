@@ -12,7 +12,7 @@ struct CalendarIconTargetTests {
         let fixture = CalendarControlFixture()
         fixture.isPinned = pinned
         let host = AccessibilityTestHost(
-            width: width, height: 44
+            width: width, height: AppDesign.Footer.height
         ) { fixture.footer }
         defer { host.close() }
         try await host.settle()
@@ -247,7 +247,7 @@ func expectCalendarControlTarget(_ frame: NSRect, action: CalendarControlAction)
     } else {
         #expect(abs(frame.width - 28) < 0.5, "Measured header target \(frame)")
     }
-    let height: CGFloat = CalendarControlAction.footer.contains(action) ? 44 : 28
+    let height: CGFloat = CalendarControlAction.footer.contains(action) ? AppDesign.Footer.height : 28
     #expect(abs(frame.height - height) < 0.5, "Measured target \(frame)")
 }
 
