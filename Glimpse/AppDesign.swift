@@ -53,8 +53,10 @@ enum AppDesign {
     }
 
     enum Settings {
-        static let contentSize = CGSize(width: 480, height: 470)
-        static let minimumContentSize = CGSize(width: 440, height: 320)
+        static let contentSize = CGSize(width: 480, height: 490)
+        /// The page is never shorter than its content (fit() still clamps to tiny screens),
+        /// because SwiftUI Tab routing skips rows fully clipped by the scroll view.
+        static let minimumContentSize = CGSize(width: 440, height: 490)
         static let contentInset: CGFloat = 20
         static let labelFontSize: CGFloat = 13
         static let supportingFontSize: CGFloat = 11.5

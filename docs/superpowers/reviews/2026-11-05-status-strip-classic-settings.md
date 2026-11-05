@@ -21,7 +21,7 @@ After using installed v1.4.28, the user rejected the whole footer and Settings r
 - Groups are separated by rules, and switches became native checkboxes.
 - Each category is a named accessibility group, so VoiceOver keeps the category names.
 - Every preference setter, recovery message, recorder path, the pin binding, and the About, Open Calendar and Quit links are unchanged. The version is shown at the bottom right.
-- The window is 480×470, with a 440×320 minimum.
+- The window is 480×490. Its minimum content height equals the full content height, so resizing can never clip rows; this mitigates known issue 5, raised by the PR38 review.
 
 **Fixes found during verification.**
 - The AI provider popup was labelled twice ("AI provider, AI provider"); the duplicate is removed.
@@ -41,4 +41,4 @@ After using installed v1.4.28, the user rejected the whole footer and Settings r
 - An independent review of these contract changes found no weakened assertions beyond the documented pixel tolerance and the native 16pt checkbox height.
 - The exact-staged Quality hook runs for this commit.
 
-Known issue 5 (Tab skips scrolled-out rows in a shrunk Settings window) is recorded in `.claude/rules/known-issues.md`. Other-machine crash causality, the real restart check, physical VoiceOver and endurance remain separate.
+Known issue 5 (SwiftUI Tab routing skips fully clipped Settings rows) is recorded in `.claude/rules/known-issues.md`. It is mitigated by the content-height minimum and is only reachable on screens with less than about 520pt of usable height. A test now asserts that the document fits at the minimum size. Other-machine crash causality, the real restart check, physical VoiceOver and endurance remain separate.

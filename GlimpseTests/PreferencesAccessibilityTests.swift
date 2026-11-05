@@ -188,7 +188,10 @@ struct PreferencesAccessibilityTests {
         let scroll = try #require(accessibilityScrollView(in: host.hosting))
         let document = try #require(scroll.documentView)
         if isMinimum {
-            #expect(document.frame.height > scroll.contentView.bounds.height)
+            // The minimum window never clips the page: SwiftUI Tab routing skips fully
+            // clipped rows (known issue 5), so every row must stay inside the clip.
+            #expect(document.frame.height <= scroll.contentView.bounds.height + AppDesign.Settings.layoutTolerance,
+                    "Document \(document.frame.height) exceeds minimum clip \(scroll.contentView.bounds.height)")
         }
         #expect(!scroll.hasHorizontalScroller)
         // Native checkboxes keep AppKit's regular intrinsic height; every other
