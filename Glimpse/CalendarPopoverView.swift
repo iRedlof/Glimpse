@@ -854,6 +854,8 @@ struct CalendarPopoverView: View {
 
     private var footerButtons: some View {
         CalendarFooterControls(
+            isPinned: store.isPinned,
+            togglePin: { panel?.setPinned(!store.isPinned) },
             quit: beginQuitConfirmation,
             openSettings: { panel?.requestSettings?() },
             keyboardContext: keyboardContext,
@@ -1032,54 +1034,62 @@ struct CalendarHeaderControls: View {
 
 @MainActor
 struct CalendarFooterControls: View {
+    var isPinned = false
+    var togglePin: () -> Void = {}
     let quit: () -> Void
     let openSettings: () -> Void
+    var today: Date = Date()
     var keyboardContext: () -> CalendarKeyboardContext = { .init(visible: false) }
     var keyboardObservation: ((CalendarKeyboardInvocation) -> Void)? = nil
     var controlFocus: FocusState<CalendarKeyboardOwner?>.Binding? = nil
     var trailingInset: CGFloat = 0
 
     var body: some View {
-        HStack(spacing: 0) {
-            actionButton("gearshape", title: "Settings", owner: .footerSettings,
-                         name: "Open Glimpse Settings", action: openSettings)
+        HStack(spacing: AppDesign.Footer.iconSpacing) {
+            Text(todayContext)
+                .font(.system(size: AppDesign.Footer.contextSize))
+                .foregroundStyle(AppDesign.Colors.calendarContextText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .accessibilityLabel("Today, \(todayContext)")
+            Spacer(minLength: AppDesign.Spacing.sm)
+            iconButton(isPinned ? "pin.fill" : "pin", owner: .footerPin,
+                       name: isPinned ? "Unpin calendar window" : "Pin calendar window",
+                       selected: isPinned, action: togglePin)
+                .accessibilityValue(isPinned ? "Pinned" : "Not pinned")
+                .help(isPinned ? "Unpin calendar window" : "Pin calendar window to keep it open")
+            iconButton("gearshape", owner: .footerSettings,
+                       name: "Open Glimpse Settings", action: openSettings)
                 .help("Open Glimpse Settings (⌘,)")
-                .overlay(alignment: .trailing) { divider }
-            actionButton("power", title: "Quit", owner: .footerQuit,
-                         name: "Quit Glimpse", quiet: true, action: quit)
+            iconButton("power", owner: .footerQuit, name: "Quit Glimpse", action: quit)
                 .accessibilityHint("Shows confirmation before quitting")
         }
+        .padding(.leading, AppDesign.Footer.leadingInset)
+        .padding(.trailing, AppDesign.Footer.trailingInset)
         .frame(height: AppDesign.Footer.height)
         .padding(.trailing, trailingInset)
     }
 
-    private var divider: some View {
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(width: 1, height: AppDesign.Footer.dividerHeight)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+    /// e.g. "Week 45 · Thu, Nov 5" in the user's calendar and locale.
+    private var todayContext: String {
+        let week = Calendar.current.component(.weekOfYear, from: today)
+        let date = today.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        return "Week \(week) · \(date)"
     }
 
-    private func actionButton(
-        _ symbol: String, title: String, owner: CalendarKeyboardOwner, name: String,
-        quiet: Bool = false, action: @escaping () -> Void
+    private func iconButton(
+        _ symbol: String, owner: CalendarKeyboardOwner, name: String,
+        selected: Bool = false, action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: AppDesign.Footer.labelSpacing) {
-                Image(systemName: symbol)
-                    .font(.system(size: AppDesign.Footer.iconSize))
-                Text(title)
-                    .font(.system(size: AppDesign.Footer.labelSize, weight: .medium))
-                    .lineLimit(1)
-            }
-                .foregroundStyle(quiet ? AppDesign.Colors.calendarContextText : .primary)
-                .frame(maxWidth: .infinity)
-                .frame(height: AppDesign.Footer.height)
+            Image(systemName: symbol)
+                .font(.system(size: AppDesign.Footer.iconSize))
+                .foregroundStyle(selected ? Color.accentColor : .primary)
+                .frame(width: AppDesign.Control.iconTargetSize, height: AppDesign.Control.iconTargetSize)
                 .contentShape(Rectangle())
                 .overlay { CalendarKeyboardFocusOutline() }
         }
-        .buttonStyle(CalendarFooterButtonStyle())
+        .buttonStyle(CalendarFooterButtonStyle(isSelected: selected))
         .modifier(CalendarControlReturn(
             owner: owner, context: keyboardContext, action: action,
             observe: keyboardObservation, focus: controlFocus
@@ -1091,9 +1101,11 @@ struct CalendarFooterControls: View {
 }
 
 private struct CalendarFooterButtonStyle: ButtonStyle {
+    var isSelected = false
+
     func makeBody(configuration: Configuration) -> some View {
         CalendarFooterButtonAppearance(
-            label: configuration.label, isPressed: configuration.isPressed
+            label: configuration.label, isPressed: configuration.isPressed, isSelected: isSelected
         )
     }
 }
@@ -1101,13 +1113,17 @@ private struct CalendarFooterButtonStyle: ButtonStyle {
 private struct CalendarFooterButtonAppearance<Label: View>: View {
     let label: Label
     let isPressed: Bool
+    let isSelected: Bool
     @State private var isHovered = false
 
     var body: some View {
         label
             .background(
-                Color.primary.opacity(isPressed ? AppDesign.Footer.pressedBackgroundOpacity
-                    : isHovered ? AppDesign.Footer.hoverBackgroundOpacity : 0)
+                RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm)
+                    .fill(isSelected
+                        ? Color.accentColor.opacity(AppDesign.Footer.pinnedBackgroundOpacity)
+                        : Color.primary.opacity(isPressed ? AppDesign.Footer.pressedBackgroundOpacity
+                            : isHovered ? AppDesign.Footer.hoverBackgroundOpacity : 0))
             )
             .onHover { isHovered = $0 }
     }

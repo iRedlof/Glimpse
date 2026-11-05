@@ -29,20 +29,20 @@ struct SettingsRootView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             Divider()
-            HStack(spacing: AppDesign.Spacing.sm) {
+            HStack(spacing: AppDesign.Settings.linkSpacing) {
                 Button("About", action: about)
                     .accessibilityLabel("About Glimpse")
-                actionSeparator
-                Button("Calendar", action: openCalendar)
+                Button("Open Calendar", action: openCalendar)
                     .accessibilityLabel("Open Calendar app")
-                actionSeparator
                 Button("Quit", action: requestQuit)
                     .accessibilityLabel("Quit Glimpse")
                     .accessibilityHint("Shows confirmation before quitting")
-                Spacer(minLength: 0)
+                Spacer(minLength: AppDesign.Spacing.sm)
+                Text("Glimpse \(appVersion)")
+                    .foregroundStyle(.secondary)
             }
             .buttonStyle(.link)
-            .font(.system(size: AppDesign.Settings.labelFontSize))
+            .font(.system(size: AppDesign.Settings.supportingFontSize))
             .controlSize(.small)
             .padding(.horizontal, AppDesign.Settings.contentInset)
             .padding(.vertical, AppDesign.Spacing.sm)
@@ -51,11 +51,7 @@ struct SettingsRootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var actionSeparator: some View {
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(width: AppDesign.Settings.groupBorderWidth,
-                   height: AppDesign.Settings.supportingFontSize)
-            .accessibilityHidden(true)
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
     }
 }

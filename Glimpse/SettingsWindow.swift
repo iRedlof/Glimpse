@@ -633,7 +633,7 @@ final class SettingsWindow: NSWindow {
 
         // Current rows center their labels beside a control in at least 28 points.
         // Full document width includes those labels without guessing an AX group.
-        let rowHeight = max(control.height, AppDesign.Settings.minimumRowHeight)
+        let rowHeight = max(control.height, AppDesign.Settings.revealRowHeight)
         let row = NSRect(x: document.bounds.minX, y: control.midY - rowHeight / 2,
                          width: document.bounds.width, height: rowHeight)
             .insetBy(dx: 0, dy: -AppDesign.Spacing.sm).intersection(document.bounds)

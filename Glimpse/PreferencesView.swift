@@ -6,7 +6,6 @@ import SwiftUI
 struct PreferencesView: View {
     @Bindable var store: StoreOf<PreferencesFeature>
     @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.self) private var environment
     @State private var hotkeyPreferences: HotkeyPreferencesModel
     private let notificationCenter: NotificationCenter
     private let onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)?
@@ -65,11 +64,12 @@ struct PreferencesView: View {
 
     var body: some View {
         // Keep all categories mounted so scrolling never tears down recording ownership.
-        VStack(alignment: .leading, spacing: AppDesign.Settings.sectionSpacing) {
+        VStack(alignment: .leading, spacing: 0) {
             if let section {
                 settingsSection(section)
             } else {
-                ForEach(SettingsSection.allCases) { section in
+                ForEach(Array(SettingsSection.allCases.enumerated()), id: \.element) { index, section in
+                    if index > 0 { settingsDivider }
                     settingsSection(section)
                 }
             }
@@ -84,67 +84,47 @@ struct PreferencesView: View {
     }
 
     private func settingsSection(_ section: SettingsSection) -> some View {
-        VStack(alignment: .leading, spacing: AppDesign.Settings.headingSpacing) {
-            Text(section.heading)
-                .font(.system(size: AppDesign.Settings.headingFontSize, weight: .semibold))
-                .accessibilityAddTraits(.isHeader)
-
-            VStack(alignment: .leading, spacing: 0) {
-                switch section {
-                case .general:
-                    launchAtLoginRow
-                    settingsDivider
-                    hotkeyRow
-                    if let calendarActions {
-                        settingsDivider
-                        pinCalendarRow(calendarActions)
-                    }
-                case .menuBar:
-                    menuBarSettings
-                case .calendar:
-                    calendarSettings
-                case .aiDateSearch:
-                    aiSettingsRows
+        VStack(alignment: .leading, spacing: AppDesign.Settings.classicRowSpacing) {
+            switch section {
+            case .general:
+                classicRow("Startup") { launchAtLoginRow }
+                classicRow("Keyboard shortcut") { hotkeyRow }
+                if let calendarActions {
+                    classicRow("Calendar window") { pinCalendarRow(calendarActions) }
                 }
-            }
-            .padding(.horizontal, AppDesign.Settings.groupHorizontalInset)
-            .padding(.vertical, AppDesign.Settings.groupVerticalInset)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                AppDesign.Colors.settingsGroup(in: environment),
-                in: RoundedRectangle(cornerRadius: AppDesign.Settings.groupCornerRadius)
-            )
-            .overlay {
-                if contrast == .increased {
-                    RoundedRectangle(cornerRadius: AppDesign.Settings.groupCornerRadius)
-                        .strokeBorder(Color(nsColor: .labelColor),
-                                      lineWidth: AppDesign.Settings.increasedContrastBorderWidth)
-                }
+            case .menuBar:
+                menuBarSettings
+            case .calendar:
+                calendarSettings
+            case .aiDateSearch:
+                aiSettingsRows
             }
         }
+        .padding(.vertical, AppDesign.Settings.classicSectionInset)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // The visible pane has no titles; each group keeps its category name for VoiceOver.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(section.heading)
     }
 
     // MARK: - Menu Bar
 
     private var menuBarSettings: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            menuBarPreview
-            .frame(maxWidth: .infinity)
-            .frame(height: AppDesign.Settings.previewHeight)
-
-            displayToggleRow
-
-            settingsDivider
-
-            settingsRow {
-                Text("Filled background")
-                Spacer()
-                Toggle("Filled background", isOn: displayBinding(
-                    keyPath: \.showFilledBackground,
-                    action: { .setShowFilledBackground($0) }
-                ))
-                .toggleStyle(.switch)
-                .labelsHidden()
+        Group {
+            classicRow("Menu bar shows") { displayToggleRow }
+            classicRow("Style") {
+                HStack(alignment: .firstTextBaseline, spacing: AppDesign.Settings.rowSpacing) {
+                    Toggle("Filled background", isOn: displayBinding(
+                        keyPath: \.showFilledBackground,
+                        action: { .setShowFilledBackground($0) }
+                    ))
+                    .toggleStyle(.checkbox)
+                    menuBarPreview
+                        // The image has no text baseline; center it on the checkbox label.
+                        .alignmentGuide(.firstTextBaseline) { dimensions in
+                            dimensions[VerticalAlignment.center] + AppDesign.Settings.previewBaselineOffset
+                        }
+                }
             }
         }
     }
@@ -184,14 +164,15 @@ struct PreferencesView: View {
             ("Year", "Show year in menu bar", \.showYear, { .setShowYear($0) }),
         ]
 
-        return SettingsCheckboxFlow(spacing: AppDesign.Settings.checkboxSpacing) {
+        return SettingsCheckboxFlow(
+            spacing: AppDesign.Settings.checkboxSpacing, lineSpacing: AppDesign.Settings.statusSpacing
+        ) {
             ForEach(options, id: \.0) { label, accessibilityName, keyPath, action in
                 Toggle(isOn: displayBinding(keyPath: keyPath, action: action)) {
                     Text(label)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .toggleStyle(.checkbox)
-                .frame(minHeight: AppDesign.Settings.minimumRowHeight, alignment: .leading)
                 .contentShape(Rectangle())
                 .accessibilityLabel(accessibilityName)
             }
@@ -202,11 +183,8 @@ struct PreferencesView: View {
     // MARK: - Calendar
 
     private var calendarSettings: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            settingsRow {
-                Text("Week starts on")
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
+        Group {
+            classicRow("Week starts on") {
                 Picker("Week starts on", selection: Binding(
                     get: { store.startOfWeekday },
                     set: { newValue in
@@ -222,11 +200,7 @@ struct PreferencesView: View {
                 .labelsHidden()
                 .fixedSize()
             }
-
-            settingsDivider
-
-            VStack(alignment: .leading, spacing: AppDesign.Settings.statusSpacing) {
-                Text("Workdays")
+            classicRow("Workdays") {
                 SettingsCheckboxFlow(
                     spacing: AppDesign.Settings.workdaySpacing,
                     minimumCellWidth: AppDesign.Settings.workdayMinimumWidth
@@ -236,7 +210,6 @@ struct PreferencesView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
             }
         }
     }
@@ -269,60 +242,52 @@ struct PreferencesView: View {
 
     // MARK: - AI Date Search
 
-    @ViewBuilder
     private var aiSettingsRows: some View {
-        settingsRow {
-            Text("Enabled")
-            Spacer()
-            Toggle("Enable AI date search", isOn: Binding(
-                get: { store.showAISearch },
-                set: { newValue in
-                    store.send(.setShowAISearch(newValue))
-                    onAISettingsChange?(store.showAISearch, store.aiProvider)
-                }
-            ))
-            .toggleStyle(.switch)
-            .labelsHidden()
-        }
-
-        if store.showAISearch {
-            settingsDivider
-
-            settingsRow {
-                Text("Provider")
-                Spacer()
-                Picker("AI provider", selection: Binding(
-                    get: { store.aiProvider },
-                    set: { provider in
-                        store.send(.setAIProvider(provider))
+        classicRow("AI date search") {
+            HStack(spacing: AppDesign.Settings.rowSpacing) {
+                Toggle("Enabled", isOn: Binding(
+                    get: { store.showAISearch },
+                    set: { newValue in
+                        store.send(.setShowAISearch(newValue))
                         onAISettingsChange?(store.showAISearch, store.aiProvider)
                     }
-                )) {
-                    ForEach(GlimpseCore.AIProvider.allCases, id: \.self) { provider in
-                        Text(provider.displayName).tag(provider)
+                ))
+                .toggleStyle(.checkbox)
+                .accessibilityLabel("Enable AI date search")
+
+                if store.showAISearch {
+                    Picker("AI provider", selection: Binding(
+                        get: { store.aiProvider },
+                        set: { provider in
+                            store.send(.setAIProvider(provider))
+                            onAISettingsChange?(store.showAISearch, store.aiProvider)
+                        }
+                    )) {
+                        ForEach(GlimpseCore.AIProvider.allCases, id: \.self) { provider in
+                            Text(provider.displayName).tag(provider)
+                        }
                     }
+                    .labelsHidden()
+                    .fixedSize()
                 }
-                .labelsHidden()
-                .fixedSize()
             }
+            Text("Type phrases like “next Friday” in the calendar.")
+                .font(.system(size: AppDesign.Settings.supportingFontSize))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var launchAtLoginRow: some View {
         VStack(alignment: .leading, spacing: AppDesign.Settings.statusSpacing) {
-            settingsRow {
-                Text("Launch at login")
-                Spacer()
-                Toggle("Launch at login", isOn: Binding(
+            Toggle("Launch Glimpse at login", isOn: Binding(
                     get: { store.launchAtLogin },
                     set: { store.send(.setLaunchAtLogin($0)) }
                 ))
-                .toggleStyle(.switch)
-                .labelsHidden()
+                .toggleStyle(.checkbox)
                 .disabled(store.isUpdatingLaunchAtLogin || launchAtLoginNeedsRecovery)
                 .accessibilityLabel("Launch at login")
                 .accessibilityValue(launchAtLoginStatusText)
-            }
 
             if store.isUpdatingLaunchAtLogin {
                 HStack(spacing: AppDesign.Settings.statusSpacing) {
@@ -384,17 +349,13 @@ struct PreferencesView: View {
 
     private var hotkeyRow: some View {
         VStack(alignment: .leading, spacing: AppDesign.Settings.statusSpacing) {
-            settingsRow {
-                Text("Global shortcut")
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
+            HStack(spacing: AppDesign.Settings.rowSpacing) {
                 hotkeyRecorder
-                Toggle("Global shortcut", isOn: Binding(
+                Toggle("Enabled", isOn: Binding(
                     get: { hotkeyPreferences.isEnabled },
                     set: { hotkeyPreferences.setEnabled($0) }
                 ))
-                .toggleStyle(.switch)
-                .labelsHidden()
+                .toggleStyle(.checkbox)
                 .accessibilityLabel("Global shortcut")
                 .accessibilityValue(hotkeyPreferences.isEnabled ? "On" : "Off")
             }
@@ -441,7 +402,6 @@ struct PreferencesView: View {
         }
         .buttonStyle(.bordered)
         .frame(width: AppDesign.Settings.recorderWidth)
-        .frame(minHeight: AppDesign.Settings.minimumRowHeight)
         .accessibilityLabel(hotkeyPreferences.isRecording
             ? "Cancel shortcut recording"
             : (hotkeyPreferences.isEnabled ? "Change global shortcut" : "Set and enable shortcut"))
@@ -483,37 +443,38 @@ struct PreferencesView: View {
     // MARK: - Shared Components
 
     private func pinCalendarRow(_ actions: SettingsCalendarActions) -> some View {
-        settingsRow {
-            Text("Pin calendar")
-            Spacer()
-            Toggle("Pin calendar", isOn: Binding(
-                get: { actions.isPinned },
-                set: { actions.isPinned = $0 }
-            ))
-            .toggleStyle(.switch)
-            .labelsHidden()
-            .disabled(actions.calendar == nil)
-            .accessibilityLabel("Pin calendar")
-            .help("Keep the calendar open when you switch to another app.")
-        }
+        Toggle("Keep pinned when switching apps", isOn: Binding(
+            get: { actions.isPinned },
+            set: { actions.isPinned = $0 }
+        ))
+        .toggleStyle(.checkbox)
+        .disabled(actions.calendar == nil)
+        .accessibilityLabel("Pin calendar")
+        .help("Keep the calendar open when you switch to another app.")
     }
 
     private var settingsDivider: some View {
         Rectangle()
             .fill(Color(nsColor: contrast == .increased ? .labelColor : .separatorColor))
             .frame(height: AppDesign.Settings.groupBorderWidth)
-            .padding(.vertical, AppDesign.Settings.dividerInset)
             .accessibilityHidden(true)
     }
 
-    private func settingsRow<Content: View>(
-        @ViewBuilder content: () -> Content
+    /// Classic preferences row: a right-aligned label column, controls on the right.
+    private func classicRow<Content: View>(
+        _ label: String, @ViewBuilder content: () -> Content
     ) -> some View {
-        HStack(spacing: AppDesign.Settings.rowSpacing) {
-            content()
+        HStack(alignment: .firstTextBaseline, spacing: AppDesign.Settings.columnSpacing) {
+            Text(label + ":")
+                .multilineTextAlignment(.trailing)
+                .frame(width: AppDesign.Settings.labelColumnWidth, alignment: .trailing)
+                .accessibilityLabel(label)
+            VStack(alignment: .leading, spacing: AppDesign.Settings.statusSpacing) {
+                content()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .font(.system(size: AppDesign.Settings.labelFontSize))
-        .frame(minHeight: AppDesign.Settings.minimumRowHeight)
     }
 
 }
@@ -522,6 +483,7 @@ struct PreferencesView: View {
 /// Workdays use equally sized adaptive cells; menu-bar choices use their natural widths.
 private struct SettingsCheckboxFlow: Layout {
     var spacing: CGFloat
+    var lineSpacing: CGFloat? = nil
     var minimumCellWidth: CGFloat? = nil
 
     private struct Arrangement {
@@ -568,7 +530,7 @@ private struct SettingsCheckboxFlow: Layout {
             let itemWidth = min(availableWidth, cellWidth ?? idealSizes[index].width)
             if x > 0 && x + itemWidth > availableWidth + AppDesign.Settings.layoutTolerance {
                 x = 0
-                y += rowHeight + spacing
+                y += rowHeight + (lineSpacing ?? spacing)
                 rowHeight = 0
             }
             let size = subview.sizeThatFits(ProposedViewSize(width: itemWidth, height: nil))
