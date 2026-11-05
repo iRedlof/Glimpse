@@ -136,7 +136,10 @@ def settings_suite():
         ("footerLifecycleDiscardsHeldEditorAndConfirmationIntent(boundary:)", 2),
         ("cleanupCannotOverwriteNewOwnership(boundary:)", 5),
         ("disposalAloneRestoresPriorityWithoutReplacementOrManualInvalidation()", 1),
-        ("injectedFooterActionsHonorNativeDownRepeatUpAndAXAfterKeyboard(owner:key:)", 15),
+        ("injectedFooterActionsHonorNativeDownRepeatUpAndAXAfterKeyboard(owner:key:)", 6),
+        ("settingsPinFollowsBoundPanelAndHidesNonkeyUnpinWithoutReset()", 1),
+        ("settingsMovedAboutAndCalendarActionsDispatchOnce()", 1),
+        ("settingsQuitSheetUsesNativeCancelAndRestoresOwnedFocus(dismissal:)", 4),
         ("quitConfirmationOwnsHeldActivationAndRecordsOnlyDeliberateTermination(key:)", 3),
         ("olderAIRequestCannotReclaimCancelOrReturnedQuit(cancelFirst:)", 2),
         ("focusedUpdateActionKeepsNativeKeyboardActivation(dark:)", 2),
@@ -159,6 +162,6 @@ def settings_suite():
                 for index in range(1, count + 1)
             ]
         cases(tests).append(case)
-    result.update(totalTestCount=42, passedTests=42)
-    result["devicesAndConfigurations"][0]["passedTests"] = 96
+    result.update(totalTestCount=45, passedTests=45)
+    result["devicesAndConfigurations"][0]["passedTests"] = 93
     return expected, result, tests

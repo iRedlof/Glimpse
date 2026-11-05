@@ -1,6 +1,6 @@
 # Glimpse
 
-[![Version](https://img.shields.io/badge/version-1.4.26-green)](https://github.com/iRedlof/Glimpse/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.4.27-green)](https://github.com/iRedlof/Glimpse/releases/latest)
 [![Download](https://img.shields.io/badge/download-DMG-brightgreen)](https://github.com/iRedlof/Glimpse/releases/latest)
 
 [![Release](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml/badge.svg)](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml)
@@ -10,7 +10,7 @@
 
 A lightweight macOS menu bar calendar app. Click the date icon to see the current month at a glance.
 
-Next release candidate: **v1.4.24/build31** brings one scrollable Settings page with Opening Glimpse, Menu bar, Calendar, and AI date search categories; visible Pin/Pinned and Settings footer actions; and coordinated Settings/calendar focus. Source is reviewed; build, native acceptance, protected delivery, and signed/public artifact verification remain pending. The accepted public release remains v1.4.23/build30.
+This branch prepares **v1.4.27/build34**, implementing the user-approved Settings & Quit footer and Native groups Settings design. Settings remains a separate window with every existing preference, Pin calendar and About/Calendar/Quit actions. The current public release is v1.4.26/build33; native checks and protected delivery for this candidate are tracked separately.
 
 ## Features
 

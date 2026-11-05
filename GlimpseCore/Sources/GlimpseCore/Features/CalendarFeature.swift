@@ -68,6 +68,8 @@ public struct CalendarFeature: Sendable {
         case togglePreferences
         case closePanel
         case onDisappear
+        /// Hidden without resetting month/date; `.prepareForReopen` resets on the next show.
+        case hiddenPreservingContext
         case prepareForReopen
         case requestCalendarAccess
         case calendarAccessResult(EKAuthorizationStatus)
@@ -252,6 +254,12 @@ public struct CalendarFeature: Sendable {
                 state.showingPreferences = false
                 state.displayedMonth = date.now
                 recomputeDays(&state)
+                state.isLoadingEvents = false
+                state.eventsRequestID = nil
+                return .cancel(id: CancelID.events)
+
+            case .hiddenPreservingContext:
+                state.showingPreferences = false
                 state.isLoadingEvents = false
                 state.eventsRequestID = nil
                 return .cancel(id: CancelID.events)

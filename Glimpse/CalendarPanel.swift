@@ -25,6 +25,21 @@ final class CalendarPanel: NSPanel {
             settingsCalendarPriority?.reconcile()
         }
     }
+
+    var pinState: Bool { calendarStore.isPinned }
+    static let hidePreservesContextKey = "Glimpse.CalendarPanel.hidePreservesContext"
+    /// One-shot: the next hide keeps month/date (a later explicit reopen resets them).
+    private var preservesContextOnNextHide = false
+
+    func setPinned(_ pinned: Bool) {
+        if calendarStore.isPinned != pinned { calendarStore.send(.togglePin) }
+        isPinned = pinned
+        if !pinned && isVisible && !isKeyWindow && !isTextInputActive {
+            preservesContextOnNextHide = true
+            orderOut(nil)
+        }
+    }
+
     weak var settingsCalendarPriority: SettingsCalendarPriority?
     var settingsPriorityCleanup: SettingsCalendarPriority.Cleanup?
     var settingsPriorityLevelToken: UUID?
@@ -188,8 +203,13 @@ final class CalendarPanel: NSPanel {
     }
 
     override func orderOut(_ sender: Any?) {
+        let preservesContext = preservesContextOnNextHide
+        preservesContextOnNextHide = false
         settingsCalendarPriority?.calendarWillHide(self)
-        NotificationCenter.default.post(name: .calendarPanelWillHide, object: self)
+        NotificationCenter.default.post(
+            name: .calendarPanelWillHide, object: self,
+            userInfo: [Self.hidePreservesContextKey: preservesContext]
+        )
         makeFirstResponder(nil)
         pendingReopenPresentation = false
         pendingResize?.cancel()
