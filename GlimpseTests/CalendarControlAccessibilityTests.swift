@@ -16,25 +16,39 @@ struct CalendarIconTargetTests {
         ) { fixture.footer }
         defer { host.close() }
         try await host.settle()
+        let names = CalendarControlAction.footer.map { fixture.name(for: $0) }
+        #expect(names == [
+            CalendarControlFixture.pinName(isPinned: pinned), "Open Glimpse Settings", "Quit Glimpse",
+        ])
         let buttons = host.elements().filter { $0.role == .button }
-        #expect(buttons.compactMap(\.label) == ["Open Glimpse Settings", "Quit Glimpse"])
-        #expect(buttons.count == 2)
-        let frames = try CalendarControlAction.footer.map {
-            try host.control(named: fixture.name(for: $0)).frame
-        }
+        #expect(buttons.compactMap(\.label) == names)
+        #expect(buttons.count == CalendarControlAction.footer.count)
+        let frames = try names.map { try host.control(named: $0).frame }
         for (action, frame) in zip(CalendarControlAction.footer, frames) {
             expectCalendarControlTarget(frame, action: action)
-            #expect(host.hosting.bounds.contains(host.rect(frame, in: host.hosting)))
-            #expect(abs(frame.width - width / 2) < 0.5)
+            let local = host.rect(frame, in: host.hosting)
+            #expect(host.hosting.bounds.contains(local), "Clipped \(action) \(local)")
+            #expect(abs(local.midY - host.hosting.bounds.midY) < 0.5, "Off-center \(action) \(local)")
         }
         let first = try #require(frames.first)
         let last = try #require(frames.last)
-        #expect(abs(host.rect(first, in: host.hosting).minX) < 0.5)
-        #expect(abs(host.rect(last, in: host.hosting).maxX - width) < 0.5)
+        #expect(abs(host.rect(last, in: host.hosting).maxX - (width - AppDesign.Footer.trailingInset)) < 0.5)
         for pair in zip(frames, frames.dropFirst()) {
-            #expect(abs(pair.1.minX - pair.0.maxX) < 0.5)
+            #expect(abs(pair.1.minX - pair.0.maxX - AppDesign.Footer.iconSpacing) < 0.5)
             #expect(abs(pair.1.minY - pair.0.minY) < 0.5)
         }
+        let contextLabel = "Today, \(fixture.todayContext)"
+        // SwiftUI exposes the combined text as the static text's value.
+        let contexts = host.elements().filter {
+            $0.role == .staticText && ($0.label == contextLabel || ($0.value as? String) == contextLabel)
+        }
+        #expect(contexts.count == 1, "Today context \(contextLabel)\n\(host.treeDescription)")
+        let context = try #require(contexts.first)
+        let contextFrame = host.rect(context.frame, in: host.hosting)
+        #expect(host.hosting.bounds.contains(contextFrame), "Clipped today context \(contextFrame)")
+        #expect(abs(contextFrame.minX - AppDesign.Footer.leadingInset) < 0.5)
+        #expect(context.frame.maxX <= first.minX - AppDesign.Spacing.sm + 0.5)
+        #expect(try host.control(named: names[0]).value as? String == (pinned ? "Pinned" : "Not pinned"))
         #expect(try host.control(named: "Open Glimpse Settings").help == "Open Glimpse Settings (⌘,)")
         for dark in [false, true] {
             host.window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
@@ -66,13 +80,21 @@ struct CalendarIconTargetTests {
                     #expect(node.help == "Go to today")
                 }
                 let before = fixture.receipts
+                let pinnedBefore = fixture.isPinned
                 try await host.click(atScreenPoint: position.point(in: node.frame))
                 var expected = before
                 expected[action, default: 0] += 1
                 #expect(fixture.receipts == expected, "Only \(action) at \(position) should act")
+                #expect(fixture.isPinned == (action == .pin ? !pinnedBefore : pinnedBefore))
+                if action == .pin {
+                    let toggled = try host.control(named: CalendarControlFixture.pinName(isPinned: !pinnedBefore))
+                    #expect(toggled.value as? String == (pinnedBefore ? "Not pinned" : "Pinned"))
+                    #expect(host.controls(named: CalendarControlFixture.pinName(isPinned: pinnedBefore)).isEmpty)
+                }
             }
         }
-        #expect(fixture.isPinned == pinned)
+        let pinClicks = IconClickPosition.allCases.count
+        #expect(fixture.isPinned == (pinClicks.isMultiple(of: 2) ? pinned : !pinned))
         #expect(try host.control(named: "Open Glimpse Settings").role == .button)
 
         if !pinned {
@@ -218,10 +240,11 @@ private struct CalendarControlFixtureRows: View {
     }
 }
 
+/// Cases are declared in on-screen order: header row, then footer row.
 enum CalendarControlAction: String, CaseIterable {
-    case previous, today, next, settings, quit
+    case previous, today, next, pin, settings, quit
     static let header: [Self] = [.previous, .today, .next]
-    static let footer: [Self] = [.settings, .quit]
+    static let footer: [Self] = [.pin, .settings, .quit]
 }
 
 enum IconClickPosition: CaseIterable {
@@ -240,15 +263,13 @@ enum IconClickPosition: CaseIterable {
 
 @MainActor
 func expectCalendarControlTarget(_ frame: NSRect, action: CalendarControlAction) {
+    let iconSize = AppDesign.Control.iconTargetSize
     if action == .today {
         #expect(frame.width >= 47.5, "Measured Today target \(frame)")
-    } else if CalendarControlAction.footer.contains(action) {
-        #expect(frame.width >= 44, "The whole footer cell must remain a usable target \(frame)")
     } else {
-        #expect(abs(frame.width - 28) < 0.5, "Measured header target \(frame)")
+        #expect(abs(frame.width - iconSize) < 0.5, "Measured \(action) icon target \(frame)")
     }
-    let height: CGFloat = CalendarControlAction.footer.contains(action) ? AppDesign.Footer.height : 28
-    #expect(abs(frame.height - height) < 0.5, "Measured target \(frame)")
+    #expect(abs(frame.height - iconSize) < 0.5, "Measured \(action) target \(frame)")
 }
 
 @MainActor
@@ -269,7 +290,20 @@ final class CalendarControlFixture {
     var isPinned = false
     var monthYearString = "September 9999"
     var todayIsDisabled = false
+    /// Fixed "today" so the footer's week/date context is deterministic.
+    let today = Date(timeIntervalSince1970: 1_793_880_000) // 2026-11-05 12:00 UTC
     private(set) var receipts: [CalendarControlAction: Int] = [:]
+
+    static func pinName(isPinned: Bool) -> String {
+        isPinned ? "Unpin calendar window" : "Pin calendar window"
+    }
+
+    /// Contract for the footer's visible today context, e.g. "Week 45 · Thu, Nov 5".
+    var todayContext: String {
+        let week = Calendar.current.component(.weekOfYear, from: today)
+        let date = today.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        return "Week \(week) · \(date)"
+    }
 
     var header: some View {
         CalendarHeaderControls(
@@ -287,8 +321,15 @@ final class CalendarControlFixture {
 
     func footer(trailingInset: CGFloat) -> some View {
         CalendarFooterControls(
+            isPinned: isPinned,
+            togglePin: {
+                self.isPinned.toggle()
+                self.record(.pin)
+            },
             quit: { self.record(.quit) },
-            openSettings: { self.record(.settings) }, trailingInset: trailingInset
+            openSettings: { self.record(.settings) },
+            today: today,
+            trailingInset: trailingInset
         )
     }
 
@@ -297,6 +338,7 @@ final class CalendarControlFixture {
         case .previous: "Previous month"
         case .today: "Go to today"
         case .next: "Next month"
+        case .pin: Self.pinName(isPinned: isPinned)
         case .quit: "Quit Glimpse"
         case .settings: "Open Glimpse Settings"
         }

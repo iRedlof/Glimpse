@@ -168,26 +168,38 @@ struct PreferencesAccessibilityTests {
         }
     }
 
-    @Test(arguments: [CGFloat(600), 520], [false, true])
+    @Test(arguments: [CGFloat(600), AppDesign.Settings.minimumContentSize.width], [false, true])
     func categorizedDocumentHasOrderedReachableNativeControls(width: CGFloat, showAI: Bool) async throws {
         var state = PreferencesFeature.State()
         state.showAISearch = showAI
         let fixture = PreferencesAccessibilityFixture(state: state)
-        let host = fixture.documentHost(width: width, height: width == 600 ? 600 : 360)
+        let isMinimum = width == AppDesign.Settings.minimumContentSize.width
+        let host = fixture.documentHost(
+            width: width, height: isMinimum ? AppDesign.Settings.minimumContentSize.height : 600
+        )
         defer { host.close(); fixture.close() }
         try await host.settle()
         try host.loadAccessibilityWindowTree()
         try await host.settle()
-        let headings = host.elements().filter { $0.role?.rawValue == "AXHeading" }
+        // Classic pane: no visible titles; each category is a labeled AXGroup.
+        let headings = host.elements().filter(isSettingsSectionGroup)
         #expect(headings.map { $0.label ?? ($0.value as? String) ?? "" } ==
                 ["Opening Glimpse", "Menu bar", "Calendar", "AI date search"])
         let scroll = try #require(accessibilityScrollView(in: host.hosting))
         let document = try #require(scroll.documentView)
-        if width == 520 {
+        if isMinimum {
             #expect(document.frame.height > scroll.contentView.bounds.height)
         }
         #expect(!scroll.hasHorizontalScroller)
-        let names = ["Launch at login", "Set and enable shortcut",
+        // Native checkboxes keep AppKit's regular intrinsic height; every other
+        // control keeps the 20pt target floor.
+        let nativeCheckboxHeight = NSButton(checkboxWithTitle: "", target: nil, action: nil).fittingSize.height
+        let nativeCheckboxes: Set<String> = [
+            "Launch at login", "Global shortcut", "Show icon in menu bar", "Show day of week in menu bar",
+            "Show month in menu bar", "Show date in menu bar", "Show year in menu bar",
+            "Filled background", "Enable AI date search"
+        ]
+        let names = ["Launch at login", "Set and enable shortcut", "Global shortcut",
                      "Show icon in menu bar", "Show day of week in menu bar",
                      "Show month in menu bar", "Show date in menu bar", "Show year in menu bar",
                      "Filled background", "Week starts on"] +
@@ -202,8 +214,13 @@ struct PreferencesAccessibilityTests {
             let clip = host.window.convertToScreen(
                 scroll.contentView.convert(scroll.contentView.bounds, to: nil)
             )
-            #expect(clip.contains(current.frame), "\(name) must be fully reachable")
-            #expect(current.frame.width > 0 && current.frame.height >= 20)
+            // Baseline-aligned rows land on fractional points; allow one device pixel of scroll rounding.
+            let pixel = 1 / (host.window.backingScaleFactor > 0 ? host.window.backingScaleFactor : 1)
+            #expect(clip.insetBy(dx: -pixel, dy: -pixel).contains(current.frame), "\(name) must be fully reachable")
+            let minimumHeight: CGFloat = nativeCheckboxes.contains(name) ? nativeCheckboxHeight : 20
+            #expect(current.frame.width > 0 && current.frame.height >= minimumHeight,
+                    "\(name) target height \(current.frame.height) is below \(minimumHeight)")
+            if nativeCheckboxes.contains(name) { #expect(current.role == .checkBox) }
             #expect(accessibilityScrollView(in: host.hosting) === scroll)
             #expect(scroll.documentView === document)
         }

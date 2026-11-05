@@ -132,7 +132,9 @@ struct AccessibilityViewportTests {
                 scroll.contentView.convert(scroll.contentView.bounds, to: nil)
             )
             let rowFrames = try row.map { try host.control(named: controls.name(for: $0)).frame }
-            expectDisjointIconRow(rowFrames, minimumGap: row == CalendarControlAction.footer ? 0 : 8)
+            expectDisjointIconRow(
+                rowFrames, minimumGap: row == CalendarControlAction.footer ? AppDesign.Footer.iconSpacing : 8
+            )
             for action in row {
                 let node = try host.control(named: controls.name(for: action))
                 expectCalendarControlTarget(node.frame, action: action)
@@ -156,11 +158,20 @@ struct AccessibilityViewportTests {
                 }
                 for position in IconClickPosition.allCases {
                     let before = controls.receipts
+                    let pinnedBefore = controls.isPinned
                     try await host.click(atScreenPoint: position.point(in: node.frame))
                     var expected = before
                     expected[action, default: 0] += 1
                     #expect(controls.receipts == expected,
                             "\(action) \(position), frame \(node.frame), clip \(clip), actual style \(scroll.scrollerStyle.rawValue)")
+                    #expect(controls.isPinned == (action == .pin ? !pinnedBefore : pinnedBefore))
+                    if action == .pin {
+                        let toggled = try host.control(named: controls.name(for: .pin))
+                        #expect(toggled.label == CalendarControlFixture.pinName(isPinned: !pinnedBefore))
+                        #expect(abs(toggled.frame.minX - node.frame.minX) < 0.5
+                                && abs(toggled.frame.minY - node.frame.minY) < 0.5,
+                                "Pin target moved after toggling \(toggled.frame) vs \(node.frame)")
+                    }
                 }
             }
         }
@@ -171,7 +182,8 @@ struct AccessibilityViewportTests {
                 #expect(!frame.intersects(other))
             }
         }
-        #expect(controls.isPinned == pinned)
+        let pinClicks = IconClickPosition.allCases.count
+        #expect(controls.isPinned == (pinClicks.isMultiple(of: 2) ? pinned : !pinned))
         for pinState in [!pinned, pinned] {
             controls.isPinned = pinState
             try await host.settle()
@@ -179,6 +191,10 @@ struct AccessibilityViewportTests {
             #expect(accessibilityScrollView(in: host.hosting) === scroll)
             #expect(scroll.documentView === document)
             #expect(try host.control(named: "Open Glimpse Settings").role == .button)
+            let pin = try host.control(named: CalendarControlFixture.pinName(isPinned: pinState))
+            #expect(pin.role == .button)
+            #expect(pin.value as? String == (pinState ? "Pinned" : "Not pinned"))
+            #expect(host.controls(named: CalendarControlFixture.pinName(isPinned: !pinState)).isEmpty)
         }
         let height = layout.naturalContentHeight
         let size = host.hosting.intrinsicContentSize
@@ -217,6 +233,7 @@ struct AccessibilityViewportTests {
         #expect(Set(dateNames).count == 42)
         let controls = [
             "Previous month", "Go to today", "Next month",
+            CalendarControlFixture.pinName(isPinned: fixture.store.isPinned),
             "Open Glimpse Settings", "Quit Glimpse",
         ]
         var dateFrames: [NSRect] = []
@@ -1237,7 +1254,10 @@ private final class CalendarViewportFixture {
     }
 
     func revealContrastFooter() async throws {
-        for name in ["Open Glimpse Settings", "Quit Glimpse"] {
+        let footerNames = [
+            CalendarControlFixture.pinName(isPinned: store.isPinned), "Open Glimpse Settings", "Quit Glimpse",
+        ]
+        for name in footerNames {
             let node = try #require(contrastNodes().first { $0.label == name && $0.role == .button })
             try await revealContrastRole(node)
         }

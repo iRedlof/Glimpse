@@ -53,38 +53,39 @@ enum AppDesign {
     }
 
     enum Settings {
-        static let contentSize = CGSize(width: 560, height: 620)
-        static let minimumContentSize = CGSize(width: 520, height: 360)
+        static let contentSize = CGSize(width: 480, height: 470)
+        static let minimumContentSize = CGSize(width: 440, height: 320)
         static let contentInset: CGFloat = 20
-        static let sectionSpacing: CGFloat = 16
-        static let headingSpacing: CGFloat = 7
-        static let headingFontSize: CGFloat = 13
         static let labelFontSize: CGFloat = 13
-        static let supportingFontSize: CGFloat = 12
-        static let groupHorizontalInset: CGFloat = 10
-        static let groupVerticalInset: CGFloat = 5
-        static let groupCornerRadius: CGFloat = 7
+        static let supportingFontSize: CGFloat = 11.5
+        static let labelColumnWidth: CGFloat = 132
+        static let columnSpacing: CGFloat = 10
+        static let classicRowSpacing: CGFloat = 9
+        static let classicSectionInset: CGFloat = 12
         static let groupBorderWidth: CGFloat = 1
-        static let increasedContrastBorderWidth: CGFloat = 2
-        static let dividerInset: CGFloat = 0
-        static let rowSpacing: CGFloat = 8
+        static let rowSpacing: CGFloat = 10
         static let statusSpacing: CGFloat = 4
-        static let minimumRowHeight: CGFloat = 34
-        static let previewHeight: CGFloat = 40
-        static let recorderWidth: CGFloat = 112
-        static let workdayMinimumWidth: CGFloat = 44
-        static let workdaySpacing: CGFloat = 4
-        static let checkboxSpacing: CGFloat = 8
+        static let minimumRowHeight: CGFloat = 22
+        /// Focus reveal keeps at least this much row (label + control) visible, plus Spacing.sm.
+        static let revealRowHeight: CGFloat = 28
+        static let recorderWidth: CGFloat = 88
+        static let workdayMinimumWidth: CGFloat = 32
+        static let workdaySpacing: CGFloat = 3
+        static let checkboxSpacing: CGFloat = 12
         static let layoutTolerance: CGFloat = 0.5
         static let screenInset: CGFloat = 10
         static let windowGap: CGFloat = 12
+        static let linkSpacing: CGFloat = 14
+        static let previewBaselineOffset: CGFloat = 4.5
     }
 
     enum Footer {
-        static let height: CGFloat = 32
-        static let iconSize: CGFloat = 15
-        static let labelSize: CGFloat = 13
-        static let labelSpacing: CGFloat = 7
+        static let height: CGFloat = 30
+        static let iconSize: CGFloat = 13
+        static let iconSpacing: CGFloat = 2
+        static let contextSize: CGFloat = 11.5
+        static let leadingInset: CGFloat = 14
+        static let trailingInset: CGFloat = 6
         static let dividerHeight: CGFloat = 16
         static let confirmationInset: CGFloat = 12
         static let hoverBackgroundOpacity: Double = 0.08

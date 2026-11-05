@@ -178,7 +178,7 @@ struct CalendarKeyboardOwnershipTests {
         let ordinaryContentSize = ordinaryOwner.contentRect(forFrameRect: ordinaryOwner.frame).size
         ordinaryOwner.setContentSize(NSSize(width: 400, height: 250))
         await settings.settle()
-        #expect(ordinaryOwner.contentRect(forFrameRect: ordinaryOwner.frame).size == NSSize(width: 520, height: 360))
+        #expect(ordinaryOwner.contentRect(forFrameRect: ordinaryOwner.frame).size == AppDesign.Settings.minimumContentSize)
         #expect(settings.controller.window === ordinaryOwner && ordinaryOwner.contentView === ordinaryRoot)
         print("GLIMPSE_SETTINGS_ORDINARY_RESIZE_FLOOR requested=(400,250) actual=\(ordinaryOwner.contentRect(forFrameRect: ordinaryOwner.frame).size) contentMinSize=\(ordinaryOwner.contentMinSize) rootBounds=\(ordinaryRoot.bounds)")
         ordinaryOwner.setContentSize(ordinaryContentSize)
@@ -188,6 +188,9 @@ struct CalendarKeyboardOwnershipTests {
         var ordinaryProviderObserved = false
         let ordinaryInitialViewport = try #require(accessibilityScrollView(in: ordinaryRoot))
         let ordinaryInitialDocument = try #require(ordinaryInitialViewport.documentView)
+        // Lower-row reveal is only observable when the document actually scrolls at this size.
+        let ordinaryDocumentOverflows = ordinaryInitialDocument.frame.height
+            > ordinaryInitialViewport.contentView.bounds.height + AppDesign.Settings.layoutTolerance
         let ordinaryInitialVisibleRect = ordinaryInitialDocument.convert(
             ordinaryInitialViewport.contentView.bounds, from: ordinaryInitialViewport.contentView
         )
@@ -207,7 +210,7 @@ struct CalendarKeyboardOwnershipTests {
             let ordinaryNodes = settings.nodes()
             let provider = ordinaryNodes.first { $0.role == .popUpButton && $0.label == "AI provider" }
             let rowLabel = ordinaryNodes.first {
-                $0.role == .staticText && ($0.label == "Provider" || ($0.value as? String) == "Provider")
+                $0.role == .staticText && ($0.label == "AI date search" || ($0.value as? String) == "AI date search:")
             }
             let viewport = accessibilityScrollView(in: ordinaryRoot)
             let proxyFrame = (ordinaryOwner.firstResponder as? NSView).flatMap { view -> NSRect? in
@@ -232,8 +235,11 @@ struct CalendarKeyboardOwnershipTests {
             } ?? false
             // The utility links sit in fixed window chrome below the scroll document.
             let fixedFooterLabels: Set<String> = ["About Glimpse", "Open Calendar app", "Quit Glimpse"]
+            // Structural identity: owned, inside the window content, outside the scroll view.
+            // A resolved AX label must also be one of the utility links.
             let isFixedFooterTarget = !responderDescendsFromScrollView && !responderDescendsFromDocument
-                && fixedFooterLabels.contains(ownedNativeTarget?.label ?? "")
+                && responderDescendsFromRoot && responderView !== ordinaryRoot
+                && (ownedNativeTarget?.label).map { fixedFooterLabels.contains($0) } != false
             var admittedFixed: NSRect?
             var fixedVisible = false
             let rawDocumentControl = responderView.flatMap { view -> NSRect? in
@@ -302,8 +308,12 @@ struct CalendarKeyboardOwnershipTests {
             }
             if providerFocused { break }
         }
-        #expect(ordinaryAdmittedTargets > 0 && ordinaryLowerRowObserved)
+        #expect(ordinaryAdmittedTargets > 0)
+        if ordinaryDocumentOverflows { #expect(ordinaryLowerRowObserved) }
         print("GLIMPSE_SETTINGS_ORDINARY_ROOT_SUMMARY providerObserved=\(ordinaryProviderObserved) admittedTargets=\(ordinaryAdmittedTargets) lowerRowObserved=\(ordinaryLowerRowObserved) replacementProof=false")
+        ordinaryOwner.setContentSize(ordinaryContentSize)
+        await settings.settle()
+        #expect(ordinaryOwner.contentRect(forFrameRect: ordinaryOwner.frame).size == ordinaryContentSize)
         try await settings.open(visibleFrame: placement.visibleFrame, avoiding: placement.avoiding, calendar: placement.calendar)
         let owner = try #require(settings.controller.window)
         let traversalViewport = owner.contentView.flatMap { accessibilityScrollView(in: $0) }
@@ -330,7 +340,10 @@ struct CalendarKeyboardOwnershipTests {
         #expect(settings.login.requests.value.count == loginBefore + 1)
         let updatingLogin = settings.nodes().first { $0.role == .checkBox && $0.label == "Launch at login" }
         #expect(updatingLogin?.enabled == false && settings.store.isUpdatingLaunchAtLogin)
-        #expect(owner.isKeyWindow && NSApp.keyWindow === owner && owner.firstResponder === owner)
+        // The native checkbox keeps its owned focus while disabled, so keyboard users keep their place.
+        #expect(owner.isKeyWindow && NSApp.keyWindow === owner
+                && (owner.firstResponder as? NSView)?.window === owner)
+        #expect(focusedLabels().contains("Launch at login"))
         print("GLIMPSE_SETTINGS_LOGIN_FOCUS stage=updating updating=\(settings.store.isUpdatingLaunchAtLogin) loginEnabled=\(updatingLogin?.enabled == true) keyWindowOwned=\(NSApp.keyWindow === owner) responderOwned=\(owner.firstResponder === owner || (owner.firstResponder as? NSView)?.window === owner) focusedLabels=\(Array(focusedLabels().prefix(8)))")
         let targetsWhileUpdating = settings.nodes().filter { $0.object.isAccessibilityFocused?() == true }.prefix(8)
             .map { ($0.label ?? "", $0.frame) }
@@ -339,19 +352,18 @@ struct CalendarKeyboardOwnershipTests {
         await settings.settle()
         let completedLogin = settings.nodes().first { $0.role == .checkBox && $0.label == "Launch at login" }
         #expect(completedLogin?.enabled == true && !settings.store.isUpdatingLaunchAtLogin)
-        #expect(owner.isKeyWindow && NSApp.keyWindow === owner && owner.firstResponder === owner)
+        #expect(owner.isKeyWindow && NSApp.keyWindow === owner
+                && (owner.firstResponder as? NSView)?.window === owner)
         print("GLIMPSE_SETTINGS_LOGIN_FOCUS stage=completed updating=\(settings.store.isUpdatingLaunchAtLogin) loginEnabled=\(completedLogin?.enabled == true) keyWindowOwned=\(NSApp.keyWindow === owner) responderOwned=\(owner.firstResponder === owner || (owner.firstResponder as? NSView)?.window === owner) focusedLabels=\(Array(focusedLabels().prefix(8)))")
         let targetsAfterUpdate = settings.nodes().filter { $0.object.isAccessibilityFocused?() == true }.prefix(8)
             .map { ($0.label ?? "", $0.frame) }
         print("GLIMPSE_SETTINGS_NATIVE_FOCUS stage=completed responderClass=\(owner.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil") responderIsView=\(owner.firstResponder is NSView) responderViewOwned=\((owner.firstResponder as? NSView)?.window === owner) targets=\(targetsAfterUpdate) clipOrigin=\(String(describing: traversalViewport?.contentView.bounds.origin)) clipSize=\(String(describing: traversalViewport?.contentView.bounds.size))")
-        try calendar.send(.tab, toWindow: owner)
-        await settings.settle()
-        print("GLIMPSE_SETTINGS_FOCUS recovered-login-tab=\(focusedLabels())")
+        print("GLIMPSE_SETTINGS_FOCUS retained-login-focus=\(focusedLabels())")
         #expect(focusedLabels().contains("Launch at login"))
         #expect(owner.isKeyWindow && NSApp.keyWindow === owner)
         try settings.expectVisible(try #require(settings.nodes().first {
             $0.role == .checkBox && $0.label == "Launch at login"
-        }), rowLabel: "Launch at login")
+        }), rowLabel: "Startup")
         try calendar.send(.tab, toWindow: owner)
         await settings.settle()
         print("GLIMPSE_SETTINGS_FOCUS next-tab-recorder=\(focusedLabels())")
@@ -361,22 +373,15 @@ struct CalendarKeyboardOwnershipTests {
         #expect(focusedLabels().contains("Launch at login"))
         try settings.expectVisible(try #require(settings.nodes().first {
             $0.role == .checkBox && $0.label == "Launch at login"
-        }), rowLabel: "Launch at login")
+        }), rowLabel: "Startup")
         var traversed: [String] = []
         for step in 0..<40 {
             try calendar.send(.tab, toWindow: owner)
             await settings.settle()
             traversed.append(contentsOf: focusedLabels())
             for target in settings.nodes().filter({ $0.object.isAccessibilityFocused?() == true }).prefix(8) {
-                let rowLabel: String?
-                switch target.label {
-                case "Set and enable shortcut": rowLabel = "Global shortcut"
-                case "Show icon in menu bar": rowLabel = nil
-                case "Week starts on": rowLabel = "Week starts on"
-                case "Enable AI date search": rowLabel = "Enabled"
-                case "AI provider": rowLabel = "Provider"
-                default: continue
-                }
+                guard let label = target.label,
+                      let rowLabel = settingsTraversalRowLabels[label] else { continue }
                 try settings.expectVisible(target, rowLabel: rowLabel)
             }
             if step < 8 || focusedLabels().contains("AI provider") {
@@ -393,7 +398,7 @@ struct CalendarKeyboardOwnershipTests {
                     .map { ($0.label ?? "", $0.frame) }
                 print("GLIMPSE_SETTINGS_NATIVE_FOCUS stage=tab-\(step) responderClass=\(owner.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil") responderIsView=\(owner.firstResponder is NSView) responderViewOwned=\((owner.firstResponder as? NSView)?.window === owner) targets=\(focusedTargets) clipOrigin=\(String(describing: traversalViewport?.contentView.bounds.origin)) clipSize=\(String(describing: traversalViewport?.contentView.bounds.size))")
                 let rowLabel = settings.nodes().first {
-                    $0.role == .staticText && ($0.label == "Provider" || ($0.value as? String) == "Provider")
+                    $0.role == .staticText && ($0.label == "AI date search" || ($0.value as? String) == "AI date search:")
                 }
                 let proxyFrame = (owner.firstResponder as? NSView).flatMap { view -> NSRect? in
                     guard view.window === owner else { return nil }
@@ -403,14 +408,14 @@ struct CalendarKeyboardOwnershipTests {
             }
             if focusedLabels().contains("AI provider") { break }
         }
-        let ordered = ["Set and enable shortcut", "Show icon in menu bar",
-                       "Week starts on", "Enable AI date search", "AI provider"]
+        // Classic pane on-screen order (full keyboard access): every native control
+        // after Launch at login, ending at the AI provider popup.
+        let ordered = Array(settingsTraversalOrder.dropFirst())
         let positions = try ordered.map { name in try #require(traversed.firstIndex(of: name)) }
         #expect(positions == positions.sorted())
         let provider = try #require(settings.nodes().first { $0.label == "AI provider" && $0.role == .popUpButton })
-        try settings.expectVisible(provider, rowLabel: "Provider")
-        let reverseOrdered = ["AI provider", "Enable AI date search", "Week starts on",
-                              "Show icon in menu bar", "Set and enable shortcut", "Launch at login"]
+        try settings.expectVisible(provider, rowLabel: "AI date search")
+        let reverseOrdered = Array(settingsTraversalOrder.reversed())
         var reverseTraversed = focusedLabels()
         try #require(reverseTraversed.contains("AI provider"))
         for _ in 0..<40 {
@@ -418,16 +423,8 @@ struct CalendarKeyboardOwnershipTests {
             await settings.settle()
             reverseTraversed.append(contentsOf: focusedLabels())
             for target in settings.nodes().filter({ $0.object.isAccessibilityFocused?() == true }).prefix(8) {
-                let rowLabel: String?
-                switch target.label {
-                case "AI provider": rowLabel = "Provider"
-                case "Enable AI date search": rowLabel = "Enabled"
-                case "Week starts on": rowLabel = "Week starts on"
-                case "Show icon in menu bar": rowLabel = nil
-                case "Set and enable shortcut": rowLabel = "Global shortcut"
-                case "Launch at login": rowLabel = "Launch at login"
-                default: continue
-                }
+                guard let label = target.label,
+                      let rowLabel = settingsTraversalRowLabels[label] else { continue }
                 try settings.expectVisible(target, rowLabel: rowLabel)
             }
             if focusedLabels().contains("Launch at login") { break }
@@ -729,7 +726,7 @@ struct CalendarKeyboardOwnershipTests {
         let saved = settings.saved.value
         #expect(visible.insetBy(dx: 10, dy: 10).contains(frame))
         if !constrained {
-            #expect(owner.contentRect(forFrameRect: frame).size == NSSize(width: 560, height: 620))
+            #expect(owner.contentRect(forFrameRect: frame).size == AppDesign.Settings.contentSize)
         }
         for section in SettingsSection.allCases {
             try await settings.reveal(section)
@@ -1688,7 +1685,7 @@ struct CalendarKeyboardOwnershipTests {
         defer { fixture.close() }
         try await fixture.open()
         let owner = try #require(fixture.controller.window)
-        owner.setContentSize(NSSize(width: 520, height: 360))
+        owner.setContentSize(AppDesign.Settings.minimumContentSize)
         await fixture.settle()
         let before = try #require(fixture.nodes().first {
             $0.role == .button && $0.label == "Set and enable shortcut"
@@ -1885,7 +1882,7 @@ struct CalendarKeyboardOwnershipTests {
         #expect(calendar.panel.isVisible)
     }
 
-    @Test(arguments: [NSSize(width: 600, height: 600), NSSize(width: 520, height: 360)])
+    @Test(arguments: [NSSize(width: 600, height: 600), AppDesign.Settings.minimumContentSize])
     func onePageControllerKeepsNativeGeometryAndSingleDocument(size: NSSize) async throws {
         let settings = SettingsWindowTestFixture()
         defer { settings.close() }
@@ -1900,8 +1897,12 @@ struct CalendarKeyboardOwnershipTests {
             $0.isActive && $0.priority == .required && ($0.firstItem as? NSView) === initialRoot &&
                 $0.secondItem == nil && $0.relation == .greaterThanOrEqual
         })
-        #expect(initialMinimumConstraints.filter { $0.firstAttribute == .width && $0.constant == 520 }.count == 1)
-        #expect(initialMinimumConstraints.filter { $0.firstAttribute == .height && $0.constant == 360 }.count == 1)
+        #expect(initialMinimumConstraints.filter {
+            $0.firstAttribute == .width && $0.constant == AppDesign.Settings.minimumContentSize.width
+        }.count == 1)
+        #expect(initialMinimumConstraints.filter {
+            $0.firstAttribute == .height && $0.constant == AppDesign.Settings.minimumContentSize.height
+        }.count == 1)
         owner.setContentSize(NSSize(width: 400, height: 250))
         await settings.settle()
         let resizedContent = owner.contentRect(forFrameRect: owner.frame).size
@@ -1912,7 +1913,7 @@ struct CalendarKeyboardOwnershipTests {
              $0.constant, $0.isActive, $0.firstItem as? NSView === initialRoot)
         }
         print("GLIMPSE_SETTINGS_RESIZE_FLOOR stage=after-native-setContentSize requested=(400,250) actual=\(resizedContent) contentMinSize=\(owner.contentMinSize) constraints=\(minimumConstraints) rootIsWindowContent=\(owner.contentView === initialRoot) rootBounds=\(initialRoot.bounds)")
-        #expect(resizedContent == NSSize(width: 520, height: 360))
+        #expect(resizedContent == AppDesign.Settings.minimumContentSize)
         let resizedMinimumConstraints = initialRoot.constraints.filter {
             $0.identifier?.hasPrefix("Glimpse.Settings.minimum") == true
         }
@@ -1921,15 +1922,19 @@ struct CalendarKeyboardOwnershipTests {
             $0.isActive && $0.priority == .required && ($0.firstItem as? NSView) === initialRoot &&
                 $0.secondItem == nil && $0.relation == .greaterThanOrEqual
         })
-        #expect(resizedMinimumConstraints.filter { $0.firstAttribute == .width && $0.constant == 520 }.count == 1)
-        #expect(resizedMinimumConstraints.filter { $0.firstAttribute == .height && $0.constant == 360 }.count == 1)
+        #expect(resizedMinimumConstraints.filter {
+            $0.firstAttribute == .width && $0.constant == AppDesign.Settings.minimumContentSize.width
+        }.count == 1)
+        #expect(resizedMinimumConstraints.filter {
+            $0.firstAttribute == .height && $0.constant == AppDesign.Settings.minimumContentSize.height
+        }.count == 1)
         owner.setContentSize(size)
         await settings.settle()
         #expect(owner.contentRect(forFrameRect: owner.frame).size == size)
         let root = try #require(owner.contentView)
         let scroll = try #require(accessibilityScrollView(in: root))
         let document = try #require(scroll.documentView)
-        let headings = settings.nodes().filter { $0.role?.rawValue == "AXHeading" }
+        let headings = settings.nodes().filter(isSettingsSectionGroup)
         #expect(headings.map { $0.label ?? ($0.value as? String) ?? "" } ==
                 ["Opening Glimpse", "Menu bar", "Calendar", "AI date search"])
         #expect(!scroll.hasHorizontalScroller)
@@ -1950,13 +1955,17 @@ struct CalendarKeyboardOwnershipTests {
             $0.isActive && $0.priority == .required && ($0.firstItem as? NSView) === root &&
                 $0.secondItem == nil && $0.relation == .greaterThanOrEqual
         })
-        #expect(reopenedMinimumConstraints.filter { $0.firstAttribute == .width && $0.constant == 520 }.count == 1)
-        #expect(reopenedMinimumConstraints.filter { $0.firstAttribute == .height && $0.constant == 360 }.count == 1)
+        #expect(reopenedMinimumConstraints.filter {
+            $0.firstAttribute == .width && $0.constant == AppDesign.Settings.minimumContentSize.width
+        }.count == 1)
+        #expect(reopenedMinimumConstraints.filter {
+            $0.firstAttribute == .height && $0.constant == AppDesign.Settings.minimumContentSize.height
+        }.count == 1)
         #expect(owner.contentRect(forFrameRect: owner.frame).size == size)
         print("GLIMPSE_SETTINGS_RESIZE_FLOOR stage=after-public-reopening contentMinSize=\(owner.contentMinSize) contentSize=\(owner.contentRect(forFrameRect: owner.frame).size) rootIsWindowContent=\(owner.contentView === root) documentUnchanged=\(scroll.documentView === document)")
         owner.setContentSize(NSSize(width: 400, height: 250))
         await settings.settle()
-        #expect(owner.contentRect(forFrameRect: owner.frame).size == NSSize(width: 520, height: 360))
+        #expect(owner.contentRect(forFrameRect: owner.frame).size == AppDesign.Settings.minimumContentSize)
         #expect(settings.controller.window === owner && owner.contentView === root)
         #expect(accessibilityScrollView(in: root) === scroll && scroll.documentView === document)
         print("GLIMPSE_SETTINGS_RESIZE_FLOOR stage=after-reopened-native-setContentSize requested=(400,250) actual=\(owner.contentRect(forFrameRect: owner.frame).size) contentMinSize=\(owner.contentMinSize) rootIsWindowContent=\(owner.contentView === root) documentUnchanged=\(scroll.documentView === document)")
@@ -2558,7 +2567,7 @@ private final class SettingsWindowTestFixture {
                 }
                 let provider = nodes().first { $0.role == .popUpButton && $0.label == "AI provider" }
                 let rowLabel = nodes().first {
-                    $0.role == .staticText && ($0.label == "Provider" || ($0.value as? String) == "Provider")
+                    $0.role == .staticText && ($0.label == "AI date search" || ($0.value as? String) == "AI date search:")
                 }
                 let viewport = accessibilityScrollView(in: hosting)
                 let proxyFrame = (owner.firstResponder as? NSView).flatMap { view -> NSRect? in
@@ -2616,7 +2625,7 @@ private final class SettingsWindowTestFixture {
         let viewport = accessibilityScrollView(in: root)
         let provider = nodes().first { $0.role == .popUpButton && $0.label == "AI provider" }
         let rowLabel = nodes().first {
-            $0.role == .staticText && ($0.label == "Provider" || ($0.value as? String) == "Provider")
+            $0.role == .staticText && ($0.label == "AI date search" || ($0.value as? String) == "AI date search:")
         }
         let constraints = try JSONSerialization.data(withJSONObject: minimumConstraints, options: [.sortedKeys])
         print("GLIMPSE_SETTINGS_HOST stage=current-root-after-public-show-and-fixture-settle contentMinSize=\(owner.contentMinSize) constraints=\(String(decoding: constraints, as: UTF8.self)) rootClass=\(String(reflecting: type(of: root))) rootBounds=\(root.bounds) rootWindowOwned=\(root.window === owner) windowFrame=\(owner.frame) requestedBounds=\(presentationBounds) keyWindowOwned=\(NSApp.keyWindow === owner) responderClass=\(owner.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil") providerAXPresent=\(provider != nil) providerAXFrame=\(String(describing: provider?.frame)) rowLabelAXPresent=\(rowLabel != nil) rowLabelAXFrame=\(String(describing: rowLabel?.frame)) documentBounds=\(String(describing: viewport?.documentView?.bounds)) clipBounds=\(String(describing: viewport?.contentView.bounds))")
@@ -2649,7 +2658,7 @@ private final class SettingsWindowTestFixture {
     func reveal(_ section: SettingsSection) async throws {
         let tree = nodes()
         let node = try #require(tree.first {
-            $0.role?.rawValue == "AXHeading" &&
+            isSettingsSectionGroup($0) &&
                 ($0.label == section.heading || ($0.value as? String) == section.heading)
         })
         let targets: [(label: String, role: NSAccessibility.Role, rowLabel: String?)]
@@ -2657,20 +2666,20 @@ private final class SettingsWindowTestFixture {
         case .general:
             let label = model.isRecording ? "Cancel shortcut recording" :
                 (model.isEnabled ? "Change global shortcut" : "Set and enable shortcut")
-            targets = [(label, .button, "Global shortcut")]
+            targets = [(label, .button, "Keyboard shortcut")]
         case .menuBar:
             // This checkbox's visible Icon label is inside its native control frame.
             targets = [("Show icon in menu bar", .checkBox, nil)]
         case .calendar:
             targets = [("Week starts on", .popUpButton, "Week starts on")]
         case .aiDateSearch:
-            targets = [("Enable AI date search", .checkBox, "Enabled")] +
-                (store.showAISearch ? [("AI provider", .popUpButton, "Provider")] : [])
+            targets = [("Enable AI date search", .checkBox, "AI date search")] +
+                (store.showAISearch ? [("AI provider", .popUpButton, "AI date search")] : [])
         }
         let revealFrame = try targets.reduce(node.frame) { frame, target in
             let control = try #require(tree.first {
                 $0.label == target.label && $0.role == target.role
-            })
+            }, "Missing \(target.role.rawValue) \(target.label) in \(section); present: \(tree.filter { $0.role == target.role }.compactMap(\.label))")
             var rowFrame = control.frame
             if let label = target.rowLabel {
                 let rowLabel = try #require(tree.first {
@@ -2689,7 +2698,7 @@ private final class SettingsWindowTestFixture {
         ))
         await settle()
         let current = try #require(nodes().first {
-            $0.role?.rawValue == "AXHeading" &&
+            isSettingsSectionGroup($0) &&
                 ($0.label == section.heading || ($0.value as? String) == section.heading)
         })
         try expectVisible(current)
@@ -2712,11 +2721,17 @@ private final class SettingsWindowTestFixture {
             })
             targetFrame = targetFrame.union(label.frame)
         }
-        #expect(scroll.contentView.bounds.contains(
+        // The classic pane uses text-baseline alignment, so control frames can sit
+        // on fractional points while AppKit pixel-aligns the clip origin. Measure
+        // the 8pt margin in whole device pixels (inward) so a sub-pixel remainder
+        // is not a reachability failure; any real clipping still fails.
+        let required = scroll.contentView.backingAlignedRect(
             scroll.contentView.convert(
                 owner.convertFromScreen(targetFrame.insetBy(dx: -8, dy: -8)), from: nil
-            )
-        ))
+            ),
+            options: .alignAllEdgesInward
+        )
+        #expect(scroll.contentView.bounds.contains(required))
     }
 
     func nodes() -> [AccessibilityTestNode] {
@@ -3941,3 +3956,42 @@ enum CalendarOwnedKey: String, Sendable {
     }
     var routerKey: CalendarKeyboardKey { CalendarKeyboardKey(nativeCode: code) }
 }
+
+/// Classic Settings has no visible titles; each category is a named accessibility group.
+@MainActor
+func isSettingsSectionGroup(_ node: AccessibilityTestNode) -> Bool {
+    node.role?.rawValue == "AXGroup"
+        && SettingsSection.allCases.contains { $0.heading == node.label }
+}
+
+/// Native Tab order of the classic Settings pane, Launch at login through AI provider,
+/// with the default fixture state (shortcut requested but not enabled, AI search on).
+@MainActor
+let settingsTraversalOrder: [String] = [
+    "Launch at login", "Set and enable shortcut", "Global shortcut", "Keep global shortcut off",
+    "Pin calendar", "Show icon in menu bar", "Show day of week in menu bar", "Show month in menu bar",
+    "Show date in menu bar", "Show year in menu bar", "Filled background", "Week starts on"
+] + Calendar.current.weekdaySymbols.map { "\($0) workday" } + ["Enable AI date search", "AI provider"]
+
+/// Left-column row label (accessibility label, no colon) that owns each traversal target.
+@MainActor
+let settingsTraversalRowLabels: [String: String] = {
+    var labels: [String: String] = [
+        "Launch at login": "Startup",
+        "Set and enable shortcut": "Keyboard shortcut",
+        "Global shortcut": "Keyboard shortcut",
+        "Keep global shortcut off": "Keyboard shortcut",
+        "Pin calendar": "Calendar window",
+        "Show icon in menu bar": "Menu bar shows",
+        "Show day of week in menu bar": "Menu bar shows",
+        "Show month in menu bar": "Menu bar shows",
+        "Show date in menu bar": "Menu bar shows",
+        "Show year in menu bar": "Menu bar shows",
+        "Filled background": "Style",
+        "Week starts on": "Week starts on",
+        "Enable AI date search": "AI date search",
+        "AI provider": "AI date search"
+    ]
+    for day in Calendar.current.weekdaySymbols { labels["\(day) workday"] = "Workdays" }
+    return labels
+}()

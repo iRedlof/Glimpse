@@ -1,6 +1,6 @@
 # Glimpse
 
-[![Version](https://img.shields.io/badge/version-1.4.28-green)](https://github.com/iRedlof/Glimpse/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.4.29-green)](https://github.com/iRedlof/Glimpse/releases/latest)
 [![Download](https://img.shields.io/badge/download-DMG-brightgreen)](https://github.com/iRedlof/Glimpse/releases/latest)
 
 [![Release](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml/badge.svg)](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml)
@@ -10,7 +10,7 @@
 
 A lightweight macOS menu bar calendar app. Click the date icon to see the current month at a glance.
 
-Candidate **v1.4.28/build35** builds on public v1.4.27/build34, which implements the user-approved Settings & Quit footer and Native groups Settings design. Settings remains a separate window with every existing preference, Pin calendar and About/Calendar/Quit actions. v1.4.28 compacts the calendar footer bar to 32pt per user feedback; it becomes current only after its release is published.
+Candidate **v1.4.29/build36** replaces the public v1.4.28/build35 footer and Settings with the user-picked **Status strip** footer (today context plus Pin, Settings and Quit icon buttons) and **Classic preferences pane** Settings (right-aligned labels, native checkboxes, every existing preference). It becomes current only after its release is published.
 
 ## Features
 

@@ -1,6 +1,6 @@
 # Glimpse stability roadmap
 
-Updated 2026-11-04. Current public/installed distribution is v1.4.27/build34 at canonical source `bb09fcb1d2472768c7490f4b4796305dd40e1ba3`, delivering the user-approved **Settings & Quit** + **Native groups** pair through PR36 and successful Release41968249285/1 with verified signed public artifacts and official installation. Candidate v1.4.28/build35 compacts the footer bar to 32pt per user feedback; it is not current until published. Historical requirements and dated reviews retain their original scope.
+Updated 2026-11-04. Current public/installed distribution is v1.4.28/build35 at canonical source `a2c3dfb944c1f935055a063bac310cb941e6af7a` (PR37, successful Release41977053831/1, verified signed/notarized public artifacts and official installation; footer measured 32pt in the installed app). The user then rejected the whole footer/Settings redesign and, from a new five-option comparison, picked **Status strip** footer and **Classic preferences pane** Settings. Candidate v1.4.29/build36 implements that pair and becomes current only after publication. Historical requirements and dated reviews retain their original scope.
 
 ## Current operating backlog
 
