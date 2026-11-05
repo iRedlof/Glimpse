@@ -1,6 +1,6 @@
 # Glimpse stability roadmap
 
-Updated 2026-11-04. Current public/installed distribution is v1.4.26/build33 at canonical source `22a96aba891c6f6125928bfec40252de3f5c8f7a`, verified through successful Release41902020311/1 and signed public artifacts. The user rejected its footer/Settings design and approved the comparison pair **Settings & Quit** + **Native groups**. Active candidate v1.4.27/build34 implements exactly that pair: two horizontal footer cells; compact filled Settings groups; existing Pin, About and Calendar actions moved into the separate Settings window. Preserve pinned calendar context and all preferences. Native checks and protected delivery remain pending for the candidate. Historical requirements and dated reviews retain their original scope.
+Updated 2026-11-04. Current public/installed distribution is v1.4.27/build34 at canonical source `bb09fcb1d2472768c7490f4b4796305dd40e1ba3`, delivering the user-approved **Settings & Quit** + **Native groups** pair through PR36 and successful Release41968249285/1 with verified signed public artifacts and official installation. Candidate v1.4.28/build35 compacts the footer bar to 32pt per user feedback; it is not current until published. Historical requirements and dated reviews retain their original scope.
 
 ## Current operating backlog
 

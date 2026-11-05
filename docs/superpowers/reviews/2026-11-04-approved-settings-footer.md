@@ -35,3 +35,7 @@ The three native failures from the handover were root-caused and fixed:
 - Exact-staged whole Quality runs in the pre-commit hook for this commit.
 
 Still not established: hosted checks, protected integration, canonical publication, signed public verification and installed appearance. The historical crash on another machine, the real restart check, physical VoiceOver, older macOS/Intel and endurance also remain separate.
+
+## v1.4.28/build35 — compact footer (user feedback)
+
+After installing v1.4.27, the user said the footer bar had too much height and supplied a reference to match. The bar is now 32pt instead of 44pt, and its divider is 16pt instead of 20pt. Icon and label sizes are unchanged, so the bar now stands about 3.4× the label cap height, the same as the reference. Footer target tests now derive the height from `AppDesign.Footer.height`. The actual dark full-calendar render was inspected.

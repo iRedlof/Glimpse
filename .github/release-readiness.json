@@ -1,7 +1,7 @@
 {
-  "version": "1.4.27",
-  "build": "34",
-  "scope": "User-approved Settings & Quit footer plus Native groups in the retained separate Settings window, preserving every existing preference and Pin/About/Open Calendar/Quit actions, with Settings-unpin context, Quit-sheet Escape and fixed-footer focus fixes. Proposal approval does not accept installed v1.4.26's rejected design. Other-machine crash causality, restart, physical accessibility and endurance remain unproved.",
+  "version": "1.4.28",
+  "build": "35",
+  "scope": "Compact 32pt calendar footer bar per user feedback on installed v1.4.27 (Settings & Quit footer and Native groups Settings unchanged otherwise). Other-machine crash causality, restart, physical accessibility and endurance remain unproved.",
   "checks": {
     "product": {
       "status": "passed",
