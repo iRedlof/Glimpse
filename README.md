@@ -10,7 +10,7 @@
 
 A lightweight macOS menu bar calendar app. Click the date icon to see the current month at a glance.
 
-Current release **v1.4.28/build35** implements the user-approved Settings & Quit footer and Native groups Settings design. Settings remains a separate window with every existing preference, Pin calendar and About/Calendar/Quit actions. v1.4.28 also compacts the calendar footer bar to 32pt per user feedback.
+Candidate **v1.4.28/build35** builds on public v1.4.27/build34, which implements the user-approved Settings & Quit footer and Native groups Settings design. Settings remains a separate window with every existing preference, Pin calendar and About/Calendar/Quit actions. v1.4.28 compacts the calendar footer bar to 32pt per user feedback; it becomes current only after its release is published.
 
 ## Features
 
