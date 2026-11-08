@@ -11,9 +11,18 @@ final class AIDateQueryModel {
     private(set) var isEditorOpen = false
     private(set) var isProcessing = false
     private(set) var errorMessage: String?
+    /// One short line asking the user for what is missing; the draft stays.
+    private(set) var clarification: String?
+
+    nonisolated static let unparsedMessage = "I didn't catch that. Try ‘next Friday’, ‘next 3 Fridays’, ‘workdays until Mar 1’ or ‘lunch Tue 1pm’."
+    nonisolated static let failureMessage = "AI couldn't complete that. Try again."
+    nonisolated static let unavailableMessage = "On-device AI is unavailable. Choose Cloud AI in Preferences."
 
     @ObservationIgnored private let client: AIDateQueryClient
-    @ObservationIgnored private let onDate: @MainActor (Date) -> Void
+    @ObservationIgnored private let onIntent: @MainActor (AIIntent) -> Void
+    @ObservationIgnored private let onResultsInvalidated: @MainActor () -> Void
+    /// A range, answer or proposal from this editor is on screen.
+    @ObservationIgnored private var hasDeliveredResult = false
     @ObservationIgnored private var enabled: Bool
     @ObservationIgnored private var preference: AIProvider
     @ObservationIgnored private var panelVisible = false
@@ -34,26 +43,31 @@ final class AIDateQueryModel {
     }
 
     private enum Outcome {
-        case date(Date), noDate, failure, unavailable, cancelled
+        case intent(AIIntent), unparsed, failure, unavailable, cancelled
     }
 
     init(
         client: AIDateQueryClient,
         enabled: Bool,
         preference: AIProvider,
-        onDate: @escaping @MainActor (Date) -> Void
+        onIntent: @escaping @MainActor (AIIntent) -> Void,
+        onResultsInvalidated: @escaping @MainActor () -> Void = {}
     ) {
         self.client = client
         self.enabled = enabled
         self.preference = preference
-        self.onDate = onDate
+        self.onIntent = onIntent
+        self.onResultsInvalidated = onResultsInvalidated
     }
 
     func setDraft(_ draft: String) {
         guard self.draft != draft else { return }
         draftRevision &+= 1
         self.draft = draft
+        clarification = nil
         abandonRequest()
+        // Results describe the old text; drop them before the user resubmits.
+        invalidateResults()
     }
 
     func setEditorOpen(_ open: Bool) {
@@ -87,7 +101,15 @@ final class AIDateQueryModel {
         draftRevision &+= 1
         isEditorOpen = false
         draft = ""
+        clarification = nil
         abandonRequest()
+        invalidateResults()
+    }
+
+    private func invalidateResults() {
+        guard hasDeliveredResult else { return }
+        hasDeliveredResult = false
+        onResultsInvalidated()
     }
 
     private func abandonRequest() {
@@ -114,16 +136,16 @@ final class AIDateQueryModel {
         requestToken = token
         isProcessing = true
         errorMessage = nil
+        clarification = nil
 
         let client = client
         let task = Task { @MainActor [weak self] in
             let outcome: Outcome
             do {
                 try Task.checkCancellation()
-                let date = try await client.parseDate(query, token.provider)
+                let intent = try await client.interpret(query, token.provider)
                 try Task.checkCancellation()
-                if let date { outcome = .date(date) }
-                else { outcome = .noDate }
+                outcome = intent.map(Outcome.intent) ?? .unparsed
             } catch is CancellationError {
                 outcome = .cancelled
             } catch {
@@ -150,20 +172,30 @@ final class AIDateQueryModel {
         isProcessing = false
         errorMessage = nil
         switch currentOutcome {
-        case .date(let date):
+        case .intent(.navigate(let day)):
             draftRevision &+= 1
             editorGeneration &+= 1
             draft = ""
             isEditorOpen = false
+            hasDeliveredResult = false
             // All old ownership is cleared before the consumer can synchronously
             // open and submit a new editor. Do not clean up again after this call.
-            onDate(date)
-        case .noDate:
-            errorMessage = "AI didn't return a usable date. Try ‘next Friday’ or ‘Jan 2028’."
+            onIntent(.navigate(day))
+        case .intent(.clarify(let message)):
+            invalidateResults()
+            clarification = message
+        case .intent(let intent):
+            // Range, answer and proposal keep the editor and draft so the user
+            // can refine; editing the draft invalidates what is shown.
+            hasDeliveredResult = true
+            onIntent(intent)
+        case .unparsed:
+            invalidateResults()
+            clarification = Self.unparsedMessage
         case .failure:
-            errorMessage = "AI couldn't complete the date search. Try again."
+            errorMessage = Self.failureMessage
         case .unavailable:
-            errorMessage = "On-device AI is unavailable. Choose Cloud AI in Preferences."
+            errorMessage = Self.unavailableMessage
         case .cancelled:
             break
         }

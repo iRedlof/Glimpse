@@ -3089,9 +3089,9 @@ final class CalendarKeyboardRootFixture {
 
     init(
         showAI: Bool = false, maximumHeight: CGFloat = 550, initialToday: Date? = nil,
-        aiClient: AIDateQueryClient = AIDateIntegrationClient.immediateNoDate,
+        aiClient: AIDateQueryClient = AIDateIntegrationClient.immediateUnparsed,
         allowAISettings: Bool = false, holdEditorPresentation: Bool = false,
-        holdCrossScreenShows: Bool = false
+        holdCrossScreenShows: Bool = false, eventKitClient: EventKitClient? = nil
     ) throws {
         self.maximumHeight = maximumHeight
         self.holdCrossScreenShows = holdCrossScreenShows
@@ -3149,7 +3149,10 @@ final class CalendarKeyboardRootFixture {
             $0.preferencesClient.loadStartOfWeekday = { calendarSettings.value.startOfWeekday }
             $0.preferencesClient.loadWorkdays = { calendarSettings.value.workdays }
             $0.preferencesClient.loadShowAISearch = { aiSettings.value.enabled }
-            $0.eventKitClient = EventKitClient(
+            // Schedule effects only: ids are deterministic and the Undo countdown never fires on its own.
+            $0.uuid = .incrementing
+            $0.continuousClock = TestClock<Duration>()
+            $0.eventKitClient = eventKitClient ?? EventKitClient(
                 requestAccess: {
                     Issue.record("Keyboard fixture must not request calendar access")
                     return false
@@ -3195,7 +3198,8 @@ final class CalendarKeyboardRootFixture {
         let store = store
         aiModel = AIDateQueryModel(
             client: aiClient, enabled: showAI, preference: .auto,
-            onDate: { store.send(.aiIntent(.navigate(CivilDate($0, calendar: .current)))) }
+            onIntent: { store.send(.aiIntent($0)) },
+            onResultsInvalidated: { store.send(.aiResultsCleared) }
         )
         let effects = effects
         panel = CalendarPanel(

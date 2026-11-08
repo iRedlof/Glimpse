@@ -253,7 +253,7 @@ class AgendaRefreshGateContracts(unittest.TestCase):
             self.receipt(results, "keyboard-ownership-acceptance.json")["executed_cases"],
             sum(json.loads((SCRIPTS / "keyboard-ownership-methods.json").read_text())["methods"].values()),
         )
-        self.assertEqual(self.receipt(results, "ai-date-search-integration-acceptance.json")["executed_cases"], 17)
+        self.assertEqual(self.receipt(results, "ai-date-search-integration-acceptance.json")["executed_cases"], 18)
         self.assertFalse(workspace.exists())
 
     def assert_agenda_copies(self, results, receipt, names):

@@ -26,6 +26,8 @@ enum AppDesign {
     enum Animation {
         static let standard = SwiftUI.Animation.easeInOut(duration: 0.2)
         static let quick = SwiftUI.Animation.easeOut(duration: 0.1)
+        /// AI result rows and the Undo chip appearing or leaving.
+        static let chip = SwiftUI.Animation.easeOut(duration: 0.15)
     }
 
     // MARK: - Icon
@@ -111,6 +113,29 @@ enum AppDesign {
         static let monthBorderOpacity: Double = 0.4
         static let workdayTintOpacity: Double = 0.04
         static let hoverBorderOpacity: Double = 0.4
+        /// Fill behind days highlighted by an AI range or proposal.
+        static let rangeHighlightOpacity: Double = 0.18
+        static let rangeHighlightCornerRadius: CGFloat = 6
+    }
+
+    // MARK: - Type to Schedule
+
+    enum Schedule {
+        static let slotRowHeight: CGFloat = 30
+        static let ghostDash: [CGFloat] = [4, 3]
+        static let ghostLineWidth: CGFloat = 1
+        static let ghostOpacity: Double = 0.55
+        static let selectedLineWidth: CGFloat = 2
+        static let selectedFillOpacity: Double = 0.12
+        static let chipCornerRadius: CGFloat = 6
+        static let chipBackgroundOpacity: Double = 0.12
+        static let timelineBarWidth: CGFloat = 3
+        static let timelineBarHeight: CGFloat = 22
+        static let busyBarOpacity: Double = 0.45
+        /// Busy events shown as context around the free times.
+        static let maximumContextEvents = 4
+        /// Range dates listed inline before "…".
+        static let maximumListedDates = 4
     }
 
     // MARK: - Status Item

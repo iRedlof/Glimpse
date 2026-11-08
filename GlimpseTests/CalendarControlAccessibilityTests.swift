@@ -367,8 +367,8 @@ struct DateSearchAccessibilityTests {
         let buttons = host.elements().filter { $0.role == .button }
         #expect(buttons.count == 1)
         let dismiss = try #require(buttons.first)
-        #expect(dismiss.label == "Close date search")
-        #expect(dismiss.help == "Clears the query and closes date search.")
+        #expect(dismiss.label == CalendarDateSearchRow.closeName)
+        #expect(dismiss.help == "Clears the query and closes Ask Glimpse.")
         expectDateSearchTarget(dismiss.frame)
         #expect(dismiss.enabled)
         if let point = activation.point(in: dismiss.frame) {
@@ -399,7 +399,7 @@ struct DateSearchAccessibilityTests {
         try await host.settle()
         try host.loadAccessibilityWindowTree()
         try await host.settle()
-        #expect(host.controls(named: "Close date search").isEmpty)
+        #expect(host.controls(named: CalendarDateSearchRow.closeName).isEmpty)
         #expect(host.elements().filter { $0.role == .button }.isEmpty)
         #expect(host.elements().filter { $0.role == .textField }.count == 1)
         #expect(fixture.query == "fixture draft")
@@ -426,10 +426,10 @@ struct DateSearchAccessibilityTests {
         let editor = try #require(editors.first)
         let dismiss = try #require(buttons.first)
         #expect(editor.enabled && dismiss.enabled)
-        #expect(editor.label == "Go to date using AI")
+        #expect(editor.label == CalendarDateSearchRow.accessibilityName)
         #expect(editor.value as? String == "fixture draft")
         #expect(!editor.frame.intersects(dismiss.frame))
-        #expect(dismiss.label == "Close date search")
+        #expect(dismiss.label == CalendarDateSearchRow.closeName)
         #expect(fixture.submissions == 0)
     }
 
@@ -448,7 +448,7 @@ struct DateSearchAccessibilityTests {
         let buttons = host.elements().filter { $0.role == .button }
         #expect(buttons.count == 1)
         let prompt = try #require(buttons.first)
-        #expect(prompt.label == "Go to date using AI")
+        #expect(prompt.label == CalendarDateSearchRow.accessibilityName)
         #expect(prompt.press())
         try await host.settle()
         #expect(fixture.isActive)

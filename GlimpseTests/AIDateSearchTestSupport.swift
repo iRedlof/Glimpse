@@ -12,8 +12,8 @@ struct AIDateIntegrationSettings: Sendable, Equatable {
 
 enum AIDateIntegrationClient {
     // Default for existing keyboard fixtures. No live resolver/configuration access.
-    static var immediateNoDate: AIDateQueryClient {
-        AIDateQueryClient(resolveProvider: { _ in .proxy }, parseDate: { _, _ in nil })
+    static var immediateUnparsed: AIDateQueryClient {
+        AIDateQueryClient(resolveProvider: { _ in .proxy }, interpret: { _, _ in nil })
     }
 }
 
@@ -34,7 +34,7 @@ final class AIDateIntegrationFixture {
             showAI: true, maximumHeight: maximumHeight,
             aiClient: AIDateQueryClient(
                 resolveProvider: { _ in .proxy },
-                parseDate: { try await requests.parse(query: $0, provider: $1) }
+                interpret: { try await requests.parse(query: $0, provider: $1) }
             ),
             allowAISettings: allowAISettings
         )
@@ -162,7 +162,7 @@ final class AIDateIntegrationRequest: Sendable {
         self.provider = provider
     }
 
-    func run() async throws -> Date? {
+    func run() async throws -> AIIntent? {
         defer {
             returnCount.withValue { $0 += 1 }
             returned.resolve(.success(()))
@@ -175,21 +175,21 @@ final class AIDateIntegrationRequest: Sendable {
         }
     }
 
-    func release(_ result: Result<Date?, any Error>) async {
+    func release(_ result: Result<AIIntent?, any Error>) async {
         await releaseGate.open(result)
     }
 }
 
 private actor AIDateIntegrationReleaseGate {
-    private var result: Result<Date?, any Error>?
-    private var waiter: CheckedContinuation<Result<Date?, any Error>, Never>?
+    private var result: Result<AIIntent?, any Error>?
+    private var waiter: CheckedContinuation<Result<AIIntent?, any Error>, Never>?
 
-    func wait() async -> Result<Date?, any Error> {
+    func wait() async -> Result<AIIntent?, any Error> {
         if let result { return result }
         return await withCheckedContinuation { waiter = $0 }
     }
 
-    func open(_ result: Result<Date?, any Error>) {
+    func open(_ result: Result<AIIntent?, any Error>) {
         guard self.result == nil else { return }
         self.result = result
         waiter?.resume(returning: result)
@@ -203,7 +203,7 @@ actor AIDateIntegrationRequests {
     private var draining = false
     var count: Int { requests.count }
 
-    func parse(query: String, provider: AIDateHelper.Provider) async throws -> Date? {
+    func parse(query: String, provider: AIDateHelper.Provider) async throws -> AIIntent? {
         let request = AIDateIntegrationRequest(query: query, provider: provider)
         let index = requests.count
         requests.append(request)

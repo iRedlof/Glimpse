@@ -99,6 +99,29 @@ enum CalendarKeyboardRouter {
         }
     }
 
+    /// ↑/↓ pick a proposed time while the AI editor has focus. Everything else
+    /// yields, so text editing and grid/browse routing are unchanged.
+    static func slotPicker(
+        _ key: CalendarKeyboardKey, phase: CalendarKeyboardPhase,
+        choosingSlots: Bool, editorOpen: Bool, editingText: Bool, modified: Bool
+    ) -> CalendarKeyboardRoute {
+        guard choosingSlots, editorOpen, editingText, !modified, phase != .up else { return .yield }
+        switch key {
+        case .up: return .move(-1)
+        case .down: return .move(1)
+        default: return .yield
+        }
+    }
+
+    /// ⌘Z removes a just-added event, except while editing text (native undo).
+    static func undoesAddedEvent(
+        keyCode: UInt16, commandOnly: Bool, canUndo: Bool, editingText: Bool
+    ) -> Bool {
+        keyCode == undoKeyCode && commandOnly && canUndo && !editingText
+    }
+
+    static let undoKeyCode: UInt16 = 6
+
     static func ownership(
         published: CalendarKeyboardOwner?, observed: Bool,
         responderIsWindowDefault: Bool, snapshotMatchesResponder: Bool

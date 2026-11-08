@@ -216,7 +216,7 @@ class AIDateSearchGateContracts(unittest.TestCase):
         self.assertLess(ai_ps, core_index)
         self.assertEqual(observed[core_index]["env"], {key: "0" for key in OPT_INS + PROBES})
         self.assertEqual(self.receipt(results)["methods"], EXPECTED["methods"])
-        self.assertEqual(self.receipt(results)["executed_cases"], 17)
+        self.assertEqual(self.receipt(results)["executed_cases"], 18)
         self.assertEqual(self.receipt(results, "keyboard-ownership-acceptance.json")["executed_cases"], 16)
         self.assertFalse(workspace.exists())
 

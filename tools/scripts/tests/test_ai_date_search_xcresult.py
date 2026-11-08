@@ -55,13 +55,13 @@ class AIDateSearchResultContracts(unittest.TestCase):
             self.assertEqual(receipt["sha256"][name], hashlib.sha256(path.read_bytes()).hexdigest())
         return receipt
 
-    def test_selected_ai_graph_is_eight_methods_seventeen_cases_with_exact_input_hashes(self):
+    def test_selected_ai_graph_is_nine_methods_eighteen_cases_with_exact_input_hashes(self):
         result, receipt, paths = self.run_checker()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(receipt["status"], "Passed")
         self.assertEqual(receipt["methods"], EXPECTED["methods"])
-        self.assertEqual(len(receipt["methods"]), 8)
-        self.assertEqual(receipt["executed_cases"], 17)
+        self.assertEqual(len(receipt["methods"]), 9)
+        self.assertEqual(receipt["executed_cases"], 18)
         self.assertEqual(receipt["command_exits"],
                          {"xcodebuild": 0, "summary": 0, "tests": 0, "log": 0})
         for name, path in paths.items():
@@ -171,7 +171,7 @@ class AIDateSearchResultContracts(unittest.TestCase):
         cases(tests)[0]["children"].append(warning)
         result, receipt, _ = self.run_checker(tests=tests)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(receipt["executed_cases"], 17)
+        self.assertEqual(receipt["executed_cases"], 18)
         self.assertEqual(receipt["runtime_warnings"],
                          [{"method": next(iter(EXPECTED["methods"])), **warning}])
         cases(tests)[0]["children"].pop(0)
@@ -200,7 +200,7 @@ class AIDateSearchResultContracts(unittest.TestCase):
                     result, receipt, _ = self.run_checker(summary=summary, tests=tests)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertEqual(receipt["methods"], EXPECTED["methods"])
-                    self.assertEqual(receipt["executed_cases"], 17)
+                    self.assertEqual(receipt["executed_cases"], 18)
                     self.assertEqual(receipt["runtime_warnings"], [
                         {"method": next(iter(EXPECTED["methods"])),
                          "parameter": {"name": ".noDate", "nodeIdentifierURL": argument["nodeIdentifierURL"]},
