@@ -30,8 +30,19 @@ them unless explicitly asked — the rationale for each is documented here.
    v1.4.27's layout reached offscreen rows; root cause not identified (section
    accessibility containers ruled out).
 
+5. **Cloud AI upstream returns 401 (server side)** — Checked live on 2026-11-08: the
+   `{tier, prompt}` request to `proxy.auris.workers.dev/refine` is accepted (HTTP 200),
+   but the body is `{"text":null,"error":"Upstream error: 401"}`, so every Cloud AI query
+   shows "AI couldn't complete that. Try again." This predates Type to Schedule (v1.4.29
+   is affected too). Fix belongs on the proxy (upstream key); the client contract, headers
+   and secret handling are unchanged. On-device AI is unaffected.
+
+6. **Type to Schedule scope** — Writes only to the default writable calendar (named on
+   the card), single-day timed events only; no invitees, location, recurrence, or
+   non-default calendar choice. Workday counts don't know holidays (the answer says so).
+
 ## Test Status
 
-- GlimpseCore: 32 tests, 3 suites — `cd GlimpseCore && swift test`
-- App tests: 18 tests, 3 suites — `xcodebuild test`
-- Total: 50 tests — all pass
+- GlimpseCore: 182 tests, 12 suites — `cd GlimpseCore && swift test`
+- App tests: 370 default-run tests — `xcodebuild test`; key-panel suites (keyboard 45, AI 9, agenda 13) run in the quality gate
+- All pass
