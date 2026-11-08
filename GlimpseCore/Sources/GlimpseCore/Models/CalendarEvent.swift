@@ -6,19 +6,23 @@ public struct CalendarEvent: Equatable, Identifiable, Sendable {
     public let startDate: Date
     public let endDate: Date
     public let isAllDay: Bool
+    /// False for all-day and "free" events, which never make a time busy.
+    public let blocksTime: Bool
 
     public init(
         id: String,
         title: String,
         startDate: Date,
         endDate: Date,
-        isAllDay: Bool
+        isAllDay: Bool,
+        blocksTime: Bool = true
     ) {
         self.id = id
         self.title = title
         self.startDate = startDate
         self.endDate = endDate
         self.isAllDay = isAllDay
+        self.blocksTime = blocksTime
     }
 
     public var timeString: String {
