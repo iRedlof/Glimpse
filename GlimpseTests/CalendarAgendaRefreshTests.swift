@@ -676,7 +676,7 @@ private final class AgendaRefreshFixture {
                     return nil
                 }
             ), enabled: showAI, preference: .auto,
-            onDate: { store.send(.aiDateResult($0)) }
+            onDate: { store.send(.aiIntent(.navigate(CivilDate($0, calendar: .current)))) }
         )
         panel = CalendarPanel(
             contentRect: NSRect(x: -1000, y: -1000, width: 316, height: 550),

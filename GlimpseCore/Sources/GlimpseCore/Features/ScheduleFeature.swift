@@ -109,14 +109,7 @@ public struct ScheduleFeature: Sendable {
         Reduce { state, action in
             switch action {
             case let .begin(draft, calendar):
-                guard state.phase != .saving else {
-                    AppLogger.calendar.info("Schedule request ignored while saving")
-                    return .none
-                }
-                clearProposal(&state)
-                state.draft = draft
-                state.searchCalendar = calendar
-                return .merge(.cancel(id: CancelID.access), startSearch(&state))
+                return begin(draft, calendar: calendar, &state)
 
             case .allowAccessTapped:
                 guard state.phase == .needsAccess else { return .none }
@@ -259,14 +252,31 @@ public struct ScheduleFeature: Sendable {
                 return error == .eventMissing ? .send(.delegate(.eventsChanged)) : .none
 
             case .dismiss:
-                guard state.phase != .saving else { return .none }
-                clearProposal(&state)
-                return .merge(.cancel(id: CancelID.search), .cancel(id: CancelID.access))
+                return dismiss(&state)
 
             case .delegate:
                 return .none
             }
         }
+    }
+
+    /// Shared with the parent so it can start a proposal without an extra action round-trip.
+    func begin(_ draft: EventDraft, calendar: Calendar, _ state: inout State) -> Effect<Action> {
+        guard state.phase != .saving else {
+            AppLogger.calendar.info("Schedule request ignored while saving")
+            return .none
+        }
+        clearProposal(&state)
+        state.draft = draft
+        state.searchCalendar = calendar
+        return .merge(.cancel(id: CancelID.access), startSearch(&state))
+    }
+
+    /// Clears the proposal; never interrupts a save and keeps a usable Undo chip.
+    func dismiss(_ state: inout State) -> Effect<Action> {
+        guard state.phase != .saving else { return .none }
+        clearProposal(&state)
+        return .merge(.cancel(id: CancelID.search), .cancel(id: CancelID.access))
     }
 
     private func clearProposal(_ state: inout State) {

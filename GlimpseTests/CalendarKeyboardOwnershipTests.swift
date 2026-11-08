@@ -3123,7 +3123,7 @@ final class CalendarKeyboardRootFixture {
                 case .goToPreviousYear: name = "previousYear"
                 case .goToNextYear: name = "nextYear"
                 case .goToToday: name = "today"
-                case .aiDateResult(.some(_)): name = "aiDate"
+                case .aiIntent(.navigate): name = "aiDate"
                 case let .dateTapped(date):
                     name = "date:\(state.calendar.component(.day, from: date))"
                 default: name = nil
@@ -3195,7 +3195,7 @@ final class CalendarKeyboardRootFixture {
         let store = store
         aiModel = AIDateQueryModel(
             client: aiClient, enabled: showAI, preference: .auto,
-            onDate: { store.send(.aiDateResult($0)) }
+            onDate: { store.send(.aiIntent(.navigate(CivilDate($0, calendar: .current)))) }
         )
         let effects = effects
         panel = CalendarPanel(

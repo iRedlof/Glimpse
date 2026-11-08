@@ -67,7 +67,7 @@ struct CalendarPopoverView: View {
         let settings = loadAISettings()
         self._aiQueryModel = State(initialValue: aiQueryModel ?? AIDateQueryModel(
             client: .live, enabled: settings.enabled, preference: settings.preference,
-            onDate: { store.send(.aiDateResult($0)) }
+            onDate: { store.send(.aiIntent(.navigate(CivilDate($0, calendar: .current)))) }
         ))
     }
 
