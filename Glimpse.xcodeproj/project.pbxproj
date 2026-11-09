@@ -526,7 +526,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 36;
+				CURRENT_PROJECT_VERSION = 37;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -534,7 +534,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.29;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -551,7 +551,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 36;
+				CURRENT_PROJECT_VERSION = 37;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -559,7 +559,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.29;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -574,9 +574,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 36;
+				CURRENT_PROJECT_VERSION = 37;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.29;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -591,9 +591,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 36;
+				CURRENT_PROJECT_VERSION = 37;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.29;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
