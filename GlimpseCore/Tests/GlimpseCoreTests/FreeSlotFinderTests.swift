@@ -151,10 +151,11 @@ struct FreeSlotFinderTests {
     }
 
     @Test
-    func exactTimeFreeComesFirst() {
+    func exactTimeIsOfferedWithItsNearestNeighboursInTimeOrder() {
         let slots = FreeSlotFinder.slots(for: draft(.exact(clock("14:00"))), events: [],
                                          now: earlyMorning, calendar: calendar)
-        #expect(starts(slots) == [at("14:00"), at("13:30"), at("14:30")])
+        // Nearest three to 14:00, listed chronologically so ↓ moves down the timeline.
+        #expect(starts(slots) == [at("13:30"), at("14:00"), at("14:30")])
     }
 
     @Test
@@ -163,14 +164,14 @@ struct FreeSlotFinderTests {
             for: draft(.exact(clock("14:00"))), events: [event("1:1", at("14:00"), at("15:00"))],
             now: earlyMorning, calendar: calendar
         )
-        #expect(starts(slots) == [at("13:30"), at("13:00"), at("15:00")])
+        #expect(starts(slots) == [at("13:00"), at("13:30"), at("15:00")])
     }
 
     @Test
     func slotsNeverCrossMidnight() {
         let slots = FreeSlotFinder.slots(for: draft(.exact(clock("23:30")), minutes: 60), events: [],
                                          now: earlyMorning, calendar: calendar)
-        #expect(slots.first?.start == at("23:00"))
+        #expect(slots.last?.start == at("23:00"))
         #expect(slots.allSatisfy { $0.end <= at("00:00", "2026-11-13") })
     }
 

@@ -1,3 +1,4 @@
+import ComposableArchitecture
 import EventKit
 import Foundation
 import Testing
@@ -81,6 +82,57 @@ struct EventKitScheduleTests {
         #expect(EventKitClient.savedEvent(identifier: "", new: new, calendarTitle: "Work") == nil)
         #expect(EventKitClient.savedEvent(identifier: "id-1", new: new, calendarTitle: "Work")
             == SavedEvent(eventID: "id-1", title: "Coffee", start: new.start, end: new.end, calendarTitle: "Work"))
+    }
+
+    @Test
+    func savedEventKeepsTheItemIdentifierForUndo() {
+        let new = NewEvent(title: "Coffee", start: start, end: start.addingTimeInterval(1_800), calendarID: "w")
+        #expect(EventKitClient.savedEvent(identifier: "id-1", itemIdentifier: "item-1", new: new,
+                                          calendarTitle: "Work")?.itemID == "item-1")
+        #expect(EventKitClient.savedEvent(identifier: "id-1", itemIdentifier: "", new: new,
+                                          calendarTitle: "Work")?.itemID == nil)
+    }
+
+    /// iCloud/Exchange can change `eventIdentifier` after the first sync; Undo
+    /// must still find the event instead of reporting it already gone.
+    @Test
+    func undoFindsTheEventAfterItsIdentifierChanged() {
+        let saved = SavedEvent(eventID: "local-id", itemID: "item-1", title: "Coffee", start: start,
+                               end: start.addingTimeInterval(1_800), calendarTitle: "Work")
+        let synced = ["item-1": "event"]
+        let afterSync = EventKitClient.undoTarget(
+            for: saved, retained: String?.none,
+            byEventIdentifier: { _ in nil }, byItemIdentifier: { synced[$0] }
+        )
+        #expect(afterSync?.event == "event")
+        #expect(afterSync?.lookup == .itemIdentifier)
+    }
+
+    @Test
+    func undoPrefersTheRetainedEventThenTheEventIdentifier() {
+        let saved = SavedEvent(eventID: "id-1", itemID: "item-1", title: "Coffee", start: start,
+                               end: start.addingTimeInterval(1_800), calendarTitle: "Work")
+        let retained = EventKitClient.undoTarget(
+            for: saved, retained: "kept", byEventIdentifier: { _ in "by-id" }, byItemIdentifier: { _ in "by-item" }
+        )
+        #expect(retained?.event == "kept" && retained?.lookup == .retained)
+        let byID = EventKitClient.undoTarget(
+            for: saved, retained: String?.none, byEventIdentifier: { _ in "by-id" }, byItemIdentifier: { _ in "by-item" }
+        )
+        #expect(byID?.event == "by-id" && byID?.lookup == .eventIdentifier)
+    }
+
+    @Test
+    func undoReportsMissingOnlyWhenEveryLookupMisses() {
+        let withoutItem = SavedEvent(eventID: "id-1", title: "Coffee", start: start,
+                                     end: start.addingTimeInterval(1_800), calendarTitle: "Work")
+        let asked = LockIsolated<[String]>([])
+        let missing = EventKitClient.undoTarget(
+            for: withoutItem, retained: String?.none,
+            byEventIdentifier: { _ in nil }, byItemIdentifier: { id in asked.withValue { $0.append(id) }; return "x" }
+        )
+        #expect(missing == nil)
+        #expect(asked.value.isEmpty)
     }
 
     @Test

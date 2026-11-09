@@ -170,14 +170,68 @@ struct CalendarFeatureAITests {
     }
 
     @Test
-    func tappingADateClearsAnswersButKeepsTheProposal() async {
+    func savedEventReloadsTheAgendaAndTellsTheApp() async {
+        let notified = LockIsolated<[SavedEvent]>([])
+        var state = CalendarFeature.State(displayedMonth: Self.now)
+        state.calendarAuthorizationStatus = .fullAccess
+        let store = makeStore(state, status: .fullAccess) { deps in
+            deps.eventKitClient.fetchEvents = { _ in [] }
+            deps.scheduleEvents.eventSaved = { event in notified.withValue { $0.append(event) } }
+        }
+        await store.send(.schedule(.delegate(.eventSaved(Self.saved)))) {
+            $0.eventsDate = Calendar.current.startOfDay(for: Self.now)
+            $0.eventsRequestID = UUID(0)
+            $0.isLoadingEvents = true
+        }
+        await store.receive(\.eventsLoaded) {
+            $0.eventsRequestID = nil
+            $0.isLoadingEvents = false
+        }
+        await store.finish()
+        #expect(notified.value == [Self.saved])
+    }
+
+    /// Tapping another day moves the selection, so a proposal for the old
+    /// day (and its slot buttons) must not stay on screen.
+    @Test
+    func tappingADateClearsAnswersAndTheProposalButKeepsUndo() async {
         let store = makeStore(withResults())
         await store.send(.dateTapped(Self.start("2026-11-20"))) {
             $0.highlight = nil
             $0.highlightedDays = []
             $0.aiAnswer = nil
             $0.selectedDate = Self.start("2026-11-20")
+            $0.schedule.draft = nil
+            $0.schedule.phase = .idle
         }
+        #expect(store.state.schedule.undo != nil)
+    }
+
+    @Test
+    func tappingADateNeverInterruptsASave() async {
+        var state = withResults()
+        state.schedule.phase = .saving
+        let store = makeStore(state)
+        await store.send(.dateTapped(Self.start("2026-11-20"))) {
+            $0.highlight = nil
+            $0.highlightedDays = []
+            $0.aiAnswer = nil
+            $0.selectedDate = Self.start("2026-11-20")
+        }
+        #expect(store.state.schedule.phase == .saving)
+    }
+
+    @Test
+    func clarificationClearsEarlierResultsAndTheProposal() async {
+        let store = makeStore(withResults())
+        await store.send(.aiIntent(.clarify("Which day?"))) {
+            $0.highlight = nil
+            $0.highlightedDays = []
+            $0.aiAnswer = nil
+            $0.schedule.draft = nil
+            $0.schedule.phase = .idle
+        }
+        #expect(store.state.schedule.undo != nil)
     }
 
     @Test

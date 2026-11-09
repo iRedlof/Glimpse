@@ -15,6 +15,8 @@ enum ScheduleCopy {
     static let requestingAccess = "Requesting calendar access…"
     static let needsAccess = "Glimpse needs calendar access to find free times."
     static let allowAccess = "Allow calendar access"
+    static let allowAccessHint = "Click, or press Return when focused, to show the system prompt."
+    static let openPrivacySettings = "Open Calendar Privacy Settings"
     static let otherIntentsStillWork = "Dates, ranges and questions still work."
     static let removing = "Removing…"
     static let removed = "Removed. Nothing was added."

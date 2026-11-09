@@ -80,6 +80,15 @@
   use `--no-edit` to preserve the existing message. If the message needs changing, that
   should be a deliberate separate action, not a side effect of an amend.
 
+## AI
+
+- **The on-device model miscounts weekdays**: given only "today is Sunday", the small
+  FoundationModels model answered "next Friday" with a Tuesday and gave "Mar 1" the past
+  year. Days the query names are resolved in Swift (`DayPhraseParser`, used by
+  `AIIntentDecoder.validate(_:today:query:)`) and win over model dates; the prompts carry
+  a 28-day date table for phrases Swift can't read. A flat all-fields `@Generable` also
+  made it file questions as events; one enum case per intent fixed that.
+
 ## Date Handling
 
 - **ISO 8601 timezone**: `ISO8601DateFormatter` defaults to UTC → off-by-one dates.

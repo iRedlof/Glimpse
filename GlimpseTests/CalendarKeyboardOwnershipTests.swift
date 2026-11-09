@@ -3152,6 +3152,8 @@ final class CalendarKeyboardRootFixture {
             // Schedule effects only: ids are deterministic and the Undo countdown never fires on its own.
             $0.uuid = .incrementing
             $0.continuousClock = TestClock<Duration>()
+            // The real save signal: it closes the editor through the view's observer.
+            $0.scheduleEvents = .liveValue
             $0.eventKitClient = eventKitClient ?? EventKitClient(
                 requestAccess: {
                     Issue.record("Keyboard fixture must not request calendar access")

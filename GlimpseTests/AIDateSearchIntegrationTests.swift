@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import ComposableArchitecture
+import EventKit
 import GlimpseCore
 import SwiftUI
 import Testing
@@ -405,6 +406,108 @@ struct AIDateSearchIntegrationTests {
         #expect(root.store.schedule.undo?.status == .available)
         #expect(!root.aiModel.isEditorOpen)
         #expect(removals.value == 0)
+        try await root.awaitAcceptedSubmissions()
+    }
+
+    private func createFixture(
+        status: LockIsolated<EKAuthorizationStatus>, requests: LockIsolated<Int>,
+        saves: LockIsolated<[NewEvent]> = LockIsolated([])
+    ) throws -> CalendarKeyboardRootFixture {
+        let work = WritableCalendar(id: "work", title: "Work")
+        let day = CivilDate(year: 2030, month: 11, day: 18)!
+        let draft = EventDraft(title: "Coffee with Priya", day: day, window: .partOfDay(.afternoon), durationMinutes: 30)
+        let eventKit = EventKitClient(
+            requestAccess: {
+                requests.withValue { $0 += 1 }
+                status.setValue(.fullAccess)
+                return true
+            },
+            fetchEvents: { _ in [] },
+            authorizationStatus: { status.value },
+            fetchEventsInInterval: { _ in [] },
+            defaultWritableCalendar: { work },
+            saveEvent: { new in
+                saves.withValue { $0.append(new) }
+                return SavedEvent(eventID: "saved-1", title: new.title, start: new.start, end: new.end,
+                                  calendarTitle: work.title)
+            },
+            removeEvent: { _ in }
+        )
+        return try CalendarKeyboardRootFixture(
+            showAI: true,
+            aiClient: AIDateQueryClient(resolveProvider: { _ in .proxy }, interpret: { _, _ in .create(draft) }),
+            eventKitClient: eventKit
+        )
+    }
+
+    private func submitCreate(_ root: CalendarKeyboardRootFixture, until phase: ScheduleFeature.Phase) async throws {
+        try await root.openThroughShowOwner()
+        try root.send(.searchShortcut)
+        await root.settleRendering()
+        let nativeEditor = try #require(root.nativeEditorField().currentEditor() as? NSTextView)
+        nativeEditor.insertText("coffee with Priya Monday afternoon", replacementRange: NSRange(location: NSNotFound, length: 0))
+        await root.settleRendering()
+        try root.send(.returnKey)
+        try #require(root.aiTasks.count == 1)
+        try await root.aiTasks[0].finish()
+        for _ in 0..<50 where root.store.schedule.phase != phase { await root.settleRendering() }
+        try #require(root.store.schedule.phase == phase)
+    }
+
+    // A double Return (or a habitual resubmit) after a create must not raise
+    // the system calendar prompt; only the Allow button does, by click or by
+    // Return once it has keyboard focus.
+    @Test
+    func liveCreateReturnInTheFieldNeverRequestsCalendarAccess() async throws {
+        let status = LockIsolated<EKAuthorizationStatus>(.notDetermined)
+        let requests = LockIsolated(0)
+        let root = try createFixture(status: status, requests: requests)
+        defer { root.close() }
+        try await submitCreate(root, until: .needsAccess)
+
+        try root.send(.returnKey)
+        try root.send(.returnKey)
+        await root.settleRendering()
+        #expect(requests.value == 0)
+        #expect(root.store.schedule.phase == .needsAccess)
+        #expect(root.aiTasks.count == 1, "Return in .needsAccess must not resubmit either")
+
+        try await root.focusOwner(.scheduleAllowAccess)
+        try root.send(.returnKey)
+        for _ in 0..<50 where root.store.schedule.phase != .choosing { await root.settleRendering() }
+        #expect(requests.value == 1)
+        #expect(root.store.schedule.phase == .choosing)
+        try await root.awaitAcceptedSubmissions()
+    }
+
+    // With focus out of the field, ↓ used to browse to next year and Return to today.
+    @Test
+    func liveCreateSlotKeysWorkWhenFocusLeavesTheField() async throws {
+        let status = LockIsolated<EKAuthorizationStatus>(.fullAccess)
+        let requests = LockIsolated(0)
+        let saves = LockIsolated<[NewEvent]>([])
+        let root = try createFixture(status: status, requests: requests, saves: saves)
+        defer { root.close() }
+        try await submitCreate(root, until: .choosing)
+        let month = root.store.displayedMonth
+
+        try #require(root.panel.makeFirstResponder(nil))
+        await root.settleRendering()
+        try root.send(.returnKey)
+        await root.settleRendering()
+        #expect(saves.value.isEmpty, "Return with nothing picked must not save")
+        try root.send(.down)
+        await root.settleRendering()
+        #expect(root.store.schedule.selectedSlotIndex == 0)
+        #expect(root.actions.value.isEmpty, "Arrows must not browse months while picking a time")
+        #expect(root.store.displayedMonth == month)
+
+        try root.send(.returnKey)
+        for _ in 0..<50 where root.store.schedule.undo == nil { await root.settleRendering() }
+        #expect(saves.value.count == 1)
+        #expect(root.actions.value.isEmpty, "Return must save the pick, not jump to today")
+        #expect(root.store.schedule.undo?.status == .available)
+        #expect(!root.aiModel.isEditorOpen)
         try await root.awaitAcceptedSubmissions()
     }
 

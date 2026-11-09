@@ -92,6 +92,8 @@ public struct ScheduleFeature: Sendable {
         @CasePathable
         public enum Delegate: Sendable {
             case authorizationChanged(EKAuthorizationStatus)
+            /// EventKit confirmed the save; the calendar changed too.
+            case eventSaved(SavedEvent)
             case eventsChanged
         }
     }
@@ -191,7 +193,7 @@ public struct ScheduleFeature: Sendable {
                 state.searchCalendar = calendar
                 state.undo = UndoChip(event: event, remaining: Self.undoSeconds, status: .available)
                 return .merge(
-                    .send(.delegate(.eventsChanged)),
+                    .send(.delegate(.eventSaved(event))),
                     .run { [clock] send in
                         for _ in 0..<Self.undoSeconds {
                             try await clock.sleep(for: .seconds(1))
@@ -206,11 +208,17 @@ public struct ScheduleFeature: Sendable {
                 // Selection cannot move while saving, so it is still the slot that failed.
                 let attempted = state.selectedSlot
                 state.selectedSlotIndex = nil
-                if error == .slotTaken, let taken = attempted {
-                    state.slots.removeAll { $0 == taken }
+                switch error {
+                case .slotTaken:
+                    if let taken = attempted { state.slots.removeAll { $0 == taken } }
                     state.notice = error.message
                     state.phase = state.slots.isEmpty ? .noSlots : .choosing
-                } else {
+                case .saveFailed where !state.slots.isEmpty:
+                    // Retryable: keep the times so the user can pick again.
+                    // Nothing is preselected, so a retry is another explicit pick.
+                    state.notice = error.message
+                    state.phase = .choosing
+                default:
                     state.phase = .failed(error)
                 }
                 return .none

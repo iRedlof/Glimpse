@@ -82,8 +82,8 @@ open Glimpse.xcodeproj
 | Directory | Contents |
 |---|---|
 | `Features/` | CalendarFeature, ScheduleFeature, PreferencesFeature |
-| `Dependencies/` | PreferencesClient, CalendarClient, EventKitClient (read + free-time fetch/save/remove), LaunchAtLoginClient, KeychainClient |
-| `Models/` | CalendarDay, CalendarEvent, GridInfo, MenuBarDisplayOptions, AIProvider, CivilDate, AIIntent, AIIntentWire, AIIntentDecoder, DateAnswerer, FreeSlotFinder, ScheduleModels |
+| `Dependencies/` | PreferencesClient, CalendarClient, EventKitClient (read + free-time fetch/save/remove), ScheduleEventsClient (save signal → app closes the AI editor), LaunchAtLoginClient, KeychainClient |
+| `Models/` | CalendarDay, CalendarEvent, GridInfo, MenuBarDisplayOptions, AIProvider, CivilDate, AIIntent, AIIntentWire, AIIntentDecoder, DayPhraseParser, DateAnswerer, FreeSlotFinder, ScheduleModels |
 
 ## Important Implementation Details
 
@@ -106,7 +106,7 @@ open Glimpse.xcodeproj
 Uses shared Auris proxy at `proxy.auris.workers.dev/refine` with the `{tier, prompt}` body. App secret is XOR-obfuscated in `ProxyConfig`. Device ID for rate limiting. No API keys needed. The live service answers HTTP 200 with `text: null` on upstream errors; that maps to the generic failure copy.
 
 ### 7. Type to Schedule (⌘G intents)
-Providers return one JSON intent (navigate, range, question, create, clarify) validated by `AIIntentDecoder`; a bare `yyyy-MM-dd` still navigates. The AI never counts and never sees calendar data: `DateAnswerer` and `FreeSlotFinder` are pure GlimpseCore code. `ScheduleFeature` never preselects a time (Return without a pick is a no-op), never cancels a started save, requests calendar access only from its explicit "Allow calendar access" action, and offers Undo for 10 s (also ⌘Z outside text editing). ↑/↓ pick times through `CalendarKeyboardRouter.slotPicker`, before browse routing.
+Providers return one JSON intent (navigate, range, question, create, clarify) validated by `AIIntentDecoder`; a bare `yyyy-MM-dd` still navigates. The AI never counts and never sees calendar data: `DateAnswerer` and `FreeSlotFinder` are pure GlimpseCore code. Days the query names ("next Friday", "Mar 1", "next 3 Fridays") are resolved in Swift by `DayPhraseParser` and win over the model's dates; both prompts also carry a 28-day date table. On-device uses a per-intent `@Generable` enum (`GeneratedRequest`). `ScheduleFeature` never preselects a time (Return without a pick is a no-op), never cancels a started save, requests calendar access only from its explicit "Allow calendar access" button (Return in the field never does), keeps the times after a retryable save failure, and offers Undo for 10 s (also ⌘Z outside text editing). A confirmed save sends `.delegate(.eventSaved)`; CalendarFeature calls `ScheduleEventsClient`, whose `.scheduleEventSaved` notification closes the editor (no `onChange`). ↑/↓ (and Return with focus out of the field) pick times through `CalendarKeyboardRouter.slotPicker`, before browse routing. Live provider check: `TEST_RUNNER_GLIMPSE_LIVE_AI=foundationModels[,proxy] xcodebuild … -only-testing:GlimpseTests/AILiveProviderGoldenTests`.
 
 ## Storage
 
@@ -212,4 +212,4 @@ grep 'CURRENT_PROJECT_VERSION' Glimpse.xcodeproj/project.pbxproj | head -1 | sed
 - App source files: ~40
 - GlimpseCore source files: ~21
 - Test files: ~45
-- Total tests: 182 GlimpseCore + 370 app default run (+ 45 keyboard, 9 AI and 13 agenda key-panel tests in the quality gate)
+- Total tests: 212 GlimpseCore + 385 app default run (+ 45 keyboard, 11 AI and 13 agenda key-panel tests in the quality gate; 4 opt-in live AI checks)

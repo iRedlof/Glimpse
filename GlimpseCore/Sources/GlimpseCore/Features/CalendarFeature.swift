@@ -98,6 +98,7 @@ public struct CalendarFeature: Sendable {
     @Dependency(\.preferencesClient) var preferencesClient
     @Dependency(\.eventKitClient) var eventKitClient
     @Dependency(\.uuid) var uuid
+    @Dependency(\.scheduleEvents) var scheduleEvents
 
     private enum CancelID { case events, calendarAccess }
 
@@ -159,7 +160,9 @@ public struct CalendarFeature: Sendable {
                 return loadEvents(&state)
 
             case let .dateTapped(date):
+                // A new day makes any proposal for the old day stale.
                 clearAIResults(&state)
+                let dismissal = dismissSchedule(&state)
                 // Toggle selection: tap again to deselect
                 if let current = state.selectedDate,
                    state.calendar.isDate(current, inSameDayAs: date) {
@@ -167,7 +170,7 @@ public struct CalendarFeature: Sendable {
                 } else {
                     state.selectedDate = date
                 }
-                return loadEvents(&state)
+                return .merge(loadEvents(&state), dismissal)
 
             case .togglePin:
                 state.isPinned.toggle()
@@ -269,6 +272,12 @@ public struct CalendarFeature: Sendable {
             case .schedule(.delegate(.eventsChanged)):
                 return loadEvents(&state)
 
+            case let .schedule(.delegate(.eventSaved(event))):
+                return .merge(
+                    loadEvents(&state),
+                    .run { [scheduleEvents] _ in await scheduleEvents.eventSaved(event) }
+                )
+
             case .schedule:
                 return .none
 
@@ -333,8 +342,9 @@ public struct CalendarFeature: Sendable {
             let proposal = ScheduleFeature().begin(draft, calendar: calendar, &state.schedule)
             return .merge(navigation, proposal.map(Action.schedule))
         case .clarify:
-            // The query model shows clarifications; they never change the calendar.
-            return .none
+            // The query model shows the clarification; it never changes the
+            // calendar, and results for the previous query no longer apply.
+            return dismissSchedule(&state)
         }
     }
 

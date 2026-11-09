@@ -245,6 +245,11 @@ struct CalendarPopoverView: View {
                 isRecordingHotkey = notification.object as? Bool ?? false
                 scrollRouter.suspendNavigation()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .scheduleEventSaved)) { _ in
+                // EventKit confirmed the save (reducer delegate → ScheduleEventsClient):
+                // close the editor so ⌘Z means Undo, not text undo.
+                closeEditorAfterSave()
+            }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                 if panel?.isVisible == true { store.send(.refreshCalendarAuthorization) }
             }
@@ -254,6 +259,12 @@ struct CalendarPopoverView: View {
                 refreshEventsAfterStoreChange()
             }
         }
+    }
+
+    private func closeEditorAfterSave() {
+        // The panel stays key (no app hand-back) so the Undo chip and ⌘Z keep working.
+        guard aiQueryModel.isEditorOpen else { return }
+        aiQueryModel.discardEditor()
     }
 
     @MainActor
@@ -300,14 +311,26 @@ struct CalendarPopoverView: View {
                 store.send(.schedule(.undoTapped))
                 return nil
             }
-            if case let .move(delta) = CalendarKeyboardRouter.slotPicker(
+            switch CalendarKeyboardRouter.slotPicker(
                 CalendarKeyboardKey(nativeCode: event.keyCode),
                 phase: event.isARepeat ? .repeatPress : .down,
                 choosingSlots: store.schedule.phase == .choosing && !store.schedule.slots.isEmpty,
-                editorOpen: aiQueryModel.isEditorOpen, editingText: editingText, modified: !modifiers.isEmpty
+                editorOpen: aiQueryModel.isEditorOpen, editingText: editingText, modified: !modifiers.isEmpty,
+                ownership: keyboardOwnerRelay.browseOwnership(in: panel)
             ) {
+            case let .move(delta):
                 store.send(.schedule(.moveSelection(delta)))
                 return nil
+            case .activate:
+                // Same honest rule as Return in the field: only a picked time saves.
+                if AISubmitRouter.route(phase: store.schedule.phase, canConfirm: store.schedule.canConfirm) == .confirm {
+                    store.send(.schedule(.confirmTapped))
+                }
+                return nil
+            case .consume:
+                return nil
+            default:
+                break
             }
 
             switch event.keyCode {
@@ -484,7 +507,6 @@ struct CalendarPopoverView: View {
                 guard context.allowsRouting else { return }
                 switch AISubmitRouter.route(phase: store.schedule.phase, canConfirm: store.schedule.canConfirm) {
                 case .confirm: store.send(.schedule(.confirmTapped))
-                case .allowAccess: store.send(.schedule(.allowAccessTapped))
                 case .ignore: break
                 case .submit: submitAIQuery()
                 }
@@ -795,7 +817,9 @@ struct CalendarPopoverView: View {
             if store.schedule.isProposing {
                 ScheduleProposalView(
                     store: store.scope(state: \.schedule, action: \.schedule),
-                    calendar: store.calendar
+                    calendar: store.calendar,
+                    keyboard: ScheduleKeyboard(context: keyboardContext, observe: keyboardObservation,
+                                               focus: $controlFocus)
                 )
             } else {
                 eventsSection
@@ -806,10 +830,6 @@ struct CalendarPopoverView: View {
             }
         }
         .animation(AppDesign.Animation.chip, value: store.schedule.undo == nil)
-        .onChange(of: store.schedule.undo?.event) { _, saved in
-            // The event is in the calendar; close the editor so ⌘Z means Undo.
-            if saved != nil, aiQueryModel.isEditorOpen { aiQueryModel.discardEditor() }
-        }
     }
 
     private var calendarAccessMessage: String {

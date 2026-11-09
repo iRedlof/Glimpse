@@ -87,7 +87,8 @@ enum ProxyProvider {
             throw AIDateFailure.unusableResponse
         }
 
-        let intent = AIIntentDecoder.decode(text: text, today: today)
+        // Days the query names are resolved in Swift, not by the model.
+        let intent = AIIntentDecoder.decode(text: text, today: today, query: AIIntentPrompt.sanitized(query))
         try Task.checkCancellation()
         if intent == nil { AppLogger.general.info("AI intent unparsed") }
         return intent

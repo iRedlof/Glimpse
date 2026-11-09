@@ -8,6 +8,9 @@ public struct AIIntentWire: Decodable, Equatable, Sendable {
     public var intent: String
     public var date: String?
     public var dates: [String]?
+    /// For a range of one weekday: its name ("friday") and how many.
+    public var weekday: String?
+    public var count: Int?
     public var label: String?
     public var question: String?
     public var from: String?
@@ -20,7 +23,8 @@ public struct AIIntentWire: Decodable, Equatable, Sendable {
     public var message: String?
 
     public init(
-        intent: String, date: String? = nil, dates: [String]? = nil, label: String? = nil,
+        intent: String, date: String? = nil, dates: [String]? = nil, weekday: String? = nil,
+        count: Int? = nil, label: String? = nil,
         question: String? = nil, from: String? = nil, to: String? = nil, title: String? = nil,
         start: String? = nil, end: String? = nil, partOfDay: String? = nil,
         durationMinutes: Int? = nil, message: String? = nil
@@ -28,6 +32,8 @@ public struct AIIntentWire: Decodable, Equatable, Sendable {
         self.intent = intent
         self.date = date
         self.dates = dates
+        self.weekday = weekday
+        self.count = count
         self.label = label
         self.question = question
         self.from = from
@@ -41,7 +47,7 @@ public struct AIIntentWire: Decodable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case intent, date, dates, label, question, from, to, title, start, end, partOfDay,
+        case intent, date, dates, weekday, count, label, question, from, to, title, start, end, partOfDay,
              durationMinutes, message
     }
 
@@ -50,6 +56,8 @@ public struct AIIntentWire: Decodable, Equatable, Sendable {
         intent = try container.decode(String.self, forKey: .intent)
         date = Self.lenientString(container, .date)
         dates = Self.lenientStrings(container, .dates)
+        weekday = Self.lenientString(container, .weekday)
+        count = Self.lenientInt(container, .count)
         label = Self.lenientString(container, .label)
         question = Self.lenientString(container, .question)
         from = Self.lenientString(container, .from)

@@ -4,6 +4,9 @@ import Foundation
 /// so a reply means the same thing whichever model produced it.
 public enum AIIntentDecoder {
     public static let maximumClarifyLength = 120
+    /// Untrusted reply text beyond this is ignored before scanning for JSON
+    /// (a valid intent is well under 1 KB; brace scanning is quadratic).
+    public static let maximumReplyLength = 4_096
     /// Accepted dates lie within this many years of today.
     public static let yearBound = 100
 
@@ -17,13 +20,15 @@ public enum AIIntentDecoder {
 
     /// Extracts the first decodable JSON object (tolerating code fences and
     /// prose), then validates it. A bare `yyyy-MM-dd` reply is a legacy
-    /// navigate. Anything unusable returns nil.
-    public static func decode(text: String, today: CivilDate) -> AIIntent? {
+    /// navigate. Anything unusable returns nil. Only the first
+    /// `maximumReplyLength` characters of the untrusted reply are read.
+    public static func decode(text: String, today: CivilDate, query: String? = nil) -> AIIntent? {
+        let text = String(text.prefix(maximumReplyLength))
         for candidate in jsonObjectCandidates(in: text) {
             guard let data = candidate.data(using: .utf8) else { continue }
             do {
                 let wire = try JSONDecoder().decode(AIIntentWire.self, from: data)
-                return validate(wire, today: today)
+                return validate(wire, today: today, query: query)
             } catch {
                 // Not the reply object (e.g. braces in prose); keep scanning.
                 continue
@@ -31,19 +36,26 @@ public enum AIIntentDecoder {
         }
         let bare = text.trimmingCharacters(in: legacyTrimSet)
         guard let date = CivilDate(iso: bare), isInBounds(date, today: today) else { return nil }
-        return .navigate(date)
+        return .navigate(query.flatMap { named(in: $0, today: today).first } ?? date)
     }
 
-    public static func validate(_ wire: AIIntentWire, today: CivilDate) -> AIIntent? {
+    /// Validates a provider reply. With the user's `query`, days the query
+    /// names ("next Friday", "Mar 1") are resolved here in Swift and win over
+    /// the model's dates, so weekday and year arithmetic never depends on it.
+    public static func validate(_ wire: AIIntentWire, today: CivilDate, query: String? = nil) -> AIIntent? {
+        let named = query.map { named(in: $0, today: today) } ?? []
         switch wire.intent.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "navigate":
-            return day(wire.date, today: today).map(AIIntent.navigate)
+            return named.first.map(AIIntent.navigate) ?? day(wire.date, today: today).map(AIIntent.navigate)
         case "range":
-            return range(wire, today: today)
+            return range(wire, today: today, query: query)
         case "question":
-            return question(wire, today: today).map(AIIntent.question) ?? .clarify(unsupportedQuestionMessage)
+            return question(wire, today: today, query: query, named: named).map(AIIntent.question)
+                ?? .clarify(unsupportedQuestionMessage)
         case "create":
-            return create(wire, today: today)
+            var resolved = wire
+            if let day = named.first { resolved.date = day.iso }
+            return create(resolved, today: today)
         case "clarify":
             let message = sanitize(wire.message ?? "", limit: maximumClarifyLength, ellipsis: true)
             return .clarify(message.isEmpty ? defaultClarifyMessage : message)
@@ -54,8 +66,14 @@ public enum AIIntentDecoder {
 
     // MARK: - Intents
 
-    private static func range(_ wire: AIIntentWire, today: CivilDate) -> AIIntent? {
-        let dates = (wire.dates ?? []).compactMap { day($0, today: today) }
+    private static func named(in query: String, today: CivilDate) -> [CivilDate] {
+        DayPhraseParser.days(in: query, today: today).filter { isInBounds($0, today: today) }
+    }
+
+    private static func range(_ wire: AIIntentWire, today: CivilDate, query: String?) -> AIIntent? {
+        let series = query.flatMap { DayPhraseParser.weekdaySeries(in: $0, today: today) }
+            ?? modelSeries(wire, today: today)
+        let dates = series ?? (wire.dates ?? []).compactMap { day($0, today: today) }
         guard !dates.isEmpty else { return nil }
         let label = sanitize(wire.label ?? "", limit: DateRangeHighlight.maximumLabelLength, ellipsis: true)
         return .range(DateRangeHighlight(
@@ -63,18 +81,38 @@ public enum AIIntentDecoder {
         ))
     }
 
-    private static func question(_ wire: AIIntentWire, today: CivilDate) -> DateQuestion? {
-        let kind = (wire.question ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+    /// A weekday series the model described by name and count.
+    private static func modelSeries(_ wire: AIIntentWire, today: CivilDate) -> [CivilDate]? {
+        guard let name = wire.weekday?.trimmingCharacters(in: .whitespaces).lowercased(),
+              let weekday = DayPhraseParser.weekday(name), let count = wire.count, count > 0 else { return nil }
+        return DayPhraseParser.upcoming(weekday: weekday, count: count, after: today)
+    }
+
+    private static func question(_ wire: AIIntentWire, today: CivilDate, query: String?,
+                                 named: [CivilDate]) -> DateQuestion? {
+        let modelKind = (wire.question ?? "").trimmingCharacters(in: .whitespaces).lowercased()
         let countKinds: [String: DayKind] = [
             "countdays": .days, "countworkdays": .workdays, "countweekenddays": .weekendDays,
         ]
+        let known = countKinds.keys.contains(modelKind) || ["weeknumber", "weekday"].contains(modelKind)
+        // A model that left the kind out still asked a question; read it from the words.
+        let kind = known ? modelKind : (query.flatMap(DayPhraseParser.questionKind(in:))?.lowercased() ?? modelKind)
         if let dayKind = countKinds[kind] {
-            guard let to = day(wire.to, today: today) else { return nil }
-            let from = wire.from == nil ? today : day(wire.from, today: today)
-            guard let from else { return nil }
+            let to: CivilDate?
+            let from: CivilDate?
+            switch named.count {
+            case 0:
+                to = day(wire.to, today: today)
+                from = wire.from == nil ? today : day(wire.from, today: today)
+            case 1:
+                (from, to) = (today, named[0])
+            default:
+                (from, to) = (named[0], named[1])
+            }
+            guard let from, let to else { return nil }
             return .count(dayKind, from: min(from, to), to: max(from, to))
         }
-        let date = wire.date == nil ? today : day(wire.date, today: today)
+        let date = named.first ?? (wire.date == nil ? today : day(wire.date, today: today))
         guard let date else { return nil }
         switch kind {
         case "weeknumber": return .weekNumber(date)

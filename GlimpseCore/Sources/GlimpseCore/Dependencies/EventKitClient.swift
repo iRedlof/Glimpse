@@ -85,10 +85,34 @@ public struct EventKitClient: Sendable {
         return chosen.map { WritableCalendar(id: $0.id, title: $0.title) }
     }
 
-    static func savedEvent(identifier: String?, new: NewEvent, calendarTitle: String) -> SavedEvent? {
+    static func savedEvent(identifier: String?, itemIdentifier: String? = nil, new: NewEvent,
+                           calendarTitle: String) -> SavedEvent? {
         guard let identifier, !identifier.isEmpty else { return nil }
-        return SavedEvent(eventID: identifier, title: new.title, start: new.start, end: new.end,
-                          calendarTitle: calendarTitle)
+        let itemID = itemIdentifier.flatMap { $0.isEmpty ? nil : $0 }
+        return SavedEvent(eventID: identifier, itemID: itemID, title: new.title, start: new.start,
+                          end: new.end, calendarTitle: calendarTitle)
+    }
+
+    /// How Undo found the event it removes.
+    enum UndoLookup: Equatable, Sendable {
+        /// The object kept from the save, still in the store.
+        case retained
+        case eventIdentifier
+        /// The identifier changed after a sync; found by `calendarItemIdentifier`.
+        case itemIdentifier
+    }
+
+    /// Finds the saved event for Undo: the retained object first, then the
+    /// event identifier, then the item identifier. Generic so the order is
+    /// testable without a live event store.
+    static func undoTarget<Event>(
+        for saved: SavedEvent, retained: Event?,
+        byEventIdentifier: (String) -> Event?, byItemIdentifier: (String) -> Event?
+    ) -> (event: Event, lookup: UndoLookup)? {
+        if let retained { return (retained, .retained) }
+        if let event = byEventIdentifier(saved.eventID) { return (event, .eventIdentifier) }
+        if let itemID = saved.itemID, let event = byItemIdentifier(itemID) { return (event, .itemIdentifier) }
+        return nil
     }
 }
 
@@ -148,6 +172,9 @@ extension EventKitClient: DependencyKey {
 /// event models cross its boundary; synchronous queries run away from the UI.
 actor EventStore {
     private let store = EKEventStore()
+    /// The last saved event, kept so Undo does not depend on identifiers a
+    /// sync may change inside the Undo window.
+    private var lastSaved: (id: String, event: EKEvent)?
     private let authorizationStatus: @Sendable () -> EKAuthorizationStatus
 
     init(
@@ -228,8 +255,9 @@ actor EventStore {
             AppLogger.calendar.error("Event save failed: \(error.localizedDescription, privacy: .public)")
             throw ScheduleError.saveFailed
         }
-        guard let saved = EventKitClient.savedEvent(identifier: event.eventIdentifier, new: new,
-                                                    calendarTitle: calendar.title) else {
+        guard let saved = EventKitClient.savedEvent(identifier: event.eventIdentifier,
+                                                    itemIdentifier: event.calendarItemIdentifier,
+                                                    new: new, calendarTitle: calendar.title) else {
             // Without an identifier Undo is impossible, so roll back to keep "Nothing was saved" true.
             AppLogger.calendar.error("Event save returned no identifier; rolling back")
             do { try store.remove(event, span: .thisEvent, commit: true) } catch {
@@ -237,22 +265,35 @@ actor EventStore {
             }
             throw ScheduleError.saveFailed
         }
+        lastSaved = (saved.eventID, event)
         AppLogger.calendar.info("Event saved: \(new.title, privacy: .private)")
         return saved
     }
 
     func remove(_ saved: SavedEvent) throws {
         try requireFullAccess()
-        guard let event = store.event(withIdentifier: saved.eventID) else {
-            AppLogger.calendar.info("Event undo: event already gone")
+        // refresh() is false once the event is gone from the store.
+        let retained = lastSaved.flatMap { $0.id == saved.eventID && $0.event.refresh() ? $0.event : nil }
+        guard let target = EventKitClient.undoTarget(
+            for: saved, retained: retained,
+            byEventIdentifier: { store.event(withIdentifier: $0) },
+            byItemIdentifier: { store.calendarItem(withIdentifier: $0) as? EKEvent }
+        ) else {
+            AppLogger.calendar.info("Event undo: no event for the saved identifiers; already gone")
             throw ScheduleError.eventMissing
         }
+        if target.lookup == .itemIdentifier {
+            AppLogger.calendar.info("Event undo: event identifier changed after sync; found by item identifier")
+        } else if target.lookup == .eventIdentifier, lastSaved?.id == saved.eventID {
+            AppLogger.calendar.info("Event undo: kept event was stale; found by event identifier")
+        }
         do {
-            try store.remove(event, span: .thisEvent, commit: true)
+            try store.remove(target.event, span: .thisEvent, commit: true)
         } catch {
             AppLogger.calendar.error("Event undo failed: \(error.localizedDescription, privacy: .public)")
             throw ScheduleError.removeFailed
         }
+        if lastSaved?.id == saved.eventID { lastSaved = nil }
         AppLogger.calendar.info("Event removed: \(saved.title, privacy: .private)")
     }
 }

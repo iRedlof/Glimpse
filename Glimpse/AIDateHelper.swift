@@ -86,13 +86,14 @@ enum AIDateHelper {
         case .foundationModels:
             do {
                 let today = CivilDate(dependencies.now(), calendar: dependencies.calendar)
-                let instructions = AIIntentPrompt.instructions(
+                let instructions = AIIntentPrompt.onDeviceInstructions(
                     today: today, timeZone: dependencies.calendar.timeZone
                 )
                 try Task.checkCancellation()
                 let wire = try await dependencies.generateOnDevice(instructions, AIIntentPrompt.user(query))
                 try Task.checkCancellation()
-                let intent = AIIntentDecoder.validate(wire, today: today)
+                // Days the query names are resolved in Swift, not by the model.
+                let intent = AIIntentDecoder.validate(wire, today: today, query: AIIntentPrompt.sanitized(query))
                 if intent == nil { AppLogger.general.info("AI intent unparsed") }
                 return intent
             } catch {

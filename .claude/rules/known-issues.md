@@ -35,7 +35,9 @@ them unless explicitly asked — the rationale for each is documented here.
    but the body is `{"text":null,"error":"Upstream error: 401"}`, so every Cloud AI query
    shows "AI couldn't complete that. Try again." This predates Type to Schedule (v1.4.29
    is affected too). Fix belongs on the proxy (upstream key); the client contract, headers
-   and secret handling are unchanged. On-device AI is unaffected.
+   and secret handling are unchanged. On-device AI is unaffected. Re-checked later on
+   2026-11-08 with `AILiveProviderGoldenTests` (proxy): still `unusableResponse` for all
+   four example queries; on-device passes all four.
 
 6. **Type to Schedule scope** — Writes only to the default writable calendar (named on
    the card), single-day timed events only; no invitees, location, recurrence, or
@@ -43,6 +45,7 @@ them unless explicitly asked — the rationale for each is documented here.
 
 ## Test Status
 
-- GlimpseCore: 182 tests, 12 suites — `cd GlimpseCore && swift test`
-- App tests: 370 default-run tests — `xcodebuild test`; key-panel suites (keyboard 45, AI 9, agenda 13) run in the quality gate
+- GlimpseCore: 212 tests, 13 suites — `cd GlimpseCore && swift test`
+- App tests: 385 default-run tests — `xcodebuild test`; key-panel suites (keyboard 45, AI 11, agenda 13) run in the quality gate
+- Live AI golden check (opt-in, 4 queries): `TEST_RUNNER_GLIMPSE_LIVE_AI=foundationModels`
 - All pass

@@ -312,12 +312,16 @@ struct ScheduleFeatureTests {
             $0.searchCalendar = Self.calendar
             $0.undo = .init(event: Self.saved, remaining: ScheduleFeature.undoSeconds, status: .available)
         }
-        await store.receive(\.delegate.eventsChanged)
+        await store.receive(\.delegate.eventSaved)
         #expect(requests.value == [NewEvent(title: "Coffee with Priya", start: Self.at("15:30"),
                                             end: Self.at("16:00"), calendarID: "work")])
+        // Run the Undo window out so no effect is left in flight.
+        for remaining in stride(from: ScheduleFeature.undoSeconds - 1, through: 1, by: -1) {
+            await clock.advance(by: .seconds(1))
+            await store.receive(\.undoTick) { $0.undo?.remaining = remaining }
+        }
         await clock.advance(by: .seconds(1))
-        await store.receive(\.undoTick) { $0.undo?.remaining = 9 }
-        await store.skipInFlightEffects()
+        await store.receive(\.undoTick) { $0.undo = nil }
     }
 
     @Test
@@ -337,7 +341,7 @@ struct ScheduleFeatureTests {
             $0.searchCalendar = Self.calendar
             $0.undo = .init(event: Self.saved, remaining: 10, status: .available)
         }
-        await saving.receive(\.delegate.eventsChanged)
+        await saving.receive(\.delegate.eventSaved)
         for remaining in stride(from: 9, through: 1, by: -1) {
             await clock.advance(by: .seconds(1))
             await saving.receive(\.undoTick) { $0.undo?.remaining = remaining }
@@ -361,7 +365,7 @@ struct ScheduleFeatureTests {
             $0.searchCalendar = Self.calendar
             $0.undo = .init(event: Self.saved, remaining: 10, status: .available)
         }
-        await store.receive(\.delegate.eventsChanged)
+        await store.receive(\.delegate.eventSaved)
         for remaining in [9, 8, 7, 6] {
             await clock.advance(by: .seconds(1))
             await store.receive(\.undoTick) { $0.undo?.remaining = remaining }
@@ -417,12 +421,38 @@ struct ScheduleFeatureTests {
     }
 
     @Test
-    func saveFailureSaysNothingWasSavedAndOffersNoUndo() async {
+    func saveFailureSaysNothingWasSavedAndKeepsTheTimesToPickAgain() async {
         struct Opaque: Error {}
-        let store = makeStore(choosing(selected: 0)) { $0.eventKitClient.saveEvent = { _ in throw Opaque() } }
+        let attempts = LockIsolated(0)
+        let store = makeStore(choosing(selected: 0)) { deps in
+            deps.eventKitClient.saveEvent = { _ in
+                attempts.withValue { $0 += 1 }
+                throw Opaque()
+            }
+        }
         await store.send(.confirmTapped) { $0.phase = .saving }
         await store.receive(\.saveFailed) {
-            $0.phase = .failed(.saveFailed)
+            $0.phase = .choosing
+            $0.selectedSlotIndex = nil
+            $0.notice = ScheduleError.saveFailed.message
+        }
+        #expect(store.state.undo == nil)
+        #expect(store.state.slots == Self.slots)
+        // Nothing is preselected: Return alone cannot retry without a new pick.
+        await store.send(.confirmTapped)
+        #expect(attempts.value == 1)
+        await store.send(.moveSelection(1)) {
+            $0.selectedSlotIndex = 0
+            $0.notice = nil
+        }
+    }
+
+    @Test(arguments: [ScheduleError.calendarReadOnly, .noWritableCalendar, .accessUnavailable])
+    func unrecoverableSaveFailuresEndTheProposal(_ error: ScheduleError) async {
+        let store = makeStore(choosing(selected: 0)) { $0.eventKitClient.saveEvent = { _ in throw error } }
+        await store.send(.confirmTapped) { $0.phase = .saving }
+        await store.receive(\.saveFailed) {
+            $0.phase = .failed(error)
             $0.selectedSlotIndex = nil
         }
         #expect(store.state.undo == nil)
@@ -452,7 +482,7 @@ struct ScheduleFeatureTests {
             $0.searchCalendar = Self.calendar
             $0.undo = .init(event: Self.saved, remaining: 10, status: .available)
         }
-        await store.receive(\.delegate.eventsChanged)
+        await store.receive(\.delegate.eventSaved)
         await store.send(.dismiss)
         #expect(store.state.undo != nil)
         await store.send(.undoTapped) { $0.undo?.status = .undoing }
@@ -504,8 +534,8 @@ struct ScheduleFeatureTests {
             $0.calendar = Self.work
             $0.dayEvents = []
             $0.slots = [
-                FreeSlot(start: instant("2026-11-13", "12:00", Self.calendar), end: instant("2026-11-13", "13:00", Self.calendar)),
                 FreeSlot(start: instant("2026-11-13", "11:00", Self.calendar), end: instant("2026-11-13", "12:00", Self.calendar)),
+                FreeSlot(start: instant("2026-11-13", "12:00", Self.calendar), end: instant("2026-11-13", "13:00", Self.calendar)),
                 FreeSlot(start: instant("2026-11-13", "13:00", Self.calendar), end: instant("2026-11-13", "14:00", Self.calendar)),
             ]
             $0.searchID = nil

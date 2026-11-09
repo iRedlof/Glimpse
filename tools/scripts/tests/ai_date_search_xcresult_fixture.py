@@ -17,6 +17,8 @@ EXPECTED = {
         "AIDateSearchIntegrationTests/dismissEscapeAndRemovalRejectLateCompletion(boundary:)": 3,
         "AIDateSearchIntegrationTests/failureCopyFitsAndRemainsAccessible(outcome:)": 3,
         "AIDateSearchIntegrationTests/liveCreateNeedsAnExplicitPickAndSavesOnce()": 1,
+        "AIDateSearchIntegrationTests/liveCreateReturnInTheFieldNeverRequestsCalendarAccess()": 1,
+        "AIDateSearchIntegrationTests/liveCreateSlotKeysWorkWhenFocusLeavesTheField()": 1,
     },
 }
 
@@ -24,10 +26,10 @@ EXPECTED = {
 def metadata():
     # Literal totals independently describe the accepted graph.
     summary = {
-        "result": "Passed", "totalTestCount": 9, "passedTests": 9, "failedTests": 0,
+        "result": "Passed", "totalTestCount": 11, "passedTests": 11, "failedTests": 0,
         "skippedTests": 0, "expectedFailures": 0, "testFailures": [],
         "devicesAndConfigurations": [
-            {"passedTests": 18, "failedTests": 0, "skippedTests": 0, "expectedFailures": 0},
+            {"passedTests": 20, "failedTests": 0, "skippedTests": 0, "expectedFailures": 0},
         ],
     }
     prefix = "test://com.apple.xcode/Glimpse/GlimpseTests/"

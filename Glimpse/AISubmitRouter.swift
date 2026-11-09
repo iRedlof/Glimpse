@@ -4,9 +4,7 @@ import GlimpseCore
 enum AISubmitAction: Equatable, Sendable {
     /// Save the time the user picked.
     case confirm
-    /// The explicit "Allow calendar access" action.
-    case allowAccess
-    /// Do nothing: no time picked yet, or work is already in flight.
+    /// Do nothing: no time picked yet, access not yet granted, or work in flight.
     case ignore
     /// Send the draft to the AI.
     case submit
@@ -18,8 +16,10 @@ enum AISubmitRouter {
     static func route(phase: ScheduleFeature.Phase, canConfirm: Bool) -> AISubmitAction {
         if canConfirm { return .confirm }
         switch phase {
-        case .needsAccess: return .allowAccess
-        case .choosing, .saving, .searching, .requestingAccess: return .ignore
+        // The calendar prompt comes only from the "Allow calendar access"
+        // button (click, or Return/Space while it has focus). A second Return
+        // in the field, out of habit, must not raise a system prompt.
+        case .needsAccess, .choosing, .saving, .searching, .requestingAccess: return .ignore
         case .idle, .noSlots, .failed, .accessUnavailable: return .submit
         }
     }

@@ -174,7 +174,7 @@ struct AIDateQueryClientTests {
             calendar: Self.calendar,
             generateOnDevice: { instructions, prompt in
                 generatorCalls.withValue { $0 += 1 }
-                promptMatched.setValue(instructions + "\n" + prompt == Self.expectedPrompt)
+                promptMatched.setValue(instructions + "\n" + prompt == Self.expectedOnDevicePrompt)
                 return AIIntentWire(intent: "navigate", date: "2026-03-15")
             }
         )
@@ -283,7 +283,8 @@ struct AIDateQueryClientTests {
 
     private static let endpoint = URL(string: "https://fixture.invalid/refine")!
     private static let now = Date(timeIntervalSince1970: 1_700_000_000)
-    private static let query = "synthetic next Friday"
+    /// Names no day, so the provider's date is used as given.
+    private static let query = "synthetic jump request"
     /// 2023-11-14T22:13:20Z is already Nov 15 in Kiritimati (UTC+14): the prompt must say the local day.
     private static let calendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
@@ -294,6 +295,31 @@ struct AIDateQueryClientTests {
         query: query, today: CivilDate(year: 2023, month: 11, day: 15)!,
         timeZone: TimeZone(identifier: "Pacific/Kiritimati")!
     )
+
+    private static let expectedOnDevicePrompt = AIIntentPrompt.onDeviceInstructions(
+        today: CivilDate(year: 2023, month: 11, day: 15)!, timeZone: TimeZone(identifier: "Pacific/Kiritimati")!
+    ) + "\n" + AIIntentPrompt.user(query)
+
+    /// Both providers: a day the query names is resolved in Swift and wins
+    /// over a wrong model date (the on-device model said Tuesday for Friday).
+    @Test
+    func namedDayInTheQueryWinsOverTheModelDateForBothProviders() async throws {
+        // Today is Wednesday 2023-11-15 in Kiritimati; next Friday is the 17th.
+        let friday = CivilDate(year: 2023, month: 11, day: 17)!
+        let reply = try JSONSerialization.data(withJSONObject: ["text": #"{"intent":"navigate","date":"2023-11-21"}"#])
+        let proxy = ProxyProvider.Dependencies(
+            endpoint: Self.endpoint.absoluteString, authorize: { _ in }, now: { Self.now }, calendar: Self.calendar,
+            transport: { _ in (reply, Self.httpResponse()) }
+        )
+        #expect(try await ProxyProvider.interpret("next Friday", dependencies: proxy) == .navigate(friday))
+
+        let onDevice = AIDateHelper.Dependencies(
+            interpretProxy: { _ in nil }, now: { Self.now }, calendar: Self.calendar,
+            generateOnDevice: { _, _ in AIIntentWire(intent: "navigate", date: "2023-11-21") }
+        )
+        #expect(try await AIDateHelper.interpret("next Friday", provider: .foundationModels, dependencies: onDevice)
+            == .navigate(friday))
+    }
 
     private static func httpResponse(status: Int = 200) -> HTTPURLResponse {
         HTTPURLResponse(url: endpoint, statusCode: status, httpVersion: nil, headerFields: nil)!
@@ -373,3 +399,76 @@ private actor AIDateClientGate {
         for waiter in waiting { waiter.resume() }
     }
 }
+
+// MARK: - Live golden check (opt-in)
+
+/// Sends the four Type to Schedule example queries to a real provider with
+/// "today" pinned to Sunday 2026-11-08 and checks the intents. Opt-in because
+/// it needs Apple Intelligence or the network:
+/// `TEST_RUNNER_GLIMPSE_LIVE_AI=foundationModels` (or `proxy`, or both, comma-separated).
+@Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["GLIMPSE_LIVE_AI"] != nil))
+struct AILiveProviderGoldenTests {
+    private static let calendar = Calendar.autoupdatingCurrent
+    private static let today = CivilDate(year: 2026, month: 11, day: 8)!
+    private static let noon = calendar.date(from: DateComponents(year: 2026, month: 11, day: 8, hour: 12))!
+
+    static let providers: [AIDateHelper.Provider] = {
+        let requested = (ProcessInfo.processInfo.environment["GLIMPSE_LIVE_AI"] ?? "")
+            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        return [AIDateHelper.Provider.foundationModels, .proxy].filter {
+            requested.contains($0 == .proxy ? "proxy" : "foundationModels")
+        }
+    }()
+
+    private static func interpret(_ query: String, _ provider: AIDateHelper.Provider) async throws -> AIIntent? {
+        var dependencies = AIDateHelper.Dependencies.live
+        dependencies.now = { noon }
+        dependencies.calendar = calendar
+        dependencies.interpretProxy = { query in
+            var proxy = ProxyProvider.Dependencies.live
+            proxy.now = { noon }
+            proxy.calendar = calendar
+            return try await ProxyProvider.interpret(query, dependencies: proxy)
+        }
+        return try await AIDateHelper.interpret(query, provider: provider, dependencies: dependencies)
+    }
+
+    private static func day(_ value: Int, month: Int = 11, year: Int = 2026) -> CivilDate {
+        CivilDate(year: year, month: month, day: value)!
+    }
+
+    @Test(arguments: providers)
+    func nextFridayNavigatesToFriday(_ provider: AIDateHelper.Provider) async throws {
+        #expect(try await Self.interpret("next Friday", provider) == .navigate(Self.day(13)))
+    }
+
+    @Test(arguments: providers)
+    func nextThreeFridaysHighlightsFridays(_ provider: AIDateHelper.Provider) async throws {
+        guard case let .range(highlight) = try await Self.interpret("next 3 Fridays", provider) else {
+            Issue.record("expected a range")
+            return
+        }
+        #expect(highlight.dates == [Self.day(13), Self.day(20), Self.day(27)])
+    }
+
+    @Test(arguments: providers)
+    func workdaysUntilMarchFirstIsAnswered(_ provider: AIDateHelper.Provider) async throws {
+        #expect(try await Self.interpret("how many workdays until Mar 1?", provider)
+            == .question(.count(.workdays, from: Self.today, to: Self.day(1, month: 3, year: 2027))))
+    }
+
+    @Test(arguments: providers)
+    func coffeeWithPriyaIsProposedOnThursdayAfternoon(_ provider: AIDateHelper.Provider) async throws {
+        guard case let .create(draft) = try await Self.interpret(
+            "coffee with Priya Thursday afternoon, 30 min", provider
+        ) else {
+            Issue.record("expected a create")
+            return
+        }
+        #expect(draft.title.lowercased().contains("priya"))
+        #expect(draft.day == Self.day(12))
+        #expect(draft.window == .partOfDay(.afternoon))
+        #expect(draft.durationMinutes == 30)
+    }
+}
+

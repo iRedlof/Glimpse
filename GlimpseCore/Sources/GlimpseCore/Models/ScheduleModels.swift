@@ -29,13 +29,18 @@ public struct NewEvent: Equatable, Sendable {
 /// An event EventKit confirmed it saved; enough to undo it.
 public struct SavedEvent: Equatable, Sendable {
     public let eventID: String
+    /// `calendarItemIdentifier`, the fallback when a sync changes `eventID`
+    /// (iCloud and Exchange can reassign it after the first sync).
+    public let itemID: String?
     public let title: String
     public let start: Date
     public let end: Date
     public let calendarTitle: String
 
-    public init(eventID: String, title: String, start: Date, end: Date, calendarTitle: String) {
+    public init(eventID: String, itemID: String? = nil, title: String, start: Date, end: Date,
+                calendarTitle: String) {
         self.eventID = eventID
+        self.itemID = itemID
         self.title = title
         self.start = start
         self.end = end

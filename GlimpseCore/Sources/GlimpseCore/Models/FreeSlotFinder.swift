@@ -80,10 +80,10 @@ public enum FreeSlotFinder {
     }
 
     /// Up to three free slots of `duration` inside `window`, starting no
-    /// earlier than `notBefore`. With a `preferredStart` the slots are the
-    /// nearest non-overlapping times to it, nearest first; otherwise the
-    /// earliest time in each gap comes first, then back-to-back fill-ins,
-    /// in chronological order.
+    /// earlier than `notBefore`, always in chronological order so ↑/↓ move
+    /// through them in the order the timeline shows. With a `preferredStart`
+    /// the slots are the nearest non-overlapping times to it; otherwise the
+    /// earliest time in each gap, then back-to-back fill-ins.
     public static func slots(busy: [DateInterval], window: DateInterval, duration: TimeInterval,
                              notBefore: Date, preferredStart: Date? = nil) -> [FreeSlot] {
         guard duration > 0 else { return [] }
@@ -134,7 +134,7 @@ public enum FreeSlotFinder {
                 picked.append(slot)
             }
         }
-        return picked
+        return picked.sorted { $0.start < $1.start }
     }
 
     static func merge(_ busy: [DateInterval], clippedTo window: DateInterval) -> [DateInterval] {

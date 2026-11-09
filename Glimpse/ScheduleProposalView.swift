@@ -9,6 +9,8 @@ import SwiftUI
 struct ScheduleProposalView: View {
     @Bindable var store: StoreOf<ScheduleFeature>
     let calendar: Calendar
+    /// Lets the card's links take keyboard focus like the panel's other controls.
+    var keyboard: ScheduleKeyboard? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
@@ -60,17 +62,16 @@ struct ScheduleProposalView: View {
             EmptyView()
         case .needsAccess:
             Text(ScheduleCopy.needsAccess).font(.caption)
-            Button(ScheduleCopy.allowAccess) { store.send(.allowAccessTapped) }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.accentColor)
-                .accessibilityLabel("Allow calendar access to find free times")
-                .accessibilityHint("Press Return or click to show the system prompt.")
+            // The only way to the system prompt: Return in the field never asks.
+            ScheduleLinkButton(
+                title: ScheduleCopy.allowAccess, owner: .scheduleAllowAccess,
+                accessibilityLabel: "Allow calendar access to find free times",
+                accessibilityHint: ScheduleCopy.allowAccessHint, keyboard: keyboard
+            ) { store.send(.allowAccessTapped) }
         case .requestingAccess:
             progress(ScheduleCopy.requestingAccess)
         case let .accessUnavailable(status):
-            ScheduleAccessUnavailableRow(status: status)
+            ScheduleAccessUnavailableRow(status: status, keyboard: keyboard)
         case .searching:
             progress(ScheduleCopy.searching)
         case .noSlots:
@@ -177,27 +178,73 @@ struct ScheduleProposalView: View {
 }
 
 struct ScheduleAccessUnavailableRow: View {
+    static let privacySettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"
+    )
+
     let status: EKAuthorizationStatus
+    var keyboard: ScheduleKeyboard? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
             Text(ScheduleCopy.accessUnavailable(status)).font(.caption)
             if status != .restricted {
-                Button("Open Calendar Privacy Settings") {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
-                        NSWorkspace.shared.open(url)
+                ScheduleLinkButton(
+                    title: ScheduleCopy.openPrivacySettings, owner: .scheduleOpenPrivacySettings,
+                    accessibilityLabel: ScheduleCopy.openPrivacySettings,
+                    accessibilityHint: "Opens System Settings to turn on calendar access.", keyboard: keyboard
+                ) {
+                    guard let url = Self.privacySettingsURL else {
+                        AppLogger.general.error("Calendar privacy settings URL is invalid")
+                        return
                     }
+                    NSWorkspace.shared.open(url)
                 }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .font(.caption)
-                .accessibilityLabel("Open Calendar Privacy Settings")
             }
             Text(ScheduleCopy.otherIntentsStillWork)
                 .font(.caption)
                 .foregroundStyle(AppDesign.Colors.calendarContextText)
         }
         .announcing(ScheduleCopy.accessUnavailable(status))
+    }
+}
+
+/// Keyboard plumbing shared with the panel's other focusable controls.
+struct ScheduleKeyboard {
+    let context: () -> CalendarKeyboardContext
+    var observe: ((CalendarKeyboardInvocation) -> Void)?
+    var focus: FocusState<CalendarKeyboardOwner?>.Binding?
+}
+
+/// The card's text actions ("Allow calendar access", "Open Calendar Privacy
+/// Settings"): one link style, focusable, with Return/Space on focus.
+struct ScheduleLinkButton: View {
+    let title: String
+    let owner: CalendarKeyboardOwner
+    let accessibilityLabel: String
+    let accessibilityHint: String
+    var keyboard: ScheduleKeyboard?
+    let action: () -> Void
+
+    var body: some View {
+        let button = Button(action: action) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .contentShape(Rectangle())
+                .overlay { CalendarKeyboardFocusOutline() }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(accessibilityHint)
+        if let keyboard {
+            button.modifier(CalendarControlReturn(
+                owner: owner, context: keyboard.context, action: action,
+                observe: keyboard.observe, focus: keyboard.focus
+            ))
+        } else {
+            button.focusable(false)
+        }
     }
 }
 

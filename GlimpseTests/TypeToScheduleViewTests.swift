@@ -19,9 +19,12 @@ struct AISubmitRouterTests {
         #expect(AISubmitRouter.route(phase: phase, canConfirm: false) == .ignore)
     }
 
+    /// A double Return after submitting a create query lands in .needsAccess;
+    /// it must not raise the system calendar prompt. Only the Allow button does.
     @Test
-    func needsAccessReturnIsTheExplicitAllowAction() {
-        #expect(AISubmitRouter.route(phase: .needsAccess, canConfirm: false) == .allowAccess)
+    func returnInTheFieldNeverRequestsCalendarAccess() {
+        #expect(AISubmitRouter.route(phase: .needsAccess, canConfirm: false) == .ignore)
+        #expect(AISubmitRouter.route(phase: .requestingAccess, canConfirm: false) == .ignore)
     }
 
     @Test(arguments: [ScheduleFeature.Phase.idle, .noSlots, .failed(.saveFailed), .accessUnavailable(.denied)])
@@ -33,25 +36,49 @@ struct AISubmitRouterTests {
 // MARK: - Key routing
 
 struct ScheduleKeyRoutingTests {
+    private func route(_ key: CalendarKeyboardKey, choosing: Bool = true, open: Bool = true,
+                       editing: Bool = true, modified: Bool = false,
+                       ownership: CalendarKeyboardBrowseOwnership = .ambiguous,
+                       phase: CalendarKeyboardPhase = .down) -> CalendarKeyboardRoute {
+        CalendarKeyboardRouter.slotPicker(key, phase: phase, choosingSlots: choosing, editorOpen: open,
+                                          editingText: editing, modified: modified, ownership: ownership)
+    }
+
     @Test
-    func arrowsPickSlotsOnlyWhileChoosingInTheEditor() {
-        func route(_ key: CalendarKeyboardKey, choosing: Bool = true, open: Bool = true,
-                   editing: Bool = true, modified: Bool = false,
-                   phase: CalendarKeyboardPhase = .down) -> CalendarKeyboardRoute {
-            CalendarKeyboardRouter.slotPicker(key, phase: phase, choosingSlots: choosing, editorOpen: open,
-                                              editingText: editing, modified: modified)
-        }
+    func arrowsPickSlotsWhileChoosingInTheEditor() {
         #expect(route(.down) == .move(1))
         #expect(route(.up) == .move(-1))
         #expect(route(.down, phase: .repeatPress) == .move(1))
         #expect(route(.down, phase: .up) == .yield)
         #expect(route(.down, choosing: false) == .yield)
         #expect(route(.down, open: false) == .yield)
-        #expect(route(.down, editing: false) == .yield)
         #expect(route(.down, modified: true) == .yield)
+        // Return in the field belongs to its onSubmit (AISubmitRouter).
         for key in [CalendarKeyboardKey.left, .right, .returnKey, .keypadEnter, .space, .tab, .other] {
             #expect(route(key) == .yield)
         }
+    }
+
+    /// Focus left the field while slots show: ↓ used to fall through to
+    /// browse(.nextYear) and Return to browse(.today) under the card.
+    @Test
+    func slotListKeepsArrowsAndReturnWhenFocusLeavesTheField() {
+        #expect(route(.down, editing: false, ownership: .windowDefault) == .move(1))
+        #expect(route(.up, open: false, editing: false, ownership: .windowDefault) == .move(-1))
+        #expect(route(.returnKey, editing: false, ownership: .windowDefault) == .activate)
+        #expect(route(.keypadEnter, editing: false, ownership: .windowDefault) == .activate)
+        #expect(route(.returnKey, editing: false, ownership: .windowDefault, phase: .repeatPress) == .consume)
+        #expect(route(.left, editing: false, ownership: .windowDefault) == .yield)
+        #expect(route(.down, choosing: false, editing: false, ownership: .windowDefault) == .yield)
+    }
+
+    @Test
+    func aFocusedControlKeepsItsOwnKeysWhileChoosing() {
+        for owner in [CalendarKeyboardOwner.grid, .footerQuit, .scheduleAllowAccess] {
+            #expect(route(.down, editing: false, ownership: .designated(owner)) == .yield)
+            #expect(route(.returnKey, editing: false, ownership: .designated(owner)) == .yield)
+        }
+        #expect(route(.down, editing: false, ownership: .ambiguous) == .yield)
     }
 
     @Test
@@ -239,6 +266,68 @@ struct ScheduleProposalAccessibilityTests {
         try await host.settle(until: { !host.controls(named: "Allow calendar access to find free times").isEmpty })
         let allow = try host.control(named: "Allow calendar access to find free times")
         #expect(allow.enabled)
+    }
+
+    /// The honest-button rule: "Saving…" is on screen until EventKit answers,
+    /// and the times cannot be picked again meanwhile.
+    @Test
+    func savingShowsSavingAndLocksTheTimes() async throws {
+        var state = choosing(selected: 0)
+        state.phase = .saving
+        let (host, _) = host(state)
+        defer { host.close() }
+        try await host.settle(until: { host.elements().contains { $0.label == ScheduleCopy.saving } })
+        let slots = host.elements().filter { $0.role == .button && ($0.label ?? "").hasPrefix("Add Coffee") }
+        #expect(slots.count == 2)
+        #expect(slots.allSatisfy { !$0.enabled })
+        try Self.renderIfRequested(host, name: "createSaving")
+    }
+
+    @Test
+    func saveFailureSaysSoAndKeepsTheTimesToPickAgain() async throws {
+        var state = choosing(selected: nil)
+        state.notice = ScheduleError.saveFailed.message
+        let (host, _) = host(state)
+        defer { host.close() }
+        try await host.settle(until: {
+            host.elements().contains {
+                $0.label == ScheduleError.saveFailed.message || $0.value as? String == ScheduleError.saveFailed.message
+            }
+        })
+        let slots = host.elements().filter { $0.role == .button && ($0.label ?? "").hasPrefix("Add Coffee") }
+        #expect(slots.count == 2)
+        #expect(slots.allSatisfy { $0.enabled })
+        try Self.renderIfRequested(host, name: "createSaveFailed")
+    }
+
+    @Test
+    func deniedCardOffersTheSettingsLinkLikeTheAllowLink() async throws {
+        var state = ScheduleFeature.State()
+        state.draft = Self.draft
+        state.phase = .accessUnavailable(.denied)
+        let (host, _) = host(state)
+        defer { host.close() }
+        try await host.settle(until: { !host.controls(named: ScheduleCopy.openPrivacySettings).isEmpty })
+        let link = try host.control(named: ScheduleCopy.openPrivacySettings)
+        #expect(link.role == .button)
+        #expect(link.enabled)
+        try Self.renderIfRequested(host, name: "createDenied")
+    }
+
+    /// Opt-in PNGs for review (GLIMPSE_SCHEDULE_RENDERS=1), attached to the
+    /// test result: `xcrun xcresulttool export attachments`.
+    private static func renderIfRequested(_ host: AccessibilityTestHost, name: String) throws {
+        guard ProcessInfo.processInfo.environment["GLIMPSE_SCHEDULE_RENDERS"] == "1" else { return }
+        // Light only: cacheDisplay skips the window background, so dark text
+        // would land on a transparent (white-looking) canvas.
+        host.window.appearance = NSAppearance(named: .aqua)
+        host.hosting.layoutSubtreeIfNeeded()
+        host.hosting.display()
+        let view = host.hosting
+        let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        let data = try #require(bitmap.representation(using: .png, properties: [:]))
+        Attachment.record(data, named: "\(name)-light.png")
     }
 
     @Test

@@ -4,6 +4,7 @@ enum CalendarKeyboardOwner: String, CaseIterable, Hashable, Sendable {
     case grid, previousMonth, today, nextMonth, searchPrompt, searchDismiss, editor
     case footerQuit, footerAbout, footerPin, footerCalendar, footerSettings
     case quitCancel, quitConfirm
+    case scheduleAllowAccess, scheduleOpenPrivacySettings
 }
 
 enum CalendarKeyboardKey: Sendable {
@@ -99,16 +100,27 @@ enum CalendarKeyboardRouter {
         }
     }
 
-    /// ↑/↓ pick a proposed time while the AI editor has focus. Everything else
-    /// yields, so text editing and grid/browse routing are unchanged.
+    /// While proposed times are showing, ↑/↓ pick one, whether focus is in
+    /// the AI editor or has left it (window default). Return with focus out
+    /// of the field is the slot list's too (`.activate`: save a picked time,
+    /// else nothing), so neither arrows nor Return browse months under the
+    /// card. A focused control (grid, buttons) keeps its own keys, and
+    /// Return in the field stays with the field's onSubmit.
     static func slotPicker(
         _ key: CalendarKeyboardKey, phase: CalendarKeyboardPhase,
-        choosingSlots: Bool, editorOpen: Bool, editingText: Bool, modified: Bool
+        choosingSlots: Bool, editorOpen: Bool, editingText: Bool, modified: Bool,
+        ownership: CalendarKeyboardBrowseOwnership
     ) -> CalendarKeyboardRoute {
-        guard choosingSlots, editorOpen, editingText, !modified, phase != .up else { return .yield }
+        guard choosingSlots, !modified, phase != .up else { return .yield }
+        let inEditor = editorOpen && editingText
+        let unfocused = !editingText && ownership == .windowDefault
+        guard inEditor || unfocused else { return .yield }
         switch key {
         case .up: return .move(-1)
         case .down: return .move(1)
+        case .returnKey, .keypadEnter:
+            guard unfocused else { return .yield }
+            return phase == .down ? .activate : .consume
         default: return .yield
         }
     }
