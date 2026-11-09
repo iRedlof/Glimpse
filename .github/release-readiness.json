@@ -1,23 +1,23 @@
 {
-  "version": "1.4.29",
-  "build": "36",
-  "scope": "User-picked Status strip calendar footer (today context, Pin/Settings/Quit icon buttons) and Classic preferences pane Settings in the retained separate window, preserving every preference and app action. Other-machine crash causality, restart, physical accessibility and endurance remain unproved.",
+  "version": "1.5.0",
+  "build": "37",
+  "scope": "Type to schedule in the Ask Glimpse field: navigate, range, question, create (with explicit slot pick, EventKit save and 10 s Undo) and clarify intents. Cloud AI proxy upstream 401 is a pre-existing server-side issue.",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-05-status-strip-classic-settings.md"
+      "evidence": "docs/superpowers/reviews/2026-11-08-type-to-schedule.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-05-status-strip-classic-settings.md"
+      "evidence": "docs/superpowers/reviews/2026-11-08-type-to-schedule.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-05-status-strip-classic-settings.md"
+      "evidence": "docs/superpowers/reviews/2026-11-08-type-to-schedule.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-05-status-strip-classic-settings.md"
+      "evidence": "docs/superpowers/reviews/2026-11-08-type-to-schedule.md"
     }
   }
 }
