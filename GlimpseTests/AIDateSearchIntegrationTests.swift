@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import ComposableArchitecture
+import EventKit
 import GlimpseCore
 import SwiftUI
 import Testing
@@ -21,7 +22,7 @@ struct AIDateSearchIntegrationTests {
             let first = try await submitDraft(fixture)
             #expect(root.aiModel.isProcessing)
             #expect(root.aiModel.errorMessage == nil)
-            #expect(nodes(root, named: "Close date search").isEmpty)
+            #expect(nodes(root, named: CalendarDateSearchRow.closeName).isEmpty)
             #expect(root.submissions == [Self.draft])
             #expect(root.submissionCurrentEvents == [true])
             await first.release(outcome.result)
@@ -29,9 +30,10 @@ struct AIDateSearchIntegrationTests {
             #expect(!root.aiModel.isProcessing)
             #expect(root.aiModel.currentRequestID == nil)
             #expect(root.aiModel.isEditorOpen && root.aiModel.draft == Self.draft)
-            #expect(root.aiModel.errorMessage == outcome.message)
+            #expect(root.aiModel.errorMessage == outcome.errorMessage
+                && root.aiModel.clarification == outcome.clarification)
             #expect(try editor(root).string == Self.draft)
-            try expectFeedback(root, outcome.message)
+            try expectFeedback(root, outcome.feedback)
             #expect(root.actions.value.isEmpty)
             #expect(root.store.selectedDate == root.today)
             #expect(await fixture.requests.count == 1)
@@ -43,7 +45,7 @@ struct AIDateSearchIntegrationTests {
             let second = try await fixture.request(at: 1)
             #expect(second.query == Self.draft && second.provider == .proxy)
             let target = try #require(root.date(day: 18))
-            await second.release(.success(target))
+            await second.release(.success(.navigate(CivilDate(target, calendar: .current))))
             try await fixture.completed(second, at: 1)
             #expect(root.actions.value == ["aiDate"])
             #expect(root.store.selectedDate == target)
@@ -71,7 +73,7 @@ struct AIDateSearchIntegrationTests {
             #expect(root.actions.value.isEmpty)
             #expect(root.accessibilityNodes().allSatisfy { node in
                 !AIDateIntegrationOutcome.allCases.contains { outcome in
-                    node.label == outcome.message || node.value as? String == outcome.message
+                    node.label == outcome.feedback || node.value as? String == outcome.feedback
                 }
             })
         }
@@ -94,11 +96,11 @@ struct AIDateSearchIntegrationTests {
             #expect(!root.aiModel.isProcessing && root.aiModel.currentRequestID == nil)
             #expect(request.cancelCount.value > 0 && request.returnCount.value == 0)
             try root.loadOwnedAccessibilityTree()
-            let dismiss = try control(root, named: "Close date search", role: .button)
+            let dismiss = try control(root, named: CalendarDateSearchRow.closeName, role: .button)
             #expect(dismiss.press())
             #expect(!root.aiModel.isEditorOpen && root.aiModel.draft.isEmpty)
             let target = try #require(root.date(day: 18))
-            await request.release(.success(target))
+            await request.release(.success(.navigate(CivilDate(target, calendar: .current))))
             try await fixture.completed(request, at: 0)
             #expect(root.actions.value.isEmpty && root.store.selectedDate == root.today)
             #expect(root.aiModel.errorMessage == nil && root.nativeEditorFields.isEmpty)
@@ -168,7 +170,7 @@ struct AIDateSearchIntegrationTests {
             settings.close()
             #expect(root.panel.isVisible && root.submissions.count == 1)
             let target = try #require(root.date(day: 18))
-            await request.release(.success(target))
+            await request.release(.success(.navigate(CivilDate(target, calendar: .current))))
             try await fixture.completed(request, at: 0)
             #expect(root.actions.value.isEmpty)
             #expect(root.store.selectedDate == root.today)
@@ -238,7 +240,7 @@ struct AIDateSearchIntegrationTests {
             // A public press exercises the actual collapsed row while hidden.
             // The subsequent direct submit is an eligibility probe of the model
             // that received the root notification, not a native Return claim.
-            let prompt = try control(root, named: "Go to date using AI", role: .button)
+            let prompt = try control(root, named: CalendarDateSearchRow.accessibilityName, role: .button)
             #expect(prompt.press())
             root.aiModel.setDraft("synthetic hidden probe")
             let hiddenTask = root.aiModel.submit()
@@ -246,7 +248,7 @@ struct AIDateSearchIntegrationTests {
             #expect(hiddenTask == nil)
             #expect(root.submissions.count == 1)
             let target = try #require(root.date(day: 18))
-            await request.release(.success(target))
+            await request.release(.success(.navigate(CivilDate(target, calendar: .current))))
             try await fixture.completed(request, at: 0)
             #expect(root.actions.value.isEmpty)
             #expect(await fixture.requests.count == 1)
@@ -275,7 +277,7 @@ struct AIDateSearchIntegrationTests {
             #expect(request.returnCount.value == 0)
             #expect(request.cancelCount.value > 0)
             let target = try #require(root.date(day: 18))
-            await request.release(.success(target))
+            await request.release(.success(.navigate(CivilDate(target, calendar: .current))))
             try await fixture.completed(request, at: 0)
             #expect(root.actions.value.isEmpty)
             #expect(root.store.selectedDate == root.today)
@@ -297,15 +299,15 @@ struct AIDateSearchIntegrationTests {
             let request = try await submitDraft(fixture)
             await request.release(outcome.result)
             try await fixture.completed(request, at: 0)
-            try expectFeedback(root, outcome.message)
+            try expectFeedback(root, outcome.feedback)
             let scroll = try #require(accessibilityScrollView(in: root.hosting))
             let document = try #require(scroll.documentView)
-            let feedback = try #require(feedbackNodes(root, outcome.message).first)
+            let feedback = try #require(feedbackNodes(root, outcome.feedback).first)
             let inDocument = document.convert(root.panel.convertFromScreen(feedback.frame), from: nil)
             _ = document.scrollToVisible(inDocument.insetBy(dx: -8, dy: -8))
             scroll.reflectScrolledClipView(scroll.contentView)
             await root.settleRendering()
-            let visibleFeedback = try #require(feedbackNodes(root, outcome.message).first)
+            let visibleFeedback = try #require(feedbackNodes(root, outcome.feedback).first)
             let clip = root.panel.convertToScreen(scroll.contentView.convert(scroll.contentView.bounds, to: nil))
             let body = NSRect(
                 x: root.panel.frame.minX + (PanelGeometry.panelWidth - PanelGeometry.contentWidth) / 2,
@@ -320,9 +322,9 @@ struct AIDateSearchIntegrationTests {
             #expect(document.frame.width <= PanelGeometry.contentWidth + PanelGeometry.tolerance)
             #expect(abs(scroll.contentView.bounds.minX) < PanelGeometry.tolerance)
             #expect(scroll.horizontalScroller == nil || scroll.horizontalScroller?.isHidden == true)
-            let dismiss = try control(root, named: "Close date search", role: .button)
-            let textField = try control(root, named: "Go to date using AI", role: .textField)
-            #expect(dismiss.help == "Clears the query and closes date search.")
+            let dismiss = try control(root, named: CalendarDateSearchRow.closeName, role: .button)
+            let textField = try control(root, named: CalendarDateSearchRow.accessibilityName, role: .textField)
+            #expect(dismiss.help == "Clears the query and closes Ask Glimpse.")
             expectDateSearchTarget(dismiss.frame)
             #expect(!dismiss.frame.intersects(textField.frame))
             #expect(textField.value as? String == Self.draft)
@@ -336,6 +338,178 @@ struct AIDateSearchIntegrationTests {
     }
 
     private static let draft = "synthetic next Friday"
+
+    // Preselecting a time, or letting Return resubmit while choosing, breaks the honest button.
+    @Test
+    func liveCreateNeedsAnExplicitPickAndSavesOnce() async throws {
+        let saves = LockIsolated<[NewEvent]>([])
+        let removals = LockIsolated(0)
+        let work = WritableCalendar(id: "work", title: "Work")
+        let day = CivilDate(year: 2030, month: 11, day: 18)!
+        let draft = EventDraft(title: "Coffee with Priya", day: day, window: .partOfDay(.afternoon), durationMinutes: 30)
+        let eventKit = EventKitClient(
+            requestAccess: {
+                Issue.record("Full-access fixture must not prompt")
+                return true
+            },
+            fetchEvents: { _ in [] },
+            authorizationStatus: { .fullAccess },
+            fetchEventsInInterval: { _ in [] },
+            defaultWritableCalendar: { work },
+            saveEvent: { new in
+                saves.withValue { $0.append(new) }
+                return SavedEvent(eventID: "saved-1", title: new.title, start: new.start, end: new.end,
+                                  calendarTitle: work.title)
+            },
+            removeEvent: { _ in removals.withValue { $0 += 1 } }
+        )
+        let root = try CalendarKeyboardRootFixture(
+            showAI: true,
+            aiClient: AIDateQueryClient(resolveProvider: { _ in .proxy }, interpret: { _, _ in .create(draft) }),
+            eventKitClient: eventKit
+        )
+        defer { root.close() }
+        try await root.openThroughShowOwner()
+        try root.send(.searchShortcut)
+        await root.settleRendering()
+        let field = try root.nativeEditorField()
+        let nativeEditor = try #require(field.currentEditor() as? NSTextView)
+        nativeEditor.insertText("coffee with Priya Monday afternoon", replacementRange: NSRange(location: NSNotFound, length: 0))
+        await root.settleRendering()
+        try root.send(.returnKey)
+        try #require(root.aiTasks.count == 1)
+        try await root.aiTasks[0].finish()
+        for _ in 0..<50 where root.store.schedule.phase != .choosing { await root.settleRendering() }
+        #expect(root.store.schedule.phase == .choosing)
+        #expect(root.store.schedule.slots.count == 3)
+        #expect(root.store.schedule.selectedSlotIndex == nil)
+        #expect(root.aiModel.isEditorOpen)
+
+        // Return before any pick neither books nor resubmits.
+        try root.send(.returnKey)
+        try root.send(.returnKey)
+        await root.settleRendering()
+        #expect(saves.value.isEmpty)
+        #expect(root.aiTasks.count == 1)
+
+        try root.send(.down)
+        try root.send(.down)
+        await root.settleRendering()
+        #expect(root.store.schedule.selectedSlotIndex == 1)
+        #expect(root.actions.value.isEmpty, "Arrows must not browse months while picking a time")
+
+        try root.send(.returnKey)
+        for _ in 0..<50 where root.store.schedule.undo == nil { await root.settleRendering() }
+        let picked = root.store.calendar.date(bySettingHour: 13, minute: 30, second: 0, of: day.date(in: root.store.calendar)!)!
+        #expect(saves.value == [NewEvent(title: "Coffee with Priya", start: picked,
+                                         end: picked.addingTimeInterval(30 * 60), calendarID: "work")])
+        #expect(root.store.schedule.undo?.status == .available)
+        #expect(!root.aiModel.isEditorOpen)
+        #expect(removals.value == 0)
+        try await root.awaitAcceptedSubmissions()
+    }
+
+    private func createFixture(
+        status: LockIsolated<EKAuthorizationStatus>, requests: LockIsolated<Int>,
+        saves: LockIsolated<[NewEvent]> = LockIsolated([])
+    ) throws -> CalendarKeyboardRootFixture {
+        let work = WritableCalendar(id: "work", title: "Work")
+        let day = CivilDate(year: 2030, month: 11, day: 18)!
+        let draft = EventDraft(title: "Coffee with Priya", day: day, window: .partOfDay(.afternoon), durationMinutes: 30)
+        let eventKit = EventKitClient(
+            requestAccess: {
+                requests.withValue { $0 += 1 }
+                status.setValue(.fullAccess)
+                return true
+            },
+            fetchEvents: { _ in [] },
+            authorizationStatus: { status.value },
+            fetchEventsInInterval: { _ in [] },
+            defaultWritableCalendar: { work },
+            saveEvent: { new in
+                saves.withValue { $0.append(new) }
+                return SavedEvent(eventID: "saved-1", title: new.title, start: new.start, end: new.end,
+                                  calendarTitle: work.title)
+            },
+            removeEvent: { _ in }
+        )
+        return try CalendarKeyboardRootFixture(
+            showAI: true,
+            aiClient: AIDateQueryClient(resolveProvider: { _ in .proxy }, interpret: { _, _ in .create(draft) }),
+            eventKitClient: eventKit
+        )
+    }
+
+    private func submitCreate(_ root: CalendarKeyboardRootFixture, until phase: ScheduleFeature.Phase) async throws {
+        try await root.openThroughShowOwner()
+        try root.send(.searchShortcut)
+        await root.settleRendering()
+        let nativeEditor = try #require(root.nativeEditorField().currentEditor() as? NSTextView)
+        nativeEditor.insertText("coffee with Priya Monday afternoon", replacementRange: NSRange(location: NSNotFound, length: 0))
+        await root.settleRendering()
+        try root.send(.returnKey)
+        try #require(root.aiTasks.count == 1)
+        try await root.aiTasks[0].finish()
+        for _ in 0..<50 where root.store.schedule.phase != phase { await root.settleRendering() }
+        try #require(root.store.schedule.phase == phase)
+    }
+
+    // A double Return (or a habitual resubmit) after a create must not raise
+    // the system calendar prompt; only the Allow button does, by click or by
+    // Return once it has keyboard focus.
+    @Test
+    func liveCreateReturnInTheFieldNeverRequestsCalendarAccess() async throws {
+        let status = LockIsolated<EKAuthorizationStatus>(.notDetermined)
+        let requests = LockIsolated(0)
+        let root = try createFixture(status: status, requests: requests)
+        defer { root.close() }
+        try await submitCreate(root, until: .needsAccess)
+
+        try root.send(.returnKey)
+        try root.send(.returnKey)
+        await root.settleRendering()
+        #expect(requests.value == 0)
+        #expect(root.store.schedule.phase == .needsAccess)
+        #expect(root.aiTasks.count == 1, "Return in .needsAccess must not resubmit either")
+
+        try await root.focusOwner(.scheduleAllowAccess)
+        try root.send(.returnKey)
+        for _ in 0..<50 where root.store.schedule.phase != .choosing { await root.settleRendering() }
+        #expect(requests.value == 1)
+        #expect(root.store.schedule.phase == .choosing)
+        try await root.awaitAcceptedSubmissions()
+    }
+
+    // With focus out of the field, ↓ used to browse to next year and Return to today.
+    @Test
+    func liveCreateSlotKeysWorkWhenFocusLeavesTheField() async throws {
+        let status = LockIsolated<EKAuthorizationStatus>(.fullAccess)
+        let requests = LockIsolated(0)
+        let saves = LockIsolated<[NewEvent]>([])
+        let root = try createFixture(status: status, requests: requests, saves: saves)
+        defer { root.close() }
+        try await submitCreate(root, until: .choosing)
+        let month = root.store.displayedMonth
+
+        try #require(root.panel.makeFirstResponder(nil))
+        await root.settleRendering()
+        try root.send(.returnKey)
+        await root.settleRendering()
+        #expect(saves.value.isEmpty, "Return with nothing picked must not save")
+        try root.send(.down)
+        await root.settleRendering()
+        #expect(root.store.schedule.selectedSlotIndex == 0)
+        #expect(root.actions.value.isEmpty, "Arrows must not browse months while picking a time")
+        #expect(root.store.displayedMonth == month)
+
+        try root.send(.returnKey)
+        for _ in 0..<50 where root.store.schedule.undo == nil { await root.settleRendering() }
+        #expect(saves.value.count == 1)
+        #expect(root.actions.value.isEmpty, "Return must save the pick, not jump to today")
+        #expect(root.store.schedule.undo?.status == .available)
+        #expect(!root.aiModel.isEditorOpen)
+        try await root.awaitAcceptedSubmissions()
+    }
 
     private func submitDraft(_ fixture: AIDateIntegrationFixture) async throws -> AIDateIntegrationRequest {
         let root = fixture.root
@@ -382,7 +556,7 @@ struct AIDateSearchIntegrationTests {
 
     private func expectFeedback(_ root: CalendarKeyboardRootFixture, _ message: String) throws {
         #expect(feedbackNodes(root, message).count == 1)
-        let dismiss = try control(root, named: "Close date search", role: .button)
+        let dismiss = try control(root, named: CalendarDateSearchRow.closeName, role: .button)
         #expect(dismiss.enabled)
         #expect(root.accessibilityNodes().filter { $0.role == .textField }.count == 1)
     }
@@ -547,7 +721,7 @@ private final class SettingsAIIntegrationHost {
 enum AIDateIntegrationOutcome: CaseIterable, Sendable {
     case noDate, operational, unavailable
 
-    var result: Result<Date?, any Error> {
+    var result: Result<AIIntent?, any Error> {
         switch self {
         case .noDate: .success(nil)
         case .operational: .failure(AIDateFailure.transport)
@@ -557,11 +731,16 @@ enum AIDateIntegrationOutcome: CaseIterable, Sendable {
 
     var message: String {
         switch self {
-        case .noDate: "AI didn't return a usable date. Try ‘next Friday’ or ‘Jan 2028’."
-        case .operational: "AI couldn't complete the date search. Try again."
+        case .noDate: AIDateQueryModel.unparsedMessage
+        case .operational: AIDateQueryModel.failureMessage
         case .unavailable: "On-device AI is unavailable. Choose Cloud AI in Preferences."
         }
     }
+
+    /// An unparsed reply asks a clarifying line instead of showing an error.
+    var errorMessage: String? { self == .noDate ? nil : message }
+    var clarification: String? { self == .noDate ? message : nil }
+    var feedback: String { self == .noDate ? "Glimpse asks: \(message)" : message }
 }
 
 enum AIDateIntegrationSettingsAction: CaseIterable, Sendable {

@@ -425,7 +425,7 @@ struct CalendarFeatureTests {
     }
 
     @Test
-    func aiDateResult_navigatesAndSelects() async {
+    func aiNavigate_navigatesAndSelectsStartOfDay() async {
         let cal = Calendar.current
         let july4 = cal.date(from: DateComponents(year: 2026, month: 7, day: 4))!
 
@@ -441,21 +441,21 @@ struct CalendarFeatureTests {
 
         store.exhaustivity = .off
 
-        await store.send(.aiDateResult(july4)) {
+        await store.send(.aiIntent(.navigate(CivilDate(year: 2026, month: 7, day: 4)!))) {
             $0.displayedMonth = july4
             $0.selectedDate = july4
         }
     }
 
     @Test
-    func aiDateResult_nilDoesNothing() async {
+    func aiClarifyDoesNothing() async {
         let store = TestStore(
             initialState: CalendarFeature.State()
         ) {
             CalendarFeature()
         }
 
-        await store.send(.aiDateResult(nil))
+        await store.send(.aiIntent(.clarify("Which day?")))
     }
 
     @Test
@@ -739,7 +739,7 @@ struct CalendarFeatureTests {
     @Test(arguments: [false, true])
     func todayAndAISelection_loadEvents(isAI: Bool) async {
         let now = Date(timeIntervalSince1970: 1_000_000)
-        let target = isAI ? Date(timeIntervalSince1970: 2_000_000) : now
+        let target = isAI ? Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 2_000_000)) : now
         let targetDay = Calendar.current.startOfDay(for: target)
         var state = CalendarFeature.State(displayedMonth: Date(timeIntervalSince1970: 0))
         state.calendarAuthorizationStatus = .fullAccess
@@ -757,7 +757,7 @@ struct CalendarFeatureTests {
             }
         }
 
-        await store.send(isAI ? .aiDateResult(target) : .goToToday) {
+        await store.send(isAI ? .aiIntent(.navigate(CivilDate(target, calendar: .current))) : .goToToday) {
             $0.displayedMonth = target
             $0.selectedDate = target
             $0.eventsDate = targetDay

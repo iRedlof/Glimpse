@@ -4,6 +4,7 @@ enum CalendarKeyboardOwner: String, CaseIterable, Hashable, Sendable {
     case grid, previousMonth, today, nextMonth, searchPrompt, searchDismiss, editor
     case footerQuit, footerAbout, footerPin, footerCalendar, footerSettings
     case quitCancel, quitConfirm
+    case scheduleAllowAccess, scheduleOpenPrivacySettings
 }
 
 enum CalendarKeyboardKey: Sendable {
@@ -98,6 +99,40 @@ enum CalendarKeyboardRouter {
         default: return .yield
         }
     }
+
+    /// While proposed times are showing, ↑/↓ pick one, whether focus is in
+    /// the AI editor or has left it (window default). Return with focus out
+    /// of the field is the slot list's too (`.activate`: save a picked time,
+    /// else nothing), so neither arrows nor Return browse months under the
+    /// card. A focused control (grid, buttons) keeps its own keys, and
+    /// Return in the field stays with the field's onSubmit.
+    static func slotPicker(
+        _ key: CalendarKeyboardKey, phase: CalendarKeyboardPhase,
+        choosingSlots: Bool, editorOpen: Bool, editingText: Bool, modified: Bool,
+        ownership: CalendarKeyboardBrowseOwnership
+    ) -> CalendarKeyboardRoute {
+        guard choosingSlots, !modified, phase != .up else { return .yield }
+        let inEditor = editorOpen && editingText
+        let unfocused = !editingText && ownership == .windowDefault
+        guard inEditor || unfocused else { return .yield }
+        switch key {
+        case .up: return .move(-1)
+        case .down: return .move(1)
+        case .returnKey, .keypadEnter:
+            guard unfocused else { return .yield }
+            return phase == .down ? .activate : .consume
+        default: return .yield
+        }
+    }
+
+    /// ⌘Z removes a just-added event, except while editing text (native undo).
+    static func undoesAddedEvent(
+        keyCode: UInt16, commandOnly: Bool, canUndo: Bool, editingText: Bool
+    ) -> Bool {
+        keyCode == undoKeyCode && commandOnly && canUndo && !editingText
+    }
+
+    static let undoKeyCode: UInt16 = 6
 
     static func ownership(
         published: CalendarKeyboardOwner?, observed: Bool,

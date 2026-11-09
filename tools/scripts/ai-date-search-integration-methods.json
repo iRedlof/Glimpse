@@ -8,6 +8,9 @@
     "AIDateSearchIntegrationTests/preferenceReloadReconcilesCurrentSettings(disable:)": 2,
     "AIDateSearchIntegrationTests/hiddenPreparationAndVisibleShowPreserveOwnership()": 1,
     "AIDateSearchIntegrationTests/dismissEscapeAndRemovalRejectLateCompletion(boundary:)": 3,
-    "AIDateSearchIntegrationTests/failureCopyFitsAndRemainsAccessible(outcome:)": 3
+    "AIDateSearchIntegrationTests/failureCopyFitsAndRemainsAccessible(outcome:)": 3,
+    "AIDateSearchIntegrationTests/liveCreateNeedsAnExplicitPickAndSavesOnce()": 1,
+    "AIDateSearchIntegrationTests/liveCreateReturnInTheFieldNeverRequestsCalendarAccess()": 1,
+    "AIDateSearchIntegrationTests/liveCreateSlotKeysWorkWhenFocusLeavesTheField()": 1
   }
 }

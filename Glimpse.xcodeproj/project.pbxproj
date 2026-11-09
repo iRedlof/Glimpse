@@ -10,7 +10,16 @@
 		E20000000000000000000001 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000002 /* SettingsWindow.swift */; };
 		E20000000000000000000003 /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000004 /* SettingsRootView.swift */; };
 		DD0000000000000000000095 /* AIDateQueryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000096 /* AIDateQueryModel.swift */; };
+		DD00000000000000000000BC /* CalendarDateSearchRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000BD /* CalendarDateSearchRow.swift */; };
+		DD00000000000000000000BA /* ScheduleProposalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000BB /* ScheduleProposalView.swift */; };
+		DD00000000000000000000B8 /* ScheduleCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000B9 /* ScheduleCopy.swift */; };
+		DD00000000000000000000B6 /* AIResultViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000B7 /* AIResultViews.swift */; };
+		DD00000000000000000000B4 /* AISubmitRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000B5 /* AISubmitRouter.swift */; };
+		DD00000000000000000000B2 /* OnDeviceIntentGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000B3 /* OnDeviceIntentGenerator.swift */; };
+		DD00000000000000000000B0 /* AIIntentPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000B1 /* AIIntentPrompt.swift */; };
 		DD0000000000000000000097 /* AIDateQueryModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000098 /* AIDateQueryModelTests.swift */; };
+		DD00000000000000000000C0 /* TypeToScheduleViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000C1 /* TypeToScheduleViewTests.swift */; };
+		DD00000000000000000000BE /* AIIntentPromptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000BF /* AIIntentPromptTests.swift */; };
 		DD0000000000000000000091 /* AIDateQueryClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000092 /* AIDateQueryClient.swift */; };
 		DD0000000000000000000093 /* AIDateQueryClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000094 /* AIDateQueryClientTests.swift */; };
 		DD0000000000000000000099 /* AIDateSearchIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000000000000000000009A /* AIDateSearchIntegrationTests.swift */; };
@@ -61,7 +70,6 @@
 		DD00000000000000000040 /* MenuBarItemRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000041 /* MenuBarItemRendererTests.swift */; };
 		BB00000000000000000024 /* AppDesignTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000014 /* AppDesignTests.swift */; };
 		BB00000000000000000025 /* CalendarStatusItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000015 /* CalendarStatusItemTests.swift */; };
-		BB00000000000000000026 /* DateParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000016 /* DateParserTests.swift */; };
 		BB00000000000000000027 /* HotkeyComboTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000017 /* HotkeyComboTests.swift */; };
 		DD00000000000000000050 /* DiagnosticsExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000051 /* DiagnosticsExportTests.swift */; };
 		DD00000000000000000052 /* CalendarInputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000053 /* CalendarInputTests.swift */; };
@@ -85,7 +93,16 @@
 		E20000000000000000000002 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
 		E20000000000000000000004 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
 		DD0000000000000000000096 /* AIDateQueryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryModel.swift; sourceTree = "<group>"; };
+		DD00000000000000000000BD /* CalendarDateSearchRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarDateSearchRow.swift; sourceTree = "<group>"; };
+		DD00000000000000000000BB /* ScheduleProposalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleProposalView.swift; sourceTree = "<group>"; };
+		DD00000000000000000000B9 /* ScheduleCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleCopy.swift; sourceTree = "<group>"; };
+		DD00000000000000000000B7 /* AIResultViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResultViews.swift; sourceTree = "<group>"; };
+		DD00000000000000000000B5 /* AISubmitRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISubmitRouter.swift; sourceTree = "<group>"; };
+		DD00000000000000000000B3 /* OnDeviceIntentGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceIntentGenerator.swift; sourceTree = "<group>"; };
+		DD00000000000000000000B1 /* AIIntentPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIIntentPrompt.swift; sourceTree = "<group>"; };
 		DD0000000000000000000098 /* AIDateQueryModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryModelTests.swift; sourceTree = "<group>"; };
+		DD00000000000000000000C1 /* TypeToScheduleViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeToScheduleViewTests.swift; sourceTree = "<group>"; };
+		DD00000000000000000000BF /* AIIntentPromptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIIntentPromptTests.swift; sourceTree = "<group>"; };
 		DD0000000000000000000092 /* AIDateQueryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryClient.swift; sourceTree = "<group>"; };
 		DD0000000000000000000094 /* AIDateQueryClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryClientTests.swift; sourceTree = "<group>"; };
 		DD000000000000000000009A /* AIDateSearchIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateSearchIntegrationTests.swift; sourceTree = "<group>"; };
@@ -139,7 +156,6 @@
 		DD00000000000000000041 /* MenuBarItemRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarItemRendererTests.swift; sourceTree = "<group>"; };
 		BB00000000000000000014 /* AppDesignTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDesignTests.swift; sourceTree = "<group>"; };
 		BB00000000000000000015 /* CalendarStatusItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarStatusItemTests.swift; sourceTree = "<group>"; };
-		BB00000000000000000016 /* DateParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateParserTests.swift; sourceTree = "<group>"; };
 		BB00000000000000000017 /* HotkeyComboTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyComboTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000051 /* DiagnosticsExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsExportTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000053 /* CalendarInputTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarInputTests.swift; sourceTree = "<group>"; };
@@ -204,6 +220,13 @@
 				DD00000000000000000012 /* AIDateHelper.swift */,
 				DD0000000000000000000092 /* AIDateQueryClient.swift */,
 				DD0000000000000000000096 /* AIDateQueryModel.swift */,
+				DD00000000000000000000BD /* CalendarDateSearchRow.swift */,
+				DD00000000000000000000BB /* ScheduleProposalView.swift */,
+				DD00000000000000000000B9 /* ScheduleCopy.swift */,
+				DD00000000000000000000B7 /* AIResultViews.swift */,
+				DD00000000000000000000B5 /* AISubmitRouter.swift */,
+				DD00000000000000000000B3 /* OnDeviceIntentGenerator.swift */,
+				DD00000000000000000000B1 /* AIIntentPrompt.swift */,
 				DD00000000000000000015 /* MonthBorderShape.swift */,
 				DD00000000000000000016 /* SparkleUpdater.swift */,
 				DD00000000000000000017 /* ProxyProvider.swift */,
@@ -251,9 +274,10 @@
 				BB00000000000000000014 /* AppDesignTests.swift */,
 				BB00000000000000000015 /* CalendarStatusItemTests.swift */,
 				DD00000000000000000000A1 /* CalendarAgendaRefreshTests.swift */,
-				BB00000000000000000016 /* DateParserTests.swift */,
 				DD0000000000000000000094 /* AIDateQueryClientTests.swift */,
 				DD0000000000000000000098 /* AIDateQueryModelTests.swift */,
+				DD00000000000000000000C1 /* TypeToScheduleViewTests.swift */,
+				DD00000000000000000000BF /* AIIntentPromptTests.swift */,
 				BB00000000000000000017 /* HotkeyComboTests.swift */,
 				DD00000000000000000051 /* DiagnosticsExportTests.swift */,
 				DD00000000000000000053 /* CalendarInputTests.swift */,
@@ -377,6 +401,13 @@
 				DD00000000000000000003 /* AIDateHelper.swift in Sources */,
 				DD0000000000000000000091 /* AIDateQueryClient.swift in Sources */,
 				DD0000000000000000000095 /* AIDateQueryModel.swift in Sources */,
+				DD00000000000000000000BC /* CalendarDateSearchRow.swift in Sources */,
+				DD00000000000000000000BA /* ScheduleProposalView.swift in Sources */,
+				DD00000000000000000000B8 /* ScheduleCopy.swift in Sources */,
+				DD00000000000000000000B6 /* AIResultViews.swift in Sources */,
+				DD00000000000000000000B4 /* AISubmitRouter.swift in Sources */,
+				DD00000000000000000000B2 /* OnDeviceIntentGenerator.swift in Sources */,
+				DD00000000000000000000B0 /* AIIntentPrompt.swift in Sources */,
 				DD00000000000000000006 /* MonthBorderShape.swift in Sources */,
 				DD00000000000000000007 /* SparkleUpdater.swift in Sources */,
 				DD00000000000000000008 /* ProxyProvider.swift in Sources */,
@@ -411,9 +442,10 @@
 				BB00000000000000000024 /* AppDesignTests.swift in Sources */,
 				BB00000000000000000025 /* CalendarStatusItemTests.swift in Sources */,
 				DD00000000000000000000A0 /* CalendarAgendaRefreshTests.swift in Sources */,
-				BB00000000000000000026 /* DateParserTests.swift in Sources */,
 				DD0000000000000000000093 /* AIDateQueryClientTests.swift in Sources */,
 				DD0000000000000000000097 /* AIDateQueryModelTests.swift in Sources */,
+				DD00000000000000000000C0 /* TypeToScheduleViewTests.swift in Sources */,
+				DD00000000000000000000BE /* AIIntentPromptTests.swift in Sources */,
 				BB00000000000000000027 /* HotkeyComboTests.swift in Sources */,
 				DD00000000000000000050 /* DiagnosticsExportTests.swift in Sources */,
 				DD00000000000000000052 /* CalendarInputTests.swift in Sources */,
@@ -494,7 +526,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 36;
+				CURRENT_PROJECT_VERSION = 37;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -502,7 +534,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.29;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -519,7 +551,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 36;
+				CURRENT_PROJECT_VERSION = 37;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -527,7 +559,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.29;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -542,9 +574,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 36;
+				CURRENT_PROJECT_VERSION = 37;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.29;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -559,9 +591,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 36;
+				CURRENT_PROJECT_VERSION = 37;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.4.29;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

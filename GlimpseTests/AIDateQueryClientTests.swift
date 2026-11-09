@@ -6,38 +6,48 @@ import Testing
 
 struct AIDateQueryClientTests {
     enum CompletedResponse: String, CaseIterable, Sendable {
-        case iso, embedded, whitespaceISO, noDate, empty, whitespaceOnly
+        case json, fenced, create, legacyISO, legacyWhitespaceISO, prose, embedded, empty, whitespaceOnly
 
         var text: String {
             switch self {
-            case .iso: "2026-03-15"
+            case .json: #"{"intent":"navigate","date":"2026-03-15"}"#
+            case .fenced: "Here you go:\n```json\n{\"intent\":\"range\",\"dates\":[\"2026-03-20\",\"2026-03-13\"],\"label\":\"Fridays\"}\n```"
+            case .create: #"{"intent":"create","title":"Coffee","date":"2026-03-15","partOfDay":"afternoon"}"#
+            case .legacyISO: "2026-03-15"
+            case .legacyWhitespaceISO: "  2026-01-01  \n"
+            case .prose: "not a date at all"
             case .embedded: "The date is 2026-12-25 for Christmas"
-            case .whitespaceISO: "  2026-01-01  \n"
-            case .noDate: "not a date at all"
             case .empty: ""
             case .whitespaceOnly: " \n\t "
             }
         }
 
-        var expectedComponents: DateComponents? {
+        var expectedIntent: AIIntent? {
             switch self {
-            case .iso: DateComponents(year: 2026, month: 3, day: 15)
-            case .embedded: DateComponents(year: 2026, month: 12, day: 25)
-            case .whitespaceISO: DateComponents(year: 2026, month: 1, day: 1)
-            case .noDate, .empty, .whitespaceOnly: nil
+            case .json, .legacyISO: .navigate(CivilDate(year: 2026, month: 3, day: 15)!)
+            case .legacyWhitespaceISO: .navigate(CivilDate(year: 2026, month: 1, day: 1)!)
+            case .fenced: .range(DateRangeHighlight(
+                dates: [CivilDate(year: 2026, month: 3, day: 13)!, CivilDate(year: 2026, month: 3, day: 20)!],
+                label: "Fridays"
+            ))
+            case .create: .create(EventDraft(
+                title: "Coffee", day: CivilDate(year: 2026, month: 3, day: 15)!,
+                window: .partOfDay(.afternoon), durationMinutes: 30
+            ))
+            case .prose, .embedded, .empty, .whitespaceOnly: nil
             }
         }
     }
 
     enum FailedResponse: String, CaseIterable, Sendable {
         case nonHTTP, badRequest, serverError, malformedJSON
-        case arrayJSON, missingText, nullText, numericText
+        case arrayJSON, missingText, nullText, numericText, upstreamError
 
         var expectedFailure: AIDateFailure {
             switch self {
             case .nonHTTP: .nonHTTPResponse
             case .badRequest, .serverError: .nonSuccessResponse
-            case .malformedJSON, .arrayJSON, .missingText, .nullText, .numericText:
+            case .malformedJSON, .arrayJSON, .missingText, .nullText, .numericText, .upstreamError:
                 .unusableResponse
             }
         }
@@ -50,6 +60,9 @@ struct AIDateQueryClientTests {
             case .missingText: data = Data("{}".utf8)
             case .nullText: data = Data("{\"text\":null}".utf8)
             case .numericText: data = Data("{\"text\":42}".utf8)
+            case .upstreamError:
+                // Observed live on 2026-11-08: HTTP 200 with a null text and an upstream error.
+                data = Data("{\"text\":null,\"model\":\"m\",\"error\":\"Upstream error: 401\"}".utf8)
             default: data = Data("{\"text\":\"2026-03-15\"}".utf8)
             }
             if self == .nonHTTP {
@@ -65,7 +78,7 @@ struct AIDateQueryClientTests {
     }
 
     @Test(arguments: CompletedResponse.allCases)
-    func proxyDateAndCompletedNoDate(response: CompletedResponse) async throws {
+    func proxyIntentAndCompletedUnparsed(response: CompletedResponse) async throws {
         let authorizationCalls = LockIsolated(0)
         let transportCalls = LockIsolated(0)
         let requestContractMatched = LockIsolated(false)
@@ -77,6 +90,7 @@ struct AIDateQueryClientTests {
                 request.setValue("synthetic-token", forHTTPHeaderField: "X-Fixture-Authorization")
             },
             now: { Self.now },
+            calendar: Self.calendar,
             transport: { request in
                 transportCalls.withValue { $0 += 1 }
                 let body = request.httpBody.flatMap {
@@ -88,6 +102,7 @@ struct AIDateQueryClientTests {
                         && request.timeoutInterval == 15
                         && request.value(forHTTPHeaderField: "Content-Type") == "application/json"
                         && request.value(forHTTPHeaderField: "X-Fixture-Authorization") == "synthetic-token"
+                        && body?.keys.sorted() == ["prompt", "tier"]
                         && body?["tier"] == "balanced"
                         && body?["prompt"] == Self.expectedPrompt
                 )
@@ -95,11 +110,8 @@ struct AIDateQueryClientTests {
             }
         )
         let client = Self.client(proxy: dependencies)
-        let date = try await client.parseDate(Self.query, client.resolveProvider(.auto))
-        let components = date.map {
-            Calendar.current.dateComponents([.year, .month, .day], from: $0)
-        }
-        #expect(components == response.expectedComponents)
+        let intent = try await client.interpret(Self.query, client.resolveProvider(.auto))
+        #expect(intent == response.expectedIntent)
         #expect(authorizationCalls.value == 1)
         #expect(transportCalls.value == 1)
         let contractMatched = requestContractMatched.value
@@ -114,20 +126,21 @@ struct AIDateQueryClientTests {
             endpoint: "https://[",
             authorize: { _ in authorizationCalls.withValue { $0 += 1 } },
             now: { Self.now },
+            calendar: Self.calendar,
             transport: { _ in
                 transportCalls.withValue { $0 += 1 }
                 return Self.completedProxy()
             }
         )
         await Self.expectFailure(.requestPreparation) {
-            try await ProxyProvider.parseDate(Self.query, dependencies: invalid)
+            try await ProxyProvider.interpret(Self.query, dependencies: invalid)
         }
         #expect(authorizationCalls.value == 0)
         #expect(transportCalls.value == 0)
 
         let transport = Self.proxyDependencies { _ in throw SelfHostileError() }
         await Self.expectFailure(.transport) {
-            try await ProxyProvider.parseDate(Self.query, dependencies: transport)
+            try await ProxyProvider.interpret(Self.query, dependencies: transport)
         }
     }
 
@@ -137,7 +150,7 @@ struct AIDateQueryClientTests {
         let client = Self.client(proxy: dependencies)
         let provider = client.resolveProvider(.proxy)
         await Self.expectFailure(response.expectedFailure) {
-            try await client.parseDate(Self.query, provider)
+            try await client.interpret(Self.query, provider)
         }
     }
 
@@ -153,48 +166,46 @@ struct AIDateQueryClientTests {
         let generatorCalls = LockIsolated(0)
         let promptMatched = LockIsolated(false)
         let dependencies = AIDateHelper.Dependencies(
-            parseProxy: { _ in
+            interpretProxy: { _ in
                 proxyCalls.withValue { $0 += 1 }
-                return DateParser.extractDate(from: "2026-12-25")
+                return .navigate(CivilDate(year: 2026, month: 12, day: 25)!)
             },
             now: { Self.now },
-            generateOnDevice: { prompt in
+            calendar: Self.calendar,
+            generateOnDevice: { instructions, prompt in
                 generatorCalls.withValue { $0 += 1 }
-                promptMatched.setValue(prompt == Self.expectedPrompt)
-                return "  2026-03-15  \n"
+                promptMatched.setValue(instructions + "\n" + prompt == Self.expectedOnDevicePrompt)
+                return AIIntentWire(intent: "navigate", date: "2026-03-15")
             }
         )
-        let date = try await AIDateHelper.parseNaturalLanguageDate(
+        let intent = try await AIDateHelper.interpret(
             Self.query, provider: .foundationModels, dependencies: dependencies
         )
-        let components = date.map {
-            Calendar.current.dateComponents([.year, .month, .day], from: $0)
-        }
-        #expect(components == DateComponents(year: 2026, month: 3, day: 15))
+        #expect(intent == .navigate(CivilDate(year: 2026, month: 3, day: 15)!))
         let actualPromptMatched = promptMatched.value
         #expect(actualPromptMatched)
         #expect(proxyCalls.value == 0)
         #expect(generatorCalls.value == 1)
 
         var noDate = dependencies
-        noDate.generateOnDevice = { _ in "no supported date" }
-        let noDateResult = try await AIDateHelper.parseNaturalLanguageDate(
+        noDate.generateOnDevice = { _, _ in AIIntentWire(intent: "teleport", date: "2026-03-15") }
+        let noDateResult = try await AIDateHelper.interpret(
             Self.query, provider: .foundationModels, dependencies: noDate
         )
         #expect(noDateResult == nil)
 
         var failed = dependencies
-        failed.generateOnDevice = { _ in throw SelfHostileError() }
+        failed.generateOnDevice = { _, _ in throw SelfHostileError() }
         let failedDependencies = failed
         await Self.expectFailure(.onDeviceRequest) {
-            try await AIDateHelper.parseNaturalLanguageDate(
+            try await AIDateHelper.interpret(
                 Self.query, provider: .foundationModels, dependencies: failedDependencies
             )
         }
         let beforeProxy = proxyCalls.value
         let beforeGenerator = generatorCalls.value
         await Self.expectFailure(.unavailable) {
-            try await AIDateHelper.parseNaturalLanguageDate(
+            try await AIDateHelper.interpret(
                 Self.query, provider: .none, dependencies: dependencies
             )
         }
@@ -207,15 +218,15 @@ struct AIDateQueryClientTests {
         for error in [CancellationError() as any Error, URLError(.cancelled)] {
             let dependencies = Self.proxyDependencies { _ in throw error }
             await #expect(throws: CancellationError.self) {
-                try await ProxyProvider.parseDate(Self.query, dependencies: dependencies)
+                try await ProxyProvider.interpret(Self.query, dependencies: dependencies)
             }
         }
         let canceledGenerator = AIDateHelper.Dependencies(
-            parseProxy: { _ in nil }, now: { Self.now },
-            generateOnDevice: { _ in throw CancellationError() }
+            interpretProxy: { _ in nil }, now: { Self.now },
+            generateOnDevice: { _, _ in throw CancellationError() }
         )
         await #expect(throws: CancellationError.self) {
-            try await AIDateHelper.parseNaturalLanguageDate(
+            try await AIDateHelper.interpret(
                 Self.query, provider: .foundationModels, dependencies: canceledGenerator
             )
         }
@@ -228,7 +239,7 @@ struct AIDateQueryClientTests {
         }
         let canceledBeforeWork = Task {
             await start.wait()
-            return try await ProxyProvider.parseDate(Self.query, dependencies: notStarted)
+            return try await ProxyProvider.interpret(Self.query, dependencies: notStarted)
         }
         canceledBeforeWork.cancel()
         await start.open()
@@ -246,19 +257,19 @@ struct AIDateQueryClientTests {
                     return Self.completedProxy()
                 }
                 let dependencies = AIDateHelper.Dependencies(
-                    parseProxy: { query in
-                        try await ProxyProvider.parseDate(query, dependencies: proxy)
+                    interpretProxy: { query in
+                        try await ProxyProvider.interpret(query, dependencies: proxy)
                     },
                     now: { Self.now },
-                    generateOnDevice: { _ in
+                    generateOnDevice: { _, _ in
                         await entered.open()
                         await finish.wait()
                         if failsAfterCancellation { throw SelfHostileError() }
-                        return "2026-03-15"
+                        return AIIntentWire(intent: "navigate", date: "2026-03-15")
                     }
                 )
                 let worker = Task {
-                    try await AIDateHelper.parseNaturalLanguageDate(
+                    try await AIDateHelper.interpret(
                         Self.query, provider: provider, dependencies: dependencies
                     )
                 }
@@ -272,8 +283,43 @@ struct AIDateQueryClientTests {
 
     private static let endpoint = URL(string: "https://fixture.invalid/refine")!
     private static let now = Date(timeIntervalSince1970: 1_700_000_000)
-    private static let query = "synthetic next Friday"
-    private static let expectedPrompt = "Respond with ONLY a date in yyyy-MM-dd format, nothing else. If the query is relative, today is 2023-11-14T22:13:20Z. Query: synthetic next Friday"
+    /// Names no day, so the provider's date is used as given.
+    private static let query = "synthetic jump request"
+    /// 2023-11-14T22:13:20Z is already Nov 15 in Kiritimati (UTC+14): the prompt must say the local day.
+    private static let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Pacific/Kiritimati")!
+        return calendar
+    }()
+    private static let expectedPrompt = AIIntentPrompt.full(
+        query: query, today: CivilDate(year: 2023, month: 11, day: 15)!,
+        timeZone: TimeZone(identifier: "Pacific/Kiritimati")!
+    )
+
+    private static let expectedOnDevicePrompt = AIIntentPrompt.onDeviceInstructions(
+        today: CivilDate(year: 2023, month: 11, day: 15)!, timeZone: TimeZone(identifier: "Pacific/Kiritimati")!
+    ) + "\n" + AIIntentPrompt.user(query)
+
+    /// Both providers: a day the query names is resolved in Swift and wins
+    /// over a wrong model date (the on-device model said Tuesday for Friday).
+    @Test
+    func namedDayInTheQueryWinsOverTheModelDateForBothProviders() async throws {
+        // Today is Wednesday 2023-11-15 in Kiritimati; next Friday is the 17th.
+        let friday = CivilDate(year: 2023, month: 11, day: 17)!
+        let reply = try JSONSerialization.data(withJSONObject: ["text": #"{"intent":"navigate","date":"2023-11-21"}"#])
+        let proxy = ProxyProvider.Dependencies(
+            endpoint: Self.endpoint.absoluteString, authorize: { _ in }, now: { Self.now }, calendar: Self.calendar,
+            transport: { _ in (reply, Self.httpResponse()) }
+        )
+        #expect(try await ProxyProvider.interpret("next Friday", dependencies: proxy) == .navigate(friday))
+
+        let onDevice = AIDateHelper.Dependencies(
+            interpretProxy: { _ in nil }, now: { Self.now }, calendar: Self.calendar,
+            generateOnDevice: { _, _ in AIIntentWire(intent: "navigate", date: "2023-11-21") }
+        )
+        #expect(try await AIDateHelper.interpret("next Friday", provider: .foundationModels, dependencies: onDevice)
+            == .navigate(friday))
+    }
 
     private static func httpResponse(status: Int = 200) -> HTTPURLResponse {
         HTTPURLResponse(url: endpoint, statusCode: status, httpVersion: nil, headerFields: nil)!
@@ -288,25 +334,25 @@ struct AIDateQueryClientTests {
     ) -> ProxyProvider.Dependencies {
         ProxyProvider.Dependencies(
             endpoint: endpoint.absoluteString, authorize: { _ in },
-            now: { Self.now }, transport: transport
+            now: { Self.now }, calendar: calendar, transport: transport
         )
     }
 
     private static func client(proxy: ProxyProvider.Dependencies) -> AIDateQueryClient {
         let dependencies = AIDateHelper.Dependencies(
-            parseProxy: { query in
-                try await ProxyProvider.parseDate(query, dependencies: proxy)
+            interpretProxy: { query in
+                try await ProxyProvider.interpret(query, dependencies: proxy)
             },
             now: { Self.now },
-            generateOnDevice: { _ in
+            generateOnDevice: { _, _ in
                 Issue.record("Synthetic proxy routing must not invoke on-device generation.")
-                return ""
+                return AIIntentWire(intent: "clarify")
             }
         )
         return AIDateQueryClient(
             resolveProvider: { AIDateHelper.provider(for: $0, onDeviceSupported: false) },
-            parseDate: {
-                try await AIDateHelper.parseNaturalLanguageDate(
+            interpret: {
+                try await AIDateHelper.interpret(
                     $0, provider: $1, dependencies: dependencies
                 )
             }
@@ -315,7 +361,7 @@ struct AIDateQueryClientTests {
 
     private static func expectFailure(
         _ expected: AIDateFailure,
-        operation: () async throws -> Date?
+        operation: () async throws -> AIIntent?
     ) async {
         do {
             _ = try await operation()
@@ -353,3 +399,76 @@ private actor AIDateClientGate {
         for waiter in waiting { waiter.resume() }
     }
 }
+
+// MARK: - Live golden check (opt-in)
+
+/// Sends the four Type to Schedule example queries to a real provider with
+/// "today" pinned to Sunday 2026-11-08 and checks the intents. Opt-in because
+/// it needs Apple Intelligence or the network:
+/// `TEST_RUNNER_GLIMPSE_LIVE_AI=foundationModels` (or `proxy`, or both, comma-separated).
+@Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["GLIMPSE_LIVE_AI"] != nil))
+struct AILiveProviderGoldenTests {
+    private static let calendar = Calendar.autoupdatingCurrent
+    private static let today = CivilDate(year: 2026, month: 11, day: 8)!
+    private static let noon = calendar.date(from: DateComponents(year: 2026, month: 11, day: 8, hour: 12))!
+
+    static let providers: [AIDateHelper.Provider] = {
+        let requested = (ProcessInfo.processInfo.environment["GLIMPSE_LIVE_AI"] ?? "")
+            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        return [AIDateHelper.Provider.foundationModels, .proxy].filter {
+            requested.contains($0 == .proxy ? "proxy" : "foundationModels")
+        }
+    }()
+
+    private static func interpret(_ query: String, _ provider: AIDateHelper.Provider) async throws -> AIIntent? {
+        var dependencies = AIDateHelper.Dependencies.live
+        dependencies.now = { noon }
+        dependencies.calendar = calendar
+        dependencies.interpretProxy = { query in
+            var proxy = ProxyProvider.Dependencies.live
+            proxy.now = { noon }
+            proxy.calendar = calendar
+            return try await ProxyProvider.interpret(query, dependencies: proxy)
+        }
+        return try await AIDateHelper.interpret(query, provider: provider, dependencies: dependencies)
+    }
+
+    private static func day(_ value: Int, month: Int = 11, year: Int = 2026) -> CivilDate {
+        CivilDate(year: year, month: month, day: value)!
+    }
+
+    @Test(arguments: providers)
+    func nextFridayNavigatesToFriday(_ provider: AIDateHelper.Provider) async throws {
+        #expect(try await Self.interpret("next Friday", provider) == .navigate(Self.day(13)))
+    }
+
+    @Test(arguments: providers)
+    func nextThreeFridaysHighlightsFridays(_ provider: AIDateHelper.Provider) async throws {
+        guard case let .range(highlight) = try await Self.interpret("next 3 Fridays", provider) else {
+            Issue.record("expected a range")
+            return
+        }
+        #expect(highlight.dates == [Self.day(13), Self.day(20), Self.day(27)])
+    }
+
+    @Test(arguments: providers)
+    func workdaysUntilMarchFirstIsAnswered(_ provider: AIDateHelper.Provider) async throws {
+        #expect(try await Self.interpret("how many workdays until Mar 1?", provider)
+            == .question(.count(.workdays, from: Self.today, to: Self.day(1, month: 3, year: 2027))))
+    }
+
+    @Test(arguments: providers)
+    func coffeeWithPriyaIsProposedOnThursdayAfternoon(_ provider: AIDateHelper.Provider) async throws {
+        guard case let .create(draft) = try await Self.interpret(
+            "coffee with Priya Thursday afternoon, 30 min", provider
+        ) else {
+            Issue.record("expected a create")
+            return
+        }
+        #expect(draft.title.lowercased().contains("priya"))
+        #expect(draft.day == Self.day(12))
+        #expect(draft.window == .partOfDay(.afternoon))
+        #expect(draft.durationMinutes == 30)
+    }
+}
+

@@ -5,10 +5,11 @@ import GlimpseCore
 import FoundationModels
 #endif
 
-/// Routes AI date queries to the best available provider:
+/// Routes AI calendar queries to the best available provider:
 /// 1. Cloud AI via proxy (no API key needed) — works on any macOS 14+
 /// 2. Apple FoundationModels (macOS 26+) — on-device, free
 /// 3. Error if neither is available
+/// Both providers return the same structured intent and share one validator.
 enum AIDateHelper {
     enum Provider: Equatable, Sendable {
         case proxy
@@ -17,21 +18,23 @@ enum AIDateHelper {
     }
 
     struct Dependencies: Sendable {
-        var parseProxy: @Sendable (String) async throws -> Date?
+        var interpretProxy: @Sendable (String) async throws -> AIIntent?
         var now: @Sendable () -> Date
-        var generateOnDevice: @Sendable (String) async throws -> String
+        var calendar: Calendar = .current
+        /// Structured on-device generation: (instructions, user prompt) → wire intent.
+        var generateOnDevice: @Sendable (String, String) async throws -> AIIntentWire
 
         static var live: Self {
             Self(
-                parseProxy: {
-                    try await ProxyProvider.parseDate($0, dependencies: .live)
+                interpretProxy: {
+                    try await ProxyProvider.interpret($0, dependencies: .live)
                 },
                 now: { Date() },
-                generateOnDevice: { prompt in
+                calendar: .autoupdatingCurrent,
+                generateOnDevice: { instructions, prompt in
                     #if canImport(FoundationModels)
                     if #available(macOS 26, *) {
-                        let session = LanguageModelSession()
-                        return try await session.respond(to: prompt).content
+                        return try await OnDeviceIntentGenerator.generate(instructions: instructions, prompt: prompt)
                     }
                     #endif
                     throw AIDateFailure.unavailable
@@ -58,14 +61,15 @@ enum AIDateHelper {
         )
     }
 
-    static func parseNaturalLanguageDate(
+    /// The validated intent; nil means the provider answered but nothing usable came back.
+    static func interpret(
         _ query: String, provider: Provider, dependencies: Dependencies
-    ) async throws -> Date? {
+    ) async throws -> AIIntent? {
         try Task.checkCancellation()
         switch provider {
         case .proxy:
             do {
-                let result = try await dependencies.parseProxy(query)
+                let result = try await dependencies.interpretProxy(query)
                 try Task.checkCancellation()
                 return result
             } catch {
@@ -81,14 +85,17 @@ enum AIDateHelper {
             }
         case .foundationModels:
             do {
-                let today = ISO8601DateFormatter().string(from: dependencies.now())
-                let prompt = "Respond with ONLY a date in yyyy-MM-dd format, nothing else. If the query is relative, today is \(today). Query: \(query)"
+                let today = CivilDate(dependencies.now(), calendar: dependencies.calendar)
+                let instructions = AIIntentPrompt.onDeviceInstructions(
+                    today: today, timeZone: dependencies.calendar.timeZone
+                )
                 try Task.checkCancellation()
-                let response = try await dependencies.generateOnDevice(prompt)
+                let wire = try await dependencies.generateOnDevice(instructions, AIIntentPrompt.user(query))
                 try Task.checkCancellation()
-                let date = DateParser.extractDate(from: response)
-                try Task.checkCancellation()
-                return date
+                // Days the query names are resolved in Swift, not by the model.
+                let intent = AIIntentDecoder.validate(wire, today: today, query: AIIntentPrompt.sanitized(query))
+                if intent == nil { AppLogger.general.info("AI intent unparsed") }
+                return intent
             } catch {
                 try Task.checkCancellation()
                 if error is CancellationError {
@@ -121,23 +128,5 @@ enum AIDateHelper {
         if #available(macOS 26, *) { return true }
         #endif
         return false
-    }
-
-}
-
-// MARK: - Shared Date Parser
-
-enum DateParser {
-    static func extractDate(from text: String) -> Date? {
-        let raw = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let regex = try? NSRegularExpression(pattern: "\\d{4}-\\d{2}-\\d{2}"),
-              let match = regex.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw)),
-              let matchRange = Range(match.range, in: raw)
-        else { return nil }
-
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone.current
-        return formatter.date(from: String(raw[matchRange]))
     }
 }

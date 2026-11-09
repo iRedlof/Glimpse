@@ -23,7 +23,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Glimpse shows your calendar events alongside the month view.</string>
+	<string>Glimpse shows your events alongside the month view and adds the ones you confirm.</string>
 	<key>SUPublicEDKey</key>
 	<string>r3bpqxl5pEGWf6atYS0ZWP3FZyTVVcFAfDj22fuCioE=</string>
 	<key>SUFeedURL</key>

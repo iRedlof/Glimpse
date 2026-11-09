@@ -28,10 +28,10 @@ Glimpse is a macOS menu bar calendar app built with TCA and Swift 6. Click the d
 # Build (requires -skipMacroValidation for TCA macros)
 xcodebuild -project Glimpse.xcodeproj -scheme Glimpse -configuration Release -skipMacroValidation build
 
-# App tests (18 tests, 3 suites)
+# App tests (370 default-run tests; key-panel suites run in the quality gate)
 xcodebuild -project Glimpse.xcodeproj -scheme Glimpse -skipMacroValidation test
 
-# GlimpseCore tests (32 TCA TestStore tests, 3 suites)
+# GlimpseCore tests (182 tests, 12 suites)
 cd GlimpseCore && swift test
 
 # Local run (re-sign Sparkle for ad-hoc)
@@ -62,7 +62,15 @@ open Glimpse.xcodeproj
 | `MonthBorderShape.swift` | Contoured month border (SwiftUI Shape) |
 | `DateIconRenderer.swift` | Date number + red accent menu bar icon, configurable text color |
 | `GlobalHotkey.swift` | Carbon EventHotKey, configurable combo with persistence |
-| `AIDateHelper.swift` | Routes between proxy API and FoundationModels |
+| `AIDateHelper.swift` | Routes between proxy API and FoundationModels; both return a validated `AIIntent` |
+| `AIIntentPrompt.swift` | The one intent prompt for both providers (local civil date, delimited query) |
+| `OnDeviceIntentGenerator.swift` | `@Generable` intent for FoundationModels (`#if canImport` + `@available(macOS 26, *)`) |
+| `AIDateQueryModel.swift` | Owns ⌘G requests: stale-result dropping, clarifications, result invalidation |
+| `AISubmitRouter.swift` | What Return in the AI field means (confirm / allow access / ignore / submit) |
+| `CalendarDateSearchRow.swift` | The "Ask Glimpse" field, trailing slot chip and clarification line |
+| `AIResultViews.swift` | Answer, range summary and clarification rows |
+| `ScheduleProposalView.swift` | Free-time proposal, access rows and the Undo chip |
+| `ScheduleCopy.swift` | User-facing and VoiceOver copy for the create flow |
 | `ProxyProvider.swift` | Auris proxy REST API integration |
 | `ProxyConfig.swift` | XOR-obfuscated app secret, device ID, auth headers |
 | `SparkleUpdater.swift` | Inline update UI with SPUUserDriver (all status states) |
@@ -73,9 +81,9 @@ open Glimpse.xcodeproj
 ### Core Package (GlimpseCore/)
 | Directory | Contents |
 |---|---|
-| `Features/` | CalendarFeature, PreferencesFeature, MenuBarFeature |
-| `Dependencies/` | PreferencesClient, CalendarClient, EventKitClient, LaunchAtLoginClient |
-| `Models/` | CalendarDay, CalendarEvent, GridInfo, MenuBarDisplayOptions, AIProvider |
+| `Features/` | CalendarFeature, ScheduleFeature, PreferencesFeature |
+| `Dependencies/` | PreferencesClient, CalendarClient, EventKitClient (read + free-time fetch/save/remove), ScheduleEventsClient (save signal → app closes the AI editor), LaunchAtLoginClient, KeychainClient |
+| `Models/` | CalendarDay, CalendarEvent, GridInfo, MenuBarDisplayOptions, AIProvider, CivilDate, AIIntent, AIIntentWire, AIIntentDecoder, DayPhraseParser, DateAnswerer, FreeSlotFinder, ScheduleModels |
 
 ## Important Implementation Details
 
@@ -95,7 +103,10 @@ open Glimpse.xcodeproj
 `NSEvent.addLocalMonitorForEvents` intercepts keyCode 36 before SwiftUI `onSubmit`. Handle Enter explicitly in the monitor when AI field is active.
 
 ### 6. AI Proxy
-Uses shared Auris proxy at `proxy.auris.workers.dev/refine`. App secret is XOR-obfuscated in `ProxyConfig`. Device ID for rate limiting. No API keys needed.
+Uses shared Auris proxy at `proxy.auris.workers.dev/refine` with the `{tier, prompt}` body. App secret is XOR-obfuscated in `ProxyConfig`. Device ID for rate limiting. No API keys needed. The live service answers HTTP 200 with `text: null` on upstream errors; that maps to the generic failure copy.
+
+### 7. Type to Schedule (⌘G intents)
+Providers return one JSON intent (navigate, range, question, create, clarify) validated by `AIIntentDecoder`; a bare `yyyy-MM-dd` still navigates. The AI never counts and never sees calendar data: `DateAnswerer` and `FreeSlotFinder` are pure GlimpseCore code. Days the query names ("next Friday", "Mar 1", "next 3 Fridays") are resolved in Swift by `DayPhraseParser` and win over the model's dates; both prompts also carry a 28-day date table. On-device uses a per-intent `@Generable` enum (`GeneratedRequest`). `ScheduleFeature` never preselects a time (Return without a pick is a no-op), never cancels a started save, requests calendar access only from its explicit "Allow calendar access" button (Return in the field never does), keeps the times after a retryable save failure, and offers Undo for 10 s (also ⌘Z outside text editing). A confirmed save sends `.delegate(.eventSaved)`; CalendarFeature calls `ScheduleEventsClient`, whose `.scheduleEventSaved` notification closes the editor (no `onChange`). ↑/↓ (and Return with focus out of the field) pick times through `CalendarKeyboardRouter.slotPicker`, before browse routing. Live provider check: `TEST_RUNNER_GLIMPSE_LIVE_AI=foundationModels[,proxy] xcodebuild … -only-testing:GlimpseTests/AILiveProviderGoldenTests`.
 
 ## Storage
 
@@ -198,7 +209,7 @@ grep 'CURRENT_PROJECT_VERSION' Glimpse.xcodeproj/project.pbxproj | head -1 | sed
 
 ## File Counts
 
-- App source files: ~17
-- GlimpseCore source files: ~12
-- Test files: 6
-- Total tests: 50
+- App source files: ~40
+- GlimpseCore source files: ~21
+- Test files: ~45
+- Total tests: 212 GlimpseCore + 385 app default run (+ 45 keyboard, 11 AI and 13 agenda key-panel tests in the quality gate; 4 opt-in live AI checks)

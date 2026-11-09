@@ -26,6 +26,14 @@ public struct CalendarFeature: Sendable {
         public var calendarAccessError: String?
         public var selectedDate: Date?
         public var showAISearch: Bool = true
+        /// Free-time proposals and the Undo chip for AI "create" requests.
+        public var schedule = ScheduleFeature.State()
+        /// The AI range shown on the grid, e.g. "Next 3 Fridays".
+        public var highlight: DateRangeHighlight?
+        /// Start-of-day dates drawn highlighted; derived here so cells do O(1) lookups.
+        public var highlightedDays: Set<Date> = []
+        /// A locally computed answer to an AI date question.
+        public var aiAnswer: DateAnswer?
 
         public var calendarAccessGranted: Bool { calendarAuthorizationStatus == .fullAccess }
 
@@ -78,7 +86,10 @@ public struct CalendarFeature: Sendable {
         case retryEvents
         case eventsLoaded(date: Date, requestID: UUID, events: [CalendarEvent])
         case eventsFailed(date: Date, requestID: UUID, message: String)
-        case aiDateResult(Date?)
+        case aiIntent(AIIntent)
+        /// The AI draft changed, was discarded, or the panel hid.
+        case aiResultsCleared
+        case schedule(ScheduleFeature.Action)
         case reloadPreferences
     }
 
@@ -87,12 +98,16 @@ public struct CalendarFeature: Sendable {
     @Dependency(\.preferencesClient) var preferencesClient
     @Dependency(\.eventKitClient) var eventKitClient
     @Dependency(\.uuid) var uuid
+    @Dependency(\.scheduleEvents) var scheduleEvents
 
     private enum CancelID { case events, calendarAccess }
 
     public init() {}
 
     public var body: some ReducerOf<Self> {
+        Scope(state: \.schedule, action: \.schedule) {
+            ScheduleFeature()
+        }
         Reduce { state, action in
             switch action {
             case .onAppear:
@@ -145,6 +160,9 @@ public struct CalendarFeature: Sendable {
                 return loadEvents(&state)
 
             case let .dateTapped(date):
+                // A new day makes any proposal for the old day stale.
+                clearAIResults(&state)
+                let dismissal = dismissSchedule(&state)
                 // Toggle selection: tap again to deselect
                 if let current = state.selectedDate,
                    state.calendar.isDate(current, inSameDayAs: date) {
@@ -152,7 +170,7 @@ public struct CalendarFeature: Sendable {
                 } else {
                     state.selectedDate = date
                 }
-                return loadEvents(&state)
+                return .merge(loadEvents(&state), dismissal)
 
             case .togglePin:
                 state.isPinned.toggle()
@@ -241,13 +259,26 @@ public struct CalendarFeature: Sendable {
                 recomputeDays(&state)
                 return .none
 
-            case let .aiDateResult(date):
-                if let date {
-                    state.displayedMonth = date
-                    state.selectedDate = date
-                    recomputeDays(&state)
-                    return loadEvents(&state)
-                }
+            case let .aiIntent(intent):
+                return handle(intent, &state)
+
+            case .aiResultsCleared:
+                clearAIResults(&state)
+                return dismissSchedule(&state)
+
+            case let .schedule(.delegate(.authorizationChanged(status))):
+                return loadEvents(&state, authorizationStatus: status)
+
+            case .schedule(.delegate(.eventsChanged)):
+                return loadEvents(&state)
+
+            case let .schedule(.delegate(.eventSaved(event))):
+                return .merge(
+                    loadEvents(&state),
+                    .run { [scheduleEvents] _ in await scheduleEvents.eventSaved(event) }
+                )
+
+            case .schedule:
                 return .none
 
             case .onDisappear:
@@ -256,7 +287,8 @@ public struct CalendarFeature: Sendable {
                 recomputeDays(&state)
                 state.isLoadingEvents = false
                 state.eventsRequestID = nil
-                return .cancel(id: CancelID.events)
+                clearAIResults(&state)
+                return .merge(.cancel(id: CancelID.events), dismissSchedule(&state))
 
             case .hiddenPreservingContext:
                 state.showingPreferences = false
@@ -277,9 +309,65 @@ public struct CalendarFeature: Sendable {
                 state.workdays = preferencesClient.loadWorkdays()
                 state.showAISearch = preferencesClient.loadShowAISearch()
                 recomputeDays(&state)
-                return loadEvents(&state)
+                clearAIResults(&state)
+                return .merge(loadEvents(&state), dismissSchedule(&state))
             }
         }
+    }
+
+    // MARK: - AI intents
+
+    private func handle(_ intent: AIIntent, _ state: inout State) -> Effect<Action> {
+        clearAIResults(&state)
+        switch intent {
+        case let .navigate(day):
+            return .merge(show(day, &state), dismissSchedule(&state))
+        case let .range(highlight):
+            let calendar = state.calendar
+            state.highlight = highlight
+            state.highlightedDays = Set(highlight.dates.compactMap { $0.date(in: calendar) })
+            guard let first = highlight.dates.first else { return dismissSchedule(&state) }
+            return .merge(show(first, &state), dismissSchedule(&state))
+        case let .question(question):
+            let calendar = state.calendar
+            state.aiAnswer = DateAnswerer.answer(
+                question, today: CivilDate(date.now, calendar: calendar), calendar: calendar,
+                workdays: state.workdays
+            )
+            return dismissSchedule(&state)
+        case let .create(draft):
+            let navigation = show(draft.day, &state)
+            if let day = draft.day.date(in: state.calendar) { state.highlightedDays = [day] }
+            let calendar = state.calendar
+            let proposal = ScheduleFeature().begin(draft, calendar: calendar, &state.schedule)
+            return .merge(navigation, proposal.map(Action.schedule))
+        case .clarify:
+            // The query model shows the clarification; it never changes the
+            // calendar, and results for the previous query no longer apply.
+            return dismissSchedule(&state)
+        }
+    }
+
+    private func show(_ day: CivilDate, _ state: inout State) -> Effect<Action> {
+        guard let date = day.date(in: state.calendar) else {
+            AppLogger.calendar.error("AI date could not be resolved in the current calendar")
+            return .none
+        }
+        state.displayedMonth = date
+        state.selectedDate = date
+        recomputeDays(&state)
+        return loadEvents(&state)
+    }
+
+    private func clearAIResults(_ state: inout State) {
+        state.highlight = nil
+        state.highlightedDays = []
+        state.aiAnswer = nil
+    }
+
+    /// Uses the child's shared helper so resets need no extra action round-trip.
+    private func dismissSchedule(_ state: inout State) -> Effect<Action> {
+        ScheduleFeature().dismiss(&state.schedule).map(Action.schedule)
     }
 
     private func recomputeDays(_ state: inout State) {

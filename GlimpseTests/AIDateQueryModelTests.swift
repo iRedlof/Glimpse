@@ -13,7 +13,7 @@ struct AIDateQueryModelTests {
     enum CurrentOutcome: String, CaseIterable, Sendable {
         case date, noDate, operationalFailure, unavailable, providerCancellation
 
-        var result: Result<Date?, any Error> {
+        var result: Result<AIIntent?, any Error> {
             switch self {
             case .date: .success(AIDateModelFixture.dateA)
             case .noDate: .success(nil)
@@ -26,10 +26,9 @@ struct AIDateQueryModelTests {
         var expectedMessage: String? {
             switch self {
             case .date, .providerCancellation: nil
-            case .noDate:
-                "AI didn't return a usable date. Try ‘next Friday’ or ‘Jan 2028’."
+            case .noDate: nil
             case .operationalFailure:
-                "AI couldn't complete the date search. Try again."
+                "AI couldn't complete that. Try again."
             case .unavailable:
                 "On-device AI is unavailable. Choose Cloud AI in Preferences."
             }
@@ -47,7 +46,7 @@ struct AIDateQueryModelTests {
     enum LateOutcome: String, CaseIterable, Sendable {
         case date, failure, noDate, cancellation
 
-        var result: Result<Date?, any Error> {
+        var result: Result<AIIntent?, any Error> {
             switch self {
             case .date: .success(AIDateModelFixture.dateA)
             case .failure: .failure(AIDateFailure.onDeviceRequest)
@@ -71,6 +70,7 @@ struct AIDateQueryModelTests {
             #expect(!fixture.model.isProcessing)
             #expect(fixture.model.currentRequestID == nil)
             #expect(fixture.model.errorMessage == outcome.expectedMessage)
+            #expect(fixture.model.clarification == (outcome == .noDate ? AIDateQueryModel.unparsedMessage : nil))
 
             if outcome == .date {
                 #expect(fixture.receipts.dates == [AIDateModelFixture.dateA])
@@ -422,7 +422,7 @@ struct AIDateQueryModelTests {
         try await withFixture { fixture in
             let tracked = try fixture.submitRequired()
             let request = try await fixture.enteredRequest(at: 0)
-            await request.release(.success(nil))
+            await request.release(.failure(AIDateFailure.transport))
             try await tracked.finished.wait()
             #expect(fixture.model.errorMessage != nil)
             fixture.model.setDraft("fixture draft B")
@@ -509,6 +509,117 @@ struct AIDateQueryModelTests {
         if let scenarioError { throw scenarioError }
     }
 
+    // MARK: - Intents beyond navigation
+
+    nonisolated static let fridays = AIIntent.range(DateRangeHighlight(
+        dates: [CivilDate(year: 2026, month: 11, day: 13)!], label: "Next Friday"
+    ))
+    nonisolated static let question = AIIntent.question(.weekday(CivilDate(year: 2026, month: 11, day: 13)!))
+    nonisolated static let create = AIIntent.create(EventDraft(
+        title: "Coffee", day: CivilDate(year: 2026, month: 11, day: 12)!, window: .unspecified, durationMinutes: 30
+    ))
+
+    private func deliver(_ intent: AIIntent?, in fixture: AIDateModelFixture, at index: Int = 0) async throws {
+        let tracked = try fixture.submitRequired()
+        let request = try await fixture.enteredRequest(at: index)
+        await request.release(.success(intent))
+        try await tracked.finished.wait()
+    }
+
+    @Test(arguments: [fridays, question, create])
+    func resultIntentsKeepTheEditorAndDraftOpen(intent: AIIntent) async throws {
+        try await withFixture { fixture in
+            try await deliver(intent, in: fixture)
+            #expect(fixture.receipts.dates == [intent])
+            #expect(fixture.model.isEditorOpen)
+            #expect(fixture.model.draft == "fixture draft A")
+            #expect(fixture.model.clarification == nil && fixture.model.errorMessage == nil)
+            #expect(fixture.receipts.invalidations == 0)
+        }
+    }
+
+    @Test
+    func unparsedReplyAsksAndEditClearsTheQuestion() async throws {
+        try await withFixture { fixture in
+            try await deliver(nil, in: fixture)
+            #expect(fixture.model.clarification == AIDateQueryModel.unparsedMessage)
+            #expect(fixture.model.errorMessage == nil)
+            fixture.model.setDraft("fixture draft B")
+            #expect(fixture.model.clarification == nil)
+        }
+    }
+
+    @Test
+    func clarifyKeepsTheDraftAndShowsOneLine() async throws {
+        try await withFixture { fixture in
+            try await deliver(.clarify("Which day?"), in: fixture)
+            #expect(fixture.receipts.dates.isEmpty)
+            #expect(fixture.model.clarification == "Which day?")
+            #expect(fixture.model.draft == "fixture draft A")
+            #expect(fixture.model.isEditorOpen)
+            fixture.model.setDraft("lunch Tuesday")
+            #expect(fixture.model.clarification == nil)
+        }
+    }
+
+    @Test
+    func editingTheDraftInvalidatesShownResultsOnce() async throws {
+        try await withFixture { fixture in
+            try await deliver(Self.fridays, in: fixture)
+            fixture.model.setDraft("fixture draft B")
+            #expect(fixture.receipts.invalidations == 1)
+            fixture.model.setDraft("fixture draft C")
+            #expect(fixture.receipts.invalidations == 1)
+        }
+    }
+
+    @Test(arguments: ["discard", "hide", "disable"])
+    func closingTheEditorInvalidatesShownResults(path: String) async throws {
+        try await withFixture { fixture in
+            try await deliver(Self.create, in: fixture)
+            switch path {
+            case "discard": fixture.model.discardEditor()
+            case "hide": fixture.model.setPanelVisible(false)
+            default: fixture.model.synchronizeSettings(enabled: false, preference: .auto)
+            }
+            #expect(fixture.receipts.invalidations == 1)
+            #expect(!fixture.model.isEditorOpen)
+        }
+    }
+
+    @Test
+    func navigationDoesNotInvalidateItsOwnResult() async throws {
+        try await withFixture { fixture in
+            try await deliver(AIDateModelFixture.dateA, in: fixture)
+            #expect(fixture.receipts.dates == [AIDateModelFixture.dateA])
+            #expect(fixture.receipts.invalidations == 0)
+            #expect(!fixture.model.isEditorOpen)
+        }
+    }
+
+    @Test
+    func laterClarificationReplacesEarlierResults() async throws {
+        try await withFixture { fixture in
+            try await deliver(Self.fridays, in: fixture)
+            try await deliver(.clarify("Which month?"), in: fixture, at: 1)
+            #expect(fixture.receipts.invalidations == 1)
+            #expect(fixture.model.clarification == "Which month?")
+        }
+    }
+
+    @Test
+    func staleResultIntentAfterAnEditIsDropped() async throws {
+        try await withFixture { fixture in
+            let tracked = try fixture.submitRequired()
+            let request = try await fixture.enteredRequest(at: 0)
+            fixture.model.setDraft("fixture draft B")
+            await request.release(.success(Self.create))
+            try await tracked.finished.wait()
+            #expect(fixture.receipts.dates.isEmpty)
+            #expect(fixture.model.clarification == nil)
+        }
+    }
+
     private func withFixture(
         preference: AIProvider = .auto,
         onDeviceSupported: Bool = true,
@@ -531,8 +642,8 @@ struct AIDateQueryModelTests {
 
 @MainActor
 private final class AIDateModelFixture {
-    nonisolated static let dateA = Date(timeIntervalSince1970: 1_000_000)
-    nonisolated static let dateB = Date(timeIntervalSince1970: 2_000_000)
+    nonisolated static let dateA = AIIntent.navigate(CivilDate(year: 1970, month: 1, day: 12)!)
+    nonisolated static let dateB = AIIntent.navigate(CivilDate(year: 1970, month: 1, day: 24)!)
     let requests: AIDateModelRequests
     let resolutions: LockIsolated<[AIProvider]>
     let receipts: AIDateModelDateReceipts
@@ -556,14 +667,15 @@ private final class AIDateModelFixture {
                 case .onDevice: return onDeviceSupported ? .foundationModels : .none
                 }
             },
-            parseDate: {
+            interpret: {
                 if $1 == .none { throw AIDateFailure.unavailable }
                 return try await requests.parse(query: $0, provider: $1)
             }
         )
         model = AIDateQueryModel(
             client: client, enabled: true, preference: preference,
-            onDate: { receipts.accept($0) }
+            onIntent: { receipts.accept($0) },
+            onResultsInvalidated: { receipts.invalidations += 1 }
         )
         model.setPanelVisible(true)
         model.setEditorOpen(true)
@@ -657,10 +769,11 @@ private final class AIDateModelFixture {
 
 @MainActor
 private final class AIDateModelDateReceipts {
-    var dates: [Date] = []
-    var onDate: (@MainActor (Date) -> Void)?
+    var dates: [AIIntent] = []
+    var invalidations = 0
+    var onDate: (@MainActor (AIIntent) -> Void)?
 
-    func accept(_ date: Date) {
+    func accept(_ date: AIIntent) {
         dates.append(date)
         onDate?(date)
     }
@@ -710,7 +823,7 @@ private final class AIDateModelRequest: Sendable {
         self.provider = provider
     }
 
-    func run(onCancellation: @escaping @Sendable () -> Void) async throws -> Date? {
+    func run(onCancellation: @escaping @Sendable () -> Void) async throws -> AIIntent? {
         defer {
             returnCount.withValue { $0 += 1 }
             returned.resolve(.success(()))
@@ -724,21 +837,21 @@ private final class AIDateModelRequest: Sendable {
         }
     }
 
-    func release(_ result: Result<Date?, any Error>) async {
+    func release(_ result: Result<AIIntent?, any Error>) async {
         await releaseGate.open(result)
     }
 }
 
 private actor AIDateModelReleaseGate {
-    private var result: Result<Date?, any Error>?
-    private var waiter: CheckedContinuation<Result<Date?, any Error>, Never>?
+    private var result: Result<AIIntent?, any Error>?
+    private var waiter: CheckedContinuation<Result<AIIntent?, any Error>, Never>?
 
-    func wait() async -> Result<Date?, any Error> {
+    func wait() async -> Result<AIIntent?, any Error> {
         if let result { return result }
         return await withCheckedContinuation { waiter = $0 }
     }
 
-    func open(_ result: Result<Date?, any Error>) {
+    func open(_ result: Result<AIIntent?, any Error>) {
         guard self.result == nil else { return }
         self.result = result
         waiter?.resume(returning: result)
@@ -757,7 +870,7 @@ private actor AIDateModelRequests {
         cancellationObservation.setValue(observation)
     }
 
-    func parse(query: String, provider: AIDateHelper.Provider) async throws -> Date? {
+    func parse(query: String, provider: AIDateHelper.Provider) async throws -> AIIntent? {
         let request = AIDateModelRequest(query: query, provider: provider)
         let index = requests.count
         requests.append(request)

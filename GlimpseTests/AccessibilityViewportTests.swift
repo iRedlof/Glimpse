@@ -40,7 +40,7 @@ struct AccessibilityViewportTests {
         let document = try #require(scroll.documentView)
         try await applyFixtureScrollerStyle(style, scroll: scroll, host: host)
         if processing {
-            #expect(host.controls(named: "Close date search").isEmpty)
+            #expect(host.controls(named: CalendarDateSearchRow.closeName).isEmpty)
             #expect(search.query == query && search.error == error && search.isActive)
             #expect(search.submissions == 0)
             search.isProcessing = false
@@ -52,12 +52,12 @@ struct AccessibilityViewportTests {
             search.isActive = true
             try await host.settle()
             try await applyFixtureScrollerStyle(style, scroll: scroll, host: host)
-            let beforeScroll = try host.control(named: "Close date search")
+            let beforeScroll = try host.control(named: CalendarDateSearchRow.closeName)
             _ = document.scrollToVisible(host.rect(beforeScroll.frame, in: document)
                 .insetBy(dx: -16, dy: -16))
             scroll.reflectScrolledClipView(scroll.contentView)
             try await host.settle()
-            let dismiss = try host.control(named: "Close date search")
+            let dismiss = try host.control(named: CalendarDateSearchRow.closeName)
             let editor = try #require(host.elements().first { $0.role == .textField })
             expectDateSearchTarget(dismiss.frame)
             let body = viewportBodyScreenRect(host: host, scroll: scroll, layout: layout)
@@ -917,14 +917,14 @@ private final class CalendarViewportFixture {
                     Issue.record("Viewport fixture must not resolve an AI provider")
                     return .none
                 },
-                parseDate: { _, _ in
+                interpret: { _, _ in
                     effects.withValue { $0 += 1 }
                     Issue.record("Viewport fixture must not request an AI date")
                     return nil
                 }
             ),
             enabled: false, preference: .auto,
-            onDate: { _ in Issue.record("Viewport fixture must not receive an AI date") }
+            onIntent: { _ in Issue.record("Viewport fixture must not receive an AI date") }
         )
         legacyHost = AccessibilityTestHost(width: 316, height: maximumHeight) {
             CalendarPopoverView(
@@ -1032,7 +1032,7 @@ private final class CalendarViewportFixture {
         let model = AIDateQueryModel(
             client: AIDateQueryClient(
                 resolveProvider: { _ in resolutions.withValue { $0 += 1 }; return .proxy },
-                parseDate: { _, _ in
+                interpret: { _, _ in
                     calls.withValue { $0 += 1 }
                     if scenario == .aiProcessing { try await aiRelease.wait() }
                     if scenario == .aiTransportError { throw AIDateFailure.transport }
@@ -1040,7 +1040,7 @@ private final class CalendarViewportFixture {
                     return nil
                 }
             ), enabled: true, preference: .auto,
-            onDate: { _ in effects.withValue { $0 += 1 }; Issue.record("Error captures must not deliver an AI date") }
+            onIntent: { _ in effects.withValue { $0 += 1 }; Issue.record("Error captures must not deliver an AI date") }
         )
         contrastModel = model
         let panel = CalendarPanel(
@@ -1193,8 +1193,8 @@ private final class CalendarViewportFixture {
         case .accessRequesting: #expect(store.isRequestingCalendarAccess && has("Requesting calendar access…"))
         case .accessError: #expect(has("Calendar access is off.") && has("Synthetic calendar access failed."))
         case .aiNoDate:
-            #expect(model.errorMessage == "AI didn't return a usable date. Try ‘next Friday’ or ‘Jan 2028’.")
-        case .aiTransportError: #expect(model.errorMessage == "AI couldn't complete the date search. Try again.")
+            #expect(model.errorMessage == AIDateQueryModel.unparsedMessage)
+        case .aiTransportError: #expect(model.errorMessage == AIDateQueryModel.failureMessage)
         case .aiUnavailable: #expect(model.errorMessage == "On-device AI is unavailable. Choose Cloud AI in Preferences.")
         case .aiProcessing: #expect(model.isProcessing && model.errorMessage == nil)
         default: #expect(has("No events") && store.events.isEmpty)

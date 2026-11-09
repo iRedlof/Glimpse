@@ -388,7 +388,7 @@ struct CalendarShowTests {
 @MainActor
 private final class ShowFixture {
     static let today = Date(timeIntervalSince1970: 1_800_000_000)
-    static let selected = Date(timeIntervalSince1970: 1_700_000_000)
+    static let selected = Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 1_700_000_000))
     static let statusFrame = NSRect(x: -5000, y: -4000, width: 100, height: 24)
     static let visibleFrame = NSRect(x: -6000, y: -5000, width: 1440, height: 1000)
 
@@ -457,7 +457,7 @@ private final class ShowFixture {
     }
 
     func browseAway() {
-        store.send(.aiDateResult(Self.selected))
+        store.send(.aiIntent(.navigate(CivilDate(Self.selected, calendar: .current))))
         store.send(.togglePreferences)
         #expect(store.displayedMonth == Self.selected)
         #expect(store.selectedDate == Self.selected)

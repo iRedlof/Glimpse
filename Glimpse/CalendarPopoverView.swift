@@ -67,7 +67,8 @@ struct CalendarPopoverView: View {
         let settings = loadAISettings()
         self._aiQueryModel = State(initialValue: aiQueryModel ?? AIDateQueryModel(
             client: .live, enabled: settings.enabled, preference: settings.preference,
-            onDate: { store.send(.aiDateResult($0)) }
+            onIntent: { store.send(.aiIntent($0)) },
+            onResultsInvalidated: { store.send(.aiResultsCleared) }
         ))
     }
 
@@ -83,6 +84,7 @@ struct CalendarPopoverView: View {
                                 aiQueryField
                                     .id("panel-ai-input")
                                     .transition(.opacity.combined(with: .move(edge: .top)))
+                                aiResults
                             }
                             CalendarGridKeyboardContent(
                                 isEligible: store.days.count == 42,
@@ -101,7 +103,7 @@ struct CalendarPopoverView: View {
                                     }
                                 }
                             agendaDateContext
-                            eventsSection
+                            agendaContent
                         }
                         .padding()
                         footerView.id("panel-footer")
@@ -243,6 +245,11 @@ struct CalendarPopoverView: View {
                 isRecordingHotkey = notification.object as? Bool ?? false
                 scrollRouter.suspendNavigation()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .scheduleEventSaved)) { _ in
+                // EventKit confirmed the save (reducer delegate → ScheduleEventsClient):
+                // close the editor so ⌘Z means Undo, not text undo.
+                closeEditorAfterSave()
+            }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                 if panel?.isVisible == true { store.send(.refreshCalendarAuthorization) }
             }
@@ -252,6 +259,12 @@ struct CalendarPopoverView: View {
                 refreshEventsAfterStoreChange()
             }
         }
+    }
+
+    private func closeEditorAfterSave() {
+        // The panel stays key (no app hand-back) so the Undo chip and ⌘Z keep working.
+        guard aiQueryModel.isEditorOpen else { return }
+        aiQueryModel.discardEditor()
     }
 
     @MainActor
@@ -290,6 +303,34 @@ struct CalendarPopoverView: View {
             if event.keyCode == 5 && modifiers == .command && store.showAISearch {
                 aiQueryModel.setEditorOpen(true)
                 return nil
+            }
+            if CalendarKeyboardRouter.undoesAddedEvent(
+                keyCode: event.keyCode, commandOnly: modifiers == .command,
+                canUndo: store.schedule.canUndo, editingText: editingText
+            ) {
+                store.send(.schedule(.undoTapped))
+                return nil
+            }
+            switch CalendarKeyboardRouter.slotPicker(
+                CalendarKeyboardKey(nativeCode: event.keyCode),
+                phase: event.isARepeat ? .repeatPress : .down,
+                choosingSlots: store.schedule.phase == .choosing && !store.schedule.slots.isEmpty,
+                editorOpen: aiQueryModel.isEditorOpen, editingText: editingText, modified: !modifiers.isEmpty,
+                ownership: keyboardOwnerRelay.browseOwnership(in: panel)
+            ) {
+            case let .move(delta):
+                store.send(.schedule(.moveSelection(delta)))
+                return nil
+            case .activate:
+                // Same honest rule as Return in the field: only a picked time saves.
+                if AISubmitRouter.route(phase: store.schedule.phase, canConfirm: store.schedule.canConfirm) == .confirm {
+                    store.send(.schedule(.confirmTapped))
+                }
+                return nil
+            case .consume:
+                return nil
+            default:
+                break
             }
 
             switch event.keyCode {
@@ -457,12 +498,18 @@ struct CalendarPopoverView: View {
             query: Binding(get: { aiQueryModel.draft }, set: { aiQueryModel.setDraft($0) }),
             isActive: Binding(get: { aiQueryModel.isEditorOpen }, set: { aiQueryModel.setEditorOpen($0) }),
             isProcessing: aiQueryModel.isProcessing, error: aiQueryModel.errorMessage,
+            clarification: aiQueryModel.clarification,
+            trailingChip: store.schedule.phase == .choosing ? ScheduleCopy.freeTimes(store.schedule.slots.count) : nil,
             focused: $aiFieldFocused, onSubmit: {
                 // Invocation belongs to native onSubmit, never an open-row flag.
                 var context = keyboardContext()
                 context.editingText = false
                 guard context.allowsRouting else { return }
-                submitAIQuery()
+                switch AISubmitRouter.route(phase: store.schedule.phase, canConfirm: store.schedule.canConfirm) {
+                case .confirm: store.send(.schedule(.confirmTapped))
+                case .ignore: break
+                case .submit: submitAIQuery()
+                }
             },
             onDismiss: { aiQueryModel.discardEditor() },
             onEditorAppear: {
@@ -484,6 +531,17 @@ struct CalendarPopoverView: View {
             }, keyboardContext: keyboardContext, keyboardObservation: keyboardObservation,
             controlFocus: $controlFocus
         )
+    }
+
+    @ViewBuilder
+    private var aiResults: some View {
+        if let answer = store.aiAnswer {
+            AIAnswerRow(answer: answer)
+        } else if let highlight = store.highlight {
+            AIRangeSummaryRow(highlight: highlight, summary: AIRangeSummary(
+                highlight: highlight, displayedMonth: store.displayedMonth, calendar: store.calendar
+            ))
+        }
     }
 
     private func synchronizeAISettings(_ enabled: Bool, _ preference: AIProvider) {
@@ -611,6 +669,7 @@ struct CalendarPopoverView: View {
         let dayNumber = cal.component(.day, from: day.date)
         let isSelected = store.selectedDate.map { cal.isDate($0, inSameDayAs: day.date) } ?? false
         let isHovered = hoveredDate.map { cal.isDate($0, inSameDayAs: day.date) } ?? false
+        let isHighlighted = store.highlightedDays.contains(cal.startOfDay(for: day.date))
 
         return Button {
             if keyboardFocused { logicalDate = day.date }
@@ -649,6 +708,12 @@ struct CalendarPopoverView: View {
                             .fill(Color.accentColor.opacity(AppDesign.Grid.workdayTintOpacity))
                     }
                 }
+                .background {
+                    if isHighlighted {
+                        RoundedRectangle(cornerRadius: AppDesign.Grid.rangeHighlightCornerRadius)
+                            .fill(Color.accentColor.opacity(AppDesign.Grid.rangeHighlightOpacity))
+                    }
+                }
                 .foregroundStyle(isToday ? .white : foregroundColor(for: day, isToday: false, isSelected: isSelected))
                 .contentShape(Rectangle())
                 .overlay {
@@ -670,7 +735,8 @@ struct CalendarPopoverView: View {
             .onHover { hovering in
                 hoveredDate = hovering ? day.date : nil
             }
-            .accessibilityLabel(dayAccessibilityLabel(day, dayNumber: dayNumber, isToday: isToday))
+            .accessibilityLabel(dayAccessibilityLabel(day, dayNumber: dayNumber, isToday: isToday)
+                + (isHighlighted ? Self.highlightSuffix(store.highlight) : ""))
             .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -688,6 +754,10 @@ struct CalendarPopoverView: View {
         if isToday { label += ", today" }
         if !day.isCurrentMonth { label += ", outside current month" }
         return label
+    }
+
+    nonisolated static func highlightSuffix(_ highlight: DateRangeHighlight?) -> String {
+        highlight.map { ", highlighted, \($0.label)" } ?? ", highlighted"
     }
 
     private func foregroundColor(
@@ -739,6 +809,28 @@ struct CalendarPopoverView: View {
     }
 
     // MARK: - Events Section
+
+    /// The events list, or the free-time proposal while an AI "create" is open,
+    /// plus the Undo chip after a save.
+    private var agendaContent: some View {
+        VStack(spacing: 12) {
+            if store.schedule.isProposing {
+                ScheduleProposalView(
+                    store: store.scope(state: \.schedule, action: \.schedule),
+                    calendar: store.calendar,
+                    keyboard: ScheduleKeyboard(context: keyboardContext, observe: keyboardObservation,
+                                               focus: $controlFocus)
+                )
+            } else {
+                eventsSection
+            }
+            if let chip = store.schedule.undo {
+                ScheduleUndoChip(chip: chip) { store.send(.schedule(.undoTapped)) }
+                    .transition(.opacity)
+            }
+        }
+        .animation(AppDesign.Animation.chip, value: store.schedule.undo == nil)
+    }
 
     private var calendarAccessMessage: String {
         switch store.calendarAuthorizationStatus {
@@ -1126,114 +1218,5 @@ private struct CalendarFooterButtonAppearance<Label: View>: View {
                             : isHovered ? AppDesign.Footer.hoverBackgroundOpacity : 0))
             )
             .onHover { isHovered = $0 }
-    }
-}
-
-@MainActor
-struct CalendarDateSearchRow: View {
-    @Binding var query: String
-    @Binding var isActive: Bool
-    let isProcessing: Bool
-    let error: String?
-    let focused: FocusState<Bool>.Binding
-    let onSubmit: () -> Void
-    let onDismiss: () -> Void
-    let onEditorAppear: () -> Void
-    var keyboardContext: () -> CalendarKeyboardContext = { .init(visible: false) }
-    var keyboardObservation: ((CalendarKeyboardInvocation) -> Void)? = nil
-    var controlFocus: FocusState<CalendarKeyboardOwner?>.Binding? = nil
-
-    var body: some View {
-        HStack(spacing: AppDesign.Spacing.sm) {
-            Image(systemName: "sparkle")
-                .font(.caption)
-                .foregroundStyle(
-                    isProcessing ? Color.accentColor :
-                    isActive ? Color.accentColor :
-                    Color.secondary
-                )
-
-            if isActive {
-                TextField("e.g. next Friday, Christmas...", text: $query)
-                    .textFieldStyle(.plain)
-                    .font(.subheadline)
-                    .accessibilityLabel("Go to date using AI")
-                    .focused(focused)
-                    .focusedValue(\.calendarKeyboardOwner, .editor)
-                    .onSubmit { onSubmit() }
-                    .onAppear(perform: onEditorAppear)
-
-                if isProcessing {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .frame(width: 16, height: 16)
-                } else {
-                    Button(action: dismissSearch) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.primary)
-                            .frame(width: AppDesign.Control.dismissTargetSize,
-                                   height: AppDesign.Control.dismissTargetSize)
-                            .contentShape(Rectangle())
-                            .overlay { CalendarKeyboardFocusOutline() }
-                    }
-                    .buttonStyle(.plain)
-                    .modifier(CalendarControlReturn(
-                        owner: .searchDismiss, context: keyboardContext, action: dismissSearch,
-                        observe: keyboardObservation, focus: controlFocus
-                    ))
-                    .accessibilityLabel("Close date search")
-                    .accessibilityHint("Clears the query and closes date search.")
-                }
-            } else {
-                Button(action: openSearch) {
-                    Text("Go to date...  ⌘G")
-                        .font(.subheadline)
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, AppDesign.Spacing.xs + 2)
-                        .padding(.horizontal, AppDesign.Spacing.xs + 2)
-                        .overlay { CalendarKeyboardFocusOutline() }
-                }
-                .buttonStyle(.plain)
-                .modifier(CalendarControlReturn(
-                    owner: .searchPrompt, context: keyboardContext, action: openSearch,
-                    observe: keyboardObservation, focus: controlFocus
-                ))
-                .accessibilityLabel("Go to date using AI")
-            }
-        }
-        .padding(.horizontal, AppDesign.Spacing.sm)
-        .padding(.vertical, isActive ? AppDesign.Spacing.xs + 2 : 0)
-        .background(
-            RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
-                .fill(Color.secondary.opacity(isActive ? 0.10 : 0.06))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
-                .strokeBorder(
-                    isActive ? Color.accentColor.opacity(0.3) : Color.clear,
-                    lineWidth: 1
-                )
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if !isActive {
-                isActive = true
-            }
-        }
-
-        if let error = error {
-            Text(error)
-                .font(.caption)
-                .foregroundStyle(.primary)
-        }
-    }
-
-    private func openSearch() { isActive = true }
-
-    private func dismissSearch() {
-        onDismiss()
-        // Keep the reused panel's existing text activation/restoration lifecycle.
     }
 }

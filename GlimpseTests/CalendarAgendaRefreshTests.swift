@@ -671,12 +671,13 @@ private final class AgendaRefreshFixture {
                     Issue.record("Agenda invalidation must not submit AI")
                     return .proxy
                 },
-                parseDate: { _, _ in
+                interpret: { _, _ in
                     Issue.record("Agenda fixture must not query live AI")
                     return nil
                 }
             ), enabled: showAI, preference: .auto,
-            onDate: { store.send(.aiDateResult($0)) }
+            onIntent: { store.send(.aiIntent($0)) },
+            onResultsInvalidated: { store.send(.aiResultsCleared) }
         )
         panel = CalendarPanel(
             contentRect: NSRect(x: -1000, y: -1000, width: 316, height: 550),

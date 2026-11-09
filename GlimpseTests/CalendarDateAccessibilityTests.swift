@@ -151,13 +151,13 @@ private final class DateAccessibilityFixture {
                     Issue.record("Date fixture must not resolve an AI provider")
                     return .none
                 },
-                parseDate: { _, _ in
+                interpret: { _, _ in
                     Issue.record("Date fixture must not request an AI date")
                     return nil
                 }
             ),
             enabled: false, preference: .auto,
-            onDate: { _ in Issue.record("Date fixture must not receive an AI date") }
+            onIntent: { _ in Issue.record("Date fixture must not receive an AI date") }
         )
         host = AccessibilityTestHost(width: 316, height: 550) {
             CalendarPopoverView(
