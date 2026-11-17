@@ -5,16 +5,18 @@ import GlimpseCore
 import FoundationModels
 #endif
 
-/// Routes AI calendar queries to the best available provider:
-/// 1. Cloud AI via proxy (no API key needed) — works on any macOS 14+
-/// 2. Apple FoundationModels (macOS 26+) — on-device, free
-/// 3. Error if neither is available
+/// Routes AI calendar queries:
+/// - Auto: Apple FoundationModels (macOS 26+, on-device) when supported, with
+///   one Cloud AI fallback on a retryable failure; Cloud AI otherwise.
+/// - Cloud AI / On-device AI: exactly the chosen provider, no fallback.
 /// Both providers return the same structured intent and share one validator.
 enum AIDateHelper {
     enum Provider: Equatable, Sendable {
         case proxy
         case foundationModels
         case none
+        /// Auto on a Mac that supports on-device AI: try it first, then Cloud AI once.
+        case onDeviceThenProxy
     }
 
     struct Dependencies: Sendable {
@@ -50,7 +52,7 @@ enum AIDateHelper {
         case .onDevice:
             return onDeviceSupported ? .foundationModels : .none
         case .auto:
-            return .proxy
+            return onDeviceSupported ? .onDeviceThenProxy : .proxy
         }
     }
 
@@ -67,6 +69,13 @@ enum AIDateHelper {
     ) async throws -> AIIntent? {
         try Task.checkCancellation()
         switch provider {
+        case .onDeviceThenProxy:
+            do {
+                return try await interpret(query, provider: .foundationModels, dependencies: dependencies)
+            } catch let failure as AIDateFailure where failure.allowsAutoFallback {
+                AppLogger.general.info("AI auto fallback: cloud")
+                return try await interpret(query, provider: .proxy, dependencies: dependencies)
+            }
         case .proxy:
             do {
                 let result = try await dependencies.interpretProxy(query)
@@ -116,9 +125,14 @@ enum AIDateHelper {
     }
 
     static func providerName() -> String {
-        switch activeProvider() {
+        providerName(for: activeProvider())
+    }
+
+    static func providerName(for provider: Provider) -> String {
+        switch provider {
         case .proxy: "Cloud AI"
         case .foundationModels: "On-device AI"
+        case .onDeviceThenProxy: "On-device AI, Cloud AI fallback"
         case .none: "None"
         }
     }

@@ -269,6 +269,7 @@ struct PreferencesView: View {
                     }
                     .labelsHidden()
                     .fixedSize()
+                    .help(store.aiProvider.helpText)
                 }
             }
             Text("Type phrases like “next Friday” in the calendar.")

@@ -9,19 +9,15 @@ them unless explicitly asked — the rationale for each is documented here.
    identity, which can trigger Keychain password prompts. Partially mitigated by not
    reading Keychain on every preferences open. Full fix requires a valid developer cert.
 
-2. **Auto AI provider always returns proxy** — `AIDateHelper.activeProvider()` with
-   `.auto` always returns `.proxy`. Does not fall back to on-device FoundationModels.
-   Intentional: proxy is always available and more reliable.
-
-3. **PreferencesView creates new Store each time** — `Store(initialState:)` is created
+2. **PreferencesView creates new Store each time** — `Store(initialState:)` is created
    inline in CalendarPopoverView. This means preferences state resets on each toggle.
    Acceptable because state is loaded from UserDefaults in `onAppear`.
 
-4. **Sparkle update check may fail silently** — Without a valid appcast URL and EdDSA
+3. **Sparkle update check may fail silently** — Without a valid appcast URL and EdDSA
    key, Sparkle's check completes with no visible feedback. The inline status UI handles
    this with error state display.
 
-5. **Tab skips Settings rows scrolled out of view** (found 2026-11-05, v1.4.29 classic
+4. **Tab skips Settings rows scrolled out of view** (found 2026-11-05, v1.4.29 classic
    pane). SwiftUI's focus routing skips rows fully clipped by the Settings scroll view
    (workdays, AI search, Quit link) even though the AppKit key-view loop contains all of
    them in order (probe: 31 entries). Mitigated: the window's minimum content height equals
@@ -37,7 +33,9 @@ them unless explicitly asked — the rationale for each is documented here.
    is affected too). Fix belongs on the proxy (upstream key); the client contract, headers
    and secret handling are unchanged. On-device AI is unaffected. Re-checked later on
    2026-11-08 with `AILiveProviderGoldenTests` (proxy): still `unusableResponse` for all
-   four example queries; on-device passes all four.
+   four example queries; on-device passes all four. Since v1.5.1, Auto prefers on-device AI on
+   macOS 26 and falls back to Cloud AI once, so Auto users with Apple Intelligence
+   are unaffected; an explicit Cloud AI choice still shows the error.
 
 6. **Type to Schedule scope** — Writes only to the default writable calendar (named on
    the card), single-day timed events only; no invitees, location, recurrence, or
@@ -45,7 +43,7 @@ them unless explicitly asked — the rationale for each is documented here.
 
 ## Test Status
 
-- GlimpseCore: 212 tests, 13 suites — `cd GlimpseCore && swift test`
-- App tests: 385 default-run tests — `xcodebuild test`; key-panel suites (keyboard 45, AI 11, agenda 13) run in the quality gate
+- GlimpseCore: 214 tests, 14 suites — `cd GlimpseCore && swift test`
+- App tests: 394 default-run tests — `xcodebuild test`; key-panel suites (keyboard 45, AI 11, agenda 13) run in the quality gate
 - Live AI golden check (opt-in, 4 queries): `TEST_RUNNER_GLIMPSE_LIVE_AI=foundationModels`
 - All pass

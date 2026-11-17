@@ -157,7 +157,7 @@ struct AIDateQueryClientTests {
     @Test
     func onDeviceResultsAndUnavailable() async throws {
         #expect(AIDateHelper.provider(for: .auto, onDeviceSupported: false) == .proxy)
-        #expect(AIDateHelper.provider(for: .auto, onDeviceSupported: true) == .proxy)
+        #expect(AIDateHelper.provider(for: .auto, onDeviceSupported: true) == .onDeviceThenProxy)
         #expect(AIDateHelper.provider(for: .proxy, onDeviceSupported: false) == .proxy)
         #expect(AIDateHelper.provider(for: .onDevice, onDeviceSupported: true) == .foundationModels)
         #expect(AIDateHelper.provider(for: .onDevice, onDeviceSupported: false) == .none)
@@ -397,6 +397,157 @@ private actor AIDateClientGate {
         let waiting = waiters
         waiters.removeAll()
         for waiter in waiting { waiter.resume() }
+    }
+}
+
+// MARK: - Auto provider routing and fallback
+
+/// Auto prefers on-device AI and falls back to Cloud AI once; explicit
+/// choices never fall back. Only synthetic providers run here.
+struct AIAutoProviderTests {
+    @Test(arguments: [
+        (AIProvider.auto, true, AIDateHelper.Provider.onDeviceThenProxy),
+        (.auto, false, .proxy),
+        (.proxy, true, .proxy),
+        (.proxy, false, .proxy),
+        (.onDevice, true, .foundationModels),
+        (.onDevice, false, .none),
+    ])
+    func routingPrefersOnDeviceOnlyForAuto(
+        preference: AIProvider, onDeviceSupported: Bool, expected: AIDateHelper.Provider
+    ) {
+        #expect(AIDateHelper.provider(for: preference, onDeviceSupported: onDeviceSupported) == expected)
+    }
+
+    @Test(arguments: AIDateFailure.allCases)
+    func fallbackCoversUnavailableUnusableAndNetworkFailuresOnly(failure: AIDateFailure) {
+        let expected: Bool = switch failure {
+        case .unavailable, .onDeviceRequest, .unusableResponse,
+             .transport, .nonHTTPResponse, .nonSuccessResponse: true
+        case .requestPreparation: false
+        }
+        #expect(failure.allowsAutoFallback == expected)
+    }
+
+    @Test
+    func autoUsesOnDeviceAnswerWithoutCallingCloud() async throws {
+        let fake = FakeProviders(onDevice: .answer, proxy: .answer)
+        let intent = try await AIDateHelper.interpret(
+            Self.query, provider: .onDeviceThenProxy, dependencies: fake.dependencies
+        )
+        #expect(intent == .navigate(Self.onDeviceDay))
+        #expect(fake.onDeviceCalls.value == 1)
+        #expect(fake.proxyCalls.value == 0)
+    }
+
+    @Test(arguments: [AIAutoFakeOutcome.unavailable, .generationError])
+    func autoFallsBackToCloudOnceWhenOnDeviceFails(onDevice: AIAutoFakeOutcome) async throws {
+        let fake = FakeProviders(onDevice: onDevice, proxy: .answer)
+        let intent = try await AIDateHelper.interpret(
+            Self.query, provider: .onDeviceThenProxy, dependencies: fake.dependencies
+        )
+        #expect(intent == .navigate(Self.proxyDay))
+        #expect(fake.onDeviceCalls.value == 1)
+        #expect(fake.proxyCalls.value == 1)
+    }
+
+    @Test
+    func autoShowsCloudErrorWhenBothProvidersFail() async {
+        let fake = FakeProviders(onDevice: .unavailable, proxy: .unusable)
+        await #expect(throws: AIDateFailure.unusableResponse) {
+            try await AIDateHelper.interpret(
+                Self.query, provider: .onDeviceThenProxy, dependencies: fake.dependencies
+            )
+        }
+        #expect(fake.onDeviceCalls.value == 1)
+        #expect(fake.proxyCalls.value == 1)
+    }
+
+    @Test
+    func autoDoesNotFallBackWhenOnDeviceAnswersWithNothingUsable() async throws {
+        let fake = FakeProviders(onDevice: .unparsed, proxy: .answer)
+        let intent = try await AIDateHelper.interpret(
+            Self.query, provider: .onDeviceThenProxy, dependencies: fake.dependencies
+        )
+        #expect(intent == nil)
+        #expect(fake.proxyCalls.value == 0)
+    }
+
+    @Test
+    func autoDoesNotFallBackAfterCancellation() async {
+        let fake = FakeProviders(onDevice: .cancelled, proxy: .answer)
+        await #expect(throws: CancellationError.self) {
+            try await AIDateHelper.interpret(
+                Self.query, provider: .onDeviceThenProxy, dependencies: fake.dependencies
+            )
+        }
+        #expect(fake.proxyCalls.value == 0)
+    }
+
+    @Test
+    func explicitChoicesNeverFallBack() async {
+        let cloud = FakeProviders(onDevice: .answer, proxy: .unusable)
+        await #expect(throws: AIDateFailure.unusableResponse) {
+            try await AIDateHelper.interpret(Self.query, provider: .proxy, dependencies: cloud.dependencies)
+        }
+        #expect(cloud.onDeviceCalls.value == 0)
+
+        let onDevice = FakeProviders(onDevice: .generationError, proxy: .answer)
+        await #expect(throws: AIDateFailure.onDeviceRequest) {
+            try await AIDateHelper.interpret(
+                Self.query, provider: .foundationModels, dependencies: onDevice.dependencies
+            )
+        }
+        #expect(onDevice.proxyCalls.value == 0)
+    }
+
+    @Test
+    func autoProviderNameMentionsBothProviders() {
+        #expect(AIDateHelper.providerName(for: .onDeviceThenProxy) == "On-device AI, Cloud AI fallback")
+        #expect(AIDateHelper.providerName(for: .proxy) == "Cloud AI")
+        #expect(AIDateHelper.providerName(for: .foundationModels) == "On-device AI")
+        #expect(AIDateHelper.providerName(for: .none) == "None")
+    }
+
+    static let query = "synthetic jump request"
+    static let onDeviceDay = CivilDate(year: 2026, month: 3, day: 15)!
+    static let proxyDay = CivilDate(year: 2026, month: 12, day: 25)!
+}
+
+enum AIAutoFakeOutcome: Sendable {
+    case answer, unparsed, unavailable, generationError, unusable, cancelled
+}
+
+private struct FakeProviders: Sendable {
+    let onDeviceCalls = LockIsolated(0)
+    let proxyCalls = LockIsolated(0)
+    let dependencies: AIDateHelper.Dependencies
+
+    init(onDevice: AIAutoFakeOutcome, proxy: AIAutoFakeOutcome) {
+        let onDeviceCalls = onDeviceCalls
+        let proxyCalls = proxyCalls
+        dependencies = AIDateHelper.Dependencies(
+            interpretProxy: { _ in
+                proxyCalls.withValue { $0 += 1 }
+                switch proxy {
+                case .answer: return .navigate(AIAutoProviderTests.proxyDay)
+                case .unparsed: return nil
+                case .cancelled: throw CancellationError()
+                case .unavailable, .generationError, .unusable: throw AIDateFailure.unusableResponse
+                }
+            },
+            now: { Date(timeIntervalSince1970: 1_700_000_000) },
+            generateOnDevice: { _, _ in
+                onDeviceCalls.withValue { $0 += 1 }
+                switch onDevice {
+                case .answer: return AIIntentWire(intent: "navigate", date: "2026-03-15")
+                case .unparsed: return AIIntentWire(intent: "teleport", date: "2026-03-15")
+                case .unavailable: throw AIDateFailure.unavailable
+                case .generationError, .unusable: throw URLError(.cannotParseResponse)
+                case .cancelled: throw CancellationError()
+                }
+            }
+        )
     }
 }
 

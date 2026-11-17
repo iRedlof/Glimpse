@@ -2,7 +2,7 @@ import Foundation
 import GlimpseCore
 
 /// Operational failures contain no query, response, endpoint or error payload.
-enum AIDateFailure: Error, Sendable, Equatable {
+enum AIDateFailure: Error, Sendable, Equatable, CaseIterable {
     case requestPreparation
     case transport
     case nonHTTPResponse
@@ -10,6 +10,17 @@ enum AIDateFailure: Error, Sendable, Equatable {
     case unusableResponse
     case onDeviceRequest
     case unavailable
+
+    /// Auto retries the other provider once only for these: the provider was
+    /// unavailable, answered unusably, or the request failed on the way.
+    /// A local request-preparation fault would fail the same way again.
+    var allowsAutoFallback: Bool {
+        switch self {
+        case .unavailable, .onDeviceRequest, .unusableResponse,
+             .transport, .nonHTTPResponse, .nonSuccessResponse: true
+        case .requestPreparation: false
+        }
+    }
 }
 
 struct AIDateQueryClient: Sendable {
