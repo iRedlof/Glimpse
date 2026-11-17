@@ -149,7 +149,7 @@ Acceptance: after an update error, retry is available when Sparkle permits it; i
 
 `Glimpse/CalendarPopoverView.swift:317–320` tells the user to set a Groq API key, although preferences expose Auto, Cloud AI, and On-device AI without an API-key field. `Glimpse/AIDateHelper.swift:23–29` shows that selecting On-device on an unsupported system reaches this path.
 
-Acceptance: the message explains that on-device AI is unavailable and directs the user to Cloud AI or Auto. The intentional Auto-to-proxy behavior documented in known issues should remain unchanged.
+Acceptance: the message explains that on-device AI is unavailable and directs the user to Cloud AI or Auto. Since v1.5.1 Auto prefers on-device AI and falls back to Cloud AI once; when on-device AI is off and Cloud AI also fails, Auto tells the user to turn on Apple Intelligence.
 
 ## Review checklist coverage
 

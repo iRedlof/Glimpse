@@ -1,23 +1,23 @@
 {
-  "version": "1.5.0",
-  "build": "37",
-  "scope": "Type to schedule in the Ask Glimpse field: navigate, range, question, create (with explicit slot pick, EventKit save and 10 s Undo) and clarify intents. Cloud AI proxy upstream 401 is a pre-existing server-side issue.",
+  "version": "1.5.1",
+  "build": "38",
+  "scope": "Auto AI provider prefers on-device FoundationModels when supported and falls back to Cloud AI once on an unavailable, unusable-response or network failure; explicit Cloud AI / On-device AI choices are unchanged. Cloud AI proxy upstream 401 is a pre-existing server-side issue.",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-08-type-to-schedule.md"
+      "evidence": "docs/superpowers/reviews/2026-11-16-auto-on-device.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-08-type-to-schedule.md"
+      "evidence": "docs/superpowers/reviews/2026-11-16-auto-on-device.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-08-type-to-schedule.md"
+      "evidence": "docs/superpowers/reviews/2026-11-16-auto-on-device.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-08-type-to-schedule.md"
+      "evidence": "docs/superpowers/reviews/2026-11-16-auto-on-device.md"
     }
   }
 }

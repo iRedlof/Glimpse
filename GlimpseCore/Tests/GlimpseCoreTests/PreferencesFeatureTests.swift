@@ -370,3 +370,16 @@ struct PreferencesFeatureTests {
         await store.receive(\.delegate.displayOptionsChanged)
     }
 }
+
+struct AIProviderHelpTextTests {
+    @Test
+    func autoHelpTextExplainsOnDeviceFirstWithCloudFallback() {
+        #expect(AIProvider.auto.helpText == "Uses on-device AI when available and falls back to Cloud AI if on-device AI is unavailable or fails. Uses Cloud AI otherwise.")
+    }
+
+    @Test
+    func explicitProvidersSayTheyDoNotFallBack() {
+        #expect(AIProvider.proxy.helpText == "Always uses Cloud AI.")
+        #expect(AIProvider.onDevice.helpText == "Always uses on-device AI (macOS 26 with Apple Intelligence).")
+    }
+}

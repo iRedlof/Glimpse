@@ -2,7 +2,7 @@ import Foundation
 import GlimpseCore
 
 /// Operational failures contain no query, response, endpoint or error payload.
-enum AIDateFailure: Error, Sendable, Equatable {
+enum AIDateFailure: Error, Sendable, Equatable, CaseIterable {
     case requestPreparation
     case transport
     case nonHTTPResponse
@@ -10,6 +10,9 @@ enum AIDateFailure: Error, Sendable, Equatable {
     case unusableResponse
     case onDeviceRequest
     case unavailable
+    /// Auto only: on-device AI is unavailable (e.g. Apple Intelligence off)
+    /// and the Cloud AI fallback failed too.
+    case onDeviceOffCloudFailed
 }
 
 struct AIDateQueryClient: Sendable {
