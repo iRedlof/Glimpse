@@ -10,17 +10,9 @@ enum AIDateFailure: Error, Sendable, Equatable, CaseIterable {
     case unusableResponse
     case onDeviceRequest
     case unavailable
-
-    /// Auto retries the other provider once only for these: the provider was
-    /// unavailable, answered unusably, or the request failed on the way.
-    /// A local request-preparation fault would fail the same way again.
-    var allowsAutoFallback: Bool {
-        switch self {
-        case .unavailable, .onDeviceRequest, .unusableResponse,
-             .transport, .nonHTTPResponse, .nonSuccessResponse: true
-        case .requestPreparation: false
-        }
-    }
+    /// Auto only: on-device AI is unavailable (e.g. Apple Intelligence off)
+    /// and the Cloud AI fallback failed too.
+    case onDeviceOffCloudFailed
 }
 
 struct AIDateQueryClient: Sendable {

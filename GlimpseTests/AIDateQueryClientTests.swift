@@ -419,16 +419,6 @@ struct AIAutoProviderTests {
         #expect(AIDateHelper.provider(for: preference, onDeviceSupported: onDeviceSupported) == expected)
     }
 
-    @Test(arguments: AIDateFailure.allCases)
-    func fallbackCoversUnavailableUnusableAndNetworkFailuresOnly(failure: AIDateFailure) {
-        let expected: Bool = switch failure {
-        case .unavailable, .onDeviceRequest, .unusableResponse,
-             .transport, .nonHTTPResponse, .nonSuccessResponse: true
-        case .requestPreparation: false
-        }
-        #expect(failure.allowsAutoFallback == expected)
-    }
-
     @Test
     func autoUsesOnDeviceAnswerWithoutCallingCloud() async throws {
         let fake = FakeProviders(onDevice: .answer, proxy: .answer)
@@ -452,8 +442,8 @@ struct AIAutoProviderTests {
     }
 
     @Test
-    func autoShowsCloudErrorWhenBothProvidersFail() async {
-        let fake = FakeProviders(onDevice: .unavailable, proxy: .unusable)
+    func autoShowsCloudErrorWhenOnDeviceRequestAndCloudBothFail() async {
+        let fake = FakeProviders(onDevice: .generationError, proxy: .unusable)
         await #expect(throws: AIDateFailure.unusableResponse) {
             try await AIDateHelper.interpret(
                 Self.query, provider: .onDeviceThenProxy, dependencies: fake.dependencies
@@ -461,6 +451,30 @@ struct AIAutoProviderTests {
         }
         #expect(fake.onDeviceCalls.value == 1)
         #expect(fake.proxyCalls.value == 1)
+    }
+
+    /// With Apple Intelligence off and Cloud failing, the user must learn
+    /// on-device is off rather than seeing only the generic Cloud failure.
+    @Test
+    func autoReportsOnDeviceOffWhenOnDeviceUnavailableAndCloudFails() async {
+        let fake = FakeProviders(onDevice: .unavailable, proxy: .unusable)
+        await #expect(throws: AIDateFailure.onDeviceOffCloudFailed) {
+            try await AIDateHelper.interpret(
+                Self.query, provider: .onDeviceThenProxy, dependencies: fake.dependencies
+            )
+        }
+        #expect(fake.onDeviceCalls.value == 1)
+        #expect(fake.proxyCalls.value == 1)
+    }
+
+    @Test
+    func autoDoesNotMaskCancellationDuringCloudFallback() async {
+        let fake = FakeProviders(onDevice: .unavailable, proxy: .cancelled)
+        await #expect(throws: CancellationError.self) {
+            try await AIDateHelper.interpret(
+                Self.query, provider: .onDeviceThenProxy, dependencies: fake.dependencies
+            )
+        }
     }
 
     @Test

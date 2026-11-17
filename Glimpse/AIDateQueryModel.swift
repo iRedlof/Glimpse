@@ -17,6 +17,7 @@ final class AIDateQueryModel {
     nonisolated static let unparsedMessage = "I didn't catch that. Try ‘next Friday’, ‘next 3 Fridays’, ‘workdays until Mar 1’ or ‘lunch Tue 1pm’."
     nonisolated static let failureMessage = "AI couldn't complete that. Try again."
     nonisolated static let unavailableMessage = "On-device AI is unavailable. Choose Cloud AI in Preferences."
+    nonisolated static let onDeviceOffCloudFailedMessage = "Cloud AI couldn't complete that and on-device AI is off. Turn on Apple Intelligence in System Settings, or try again."
 
     @ObservationIgnored private let client: AIDateQueryClient
     @ObservationIgnored private let onIntent: @MainActor (AIIntent) -> Void
@@ -43,7 +44,7 @@ final class AIDateQueryModel {
     }
 
     private enum Outcome {
-        case intent(AIIntent), unparsed, failure, unavailable, cancelled
+        case intent(AIIntent), unparsed, failure, unavailable, onDeviceOffCloudFailed, cancelled
     }
 
     init(
@@ -150,13 +151,20 @@ final class AIDateQueryModel {
                 outcome = .cancelled
             } catch {
                 // Error payloads never enter observable state or logs.
-                outcome = Task.isCancelled ? .cancelled
-                    : (error as? AIDateFailure == .unavailable ? .unavailable : .failure)
+                outcome = Task.isCancelled ? .cancelled : Self.outcome(for: error)
             }
             self?.complete(outcome, token: token)
         }
         requestTask = task
         return task
+    }
+
+    private nonisolated static func outcome(for error: any Error) -> Outcome {
+        switch error as? AIDateFailure {
+        case .unavailable: .unavailable
+        case .onDeviceOffCloudFailed: .onDeviceOffCloudFailed
+        default: .failure
+        }
     }
 
     private func complete(_ outcome: Outcome, token: RequestToken) {
@@ -196,6 +204,8 @@ final class AIDateQueryModel {
             errorMessage = Self.failureMessage
         case .unavailable:
             errorMessage = Self.unavailableMessage
+        case .onDeviceOffCloudFailed:
+            errorMessage = Self.onDeviceOffCloudFailedMessage
         case .cancelled:
             break
         }

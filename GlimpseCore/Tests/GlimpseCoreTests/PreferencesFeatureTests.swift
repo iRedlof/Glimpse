@@ -374,7 +374,7 @@ struct PreferencesFeatureTests {
 struct AIProviderHelpTextTests {
     @Test
     func autoHelpTextExplainsOnDeviceFirstWithCloudFallback() {
-        #expect(AIProvider.auto.helpText == "Uses on-device AI when available and falls back to Cloud AI if it can’t answer. Uses Cloud AI otherwise.")
+        #expect(AIProvider.auto.helpText == "Uses on-device AI when available and falls back to Cloud AI if on-device AI is unavailable or fails. Uses Cloud AI otherwise.")
     }
 
     @Test

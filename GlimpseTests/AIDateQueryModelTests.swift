@@ -397,6 +397,38 @@ struct AIDateQueryModelTests {
         }
     }
 
+    // Auto must reach the provider as on-device-then-Cloud when on-device is supported.
+    @Test(arguments: [
+        (true, AIDateHelper.Provider.onDeviceThenProxy),
+        (false, .proxy),
+    ])
+    func autoRequestUsesRealRouting(
+        onDeviceSupported: Bool, expected: AIDateHelper.Provider
+    ) async throws {
+        try await withFixture(preference: .auto, onDeviceSupported: onDeviceSupported) { fixture in
+            let tracked = try fixture.submitRequired()
+            let request = try await fixture.enteredRequest(at: 0)
+            #expect(request.provider == expected)
+            #expect(fixture.resolutions.value == [.auto])
+            await request.release(.success(AIDateModelFixture.dateA))
+            try await tracked.finished.wait()
+            #expect(fixture.receipts.dates == [AIDateModelFixture.dateA])
+        }
+    }
+
+    // Auto with on-device off and Cloud failing must say how to recover, not a bare failure.
+    @Test
+    func autoBothUnavailableTellsUserToTurnOnAppleIntelligence() async throws {
+        try await withFixture(preference: .auto, onDeviceSupported: true) { fixture in
+            let tracked = try fixture.submitRequired()
+            let request = try await fixture.enteredRequest(at: 0)
+            await request.release(.failure(AIDateFailure.onDeviceOffCloudFailed))
+            try await tracked.finished.wait()
+            #expect(fixture.model.errorMessage == AIDateQueryModel.onDeviceOffCloudFailedMessage)
+            #expect(fixture.model.draft == "fixture draft A")
+        }
+    }
+
     // Treating unavailable as rejection/no-date or invoking a provider breaks this.
     @Test
     func unsupportedProviderRetainsDraftWithoutInvokingWork() async throws {
@@ -662,10 +694,8 @@ private final class AIDateModelFixture {
         let client = AIDateQueryClient(
             resolveProvider: { preference in
                 resolutions.withValue { $0.append(preference) }
-                switch preference {
-                case .auto, .proxy: return .proxy
-                case .onDevice: return onDeviceSupported ? .foundationModels : .none
-                }
+                // The real router, so fixture routing cannot drift from the app.
+                return AIDateHelper.provider(for: preference, onDeviceSupported: onDeviceSupported)
             },
             interpret: {
                 if $1 == .none { throw AIDateFailure.unavailable }

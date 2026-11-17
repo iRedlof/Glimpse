@@ -35,7 +35,9 @@ them unless explicitly asked — the rationale for each is documented here.
    2026-11-08 with `AILiveProviderGoldenTests` (proxy): still `unusableResponse` for all
    four example queries; on-device passes all four. Since v1.5.1, Auto prefers on-device AI on
    macOS 26 and falls back to Cloud AI once, so Auto users with Apple Intelligence
-   are unaffected; an explicit Cloud AI choice still shows the error.
+   are largely unaffected (a cold on-device failure still falls back to the failing
+   proxy and shows the error; with Apple Intelligence off, Auto says to turn it on).
+   An explicit Cloud AI choice still shows the error.
 
 6. **Type to Schedule scope** — Writes only to the default writable calendar (named on
    the card), single-day timed events only; no invitees, location, recurrence, or

@@ -189,7 +189,7 @@ struct PreferencesAccessibilityTests {
         let document = try #require(scroll.documentView)
         if isMinimum {
             // The minimum window never clips the page: SwiftUI Tab routing skips fully
-            // clipped rows (known issue 5), so every row must stay inside the clip.
+            // clipped rows (known issue 4), so every row must stay inside the clip.
             #expect(document.frame.height <= scroll.contentView.bounds.height + AppDesign.Settings.layoutTolerance,
                     "Document \(document.frame.height) exceeds minimum clip \(scroll.contentView.bounds.height)")
         }

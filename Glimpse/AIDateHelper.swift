@@ -70,11 +70,19 @@ enum AIDateHelper {
         try Task.checkCancellation()
         switch provider {
         case .onDeviceThenProxy:
+            // The on-device branch only throws .unavailable, .onDeviceRequest
+            // or CancellationError; both failures warrant one Cloud AI try.
+            let onDeviceFailure: AIDateFailure
             do {
                 return try await interpret(query, provider: .foundationModels, dependencies: dependencies)
-            } catch let failure as AIDateFailure where failure.allowsAutoFallback {
-                AppLogger.general.info("AI auto fallback: cloud")
+            } catch let failure as AIDateFailure {
+                onDeviceFailure = failure
+            }
+            AppLogger.general.info("AI auto fallback: cloud")
+            do {
                 return try await interpret(query, provider: .proxy, dependencies: dependencies)
+            } catch is AIDateFailure where onDeviceFailure == .unavailable {
+                throw AIDateFailure.onDeviceOffCloudFailed
             }
         case .proxy:
             do {
