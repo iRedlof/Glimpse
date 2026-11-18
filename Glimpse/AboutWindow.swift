@@ -30,6 +30,30 @@ enum AboutWindow {
     }
 }
 
+/// Version text shared by the About window and the Settings About section.
+enum AppVersionText {
+    static let missing = "—"
+
+    /// e.g. "Glimpse 1.5.1 (52)"; missing Info.plist values read as "—".
+    static func productLine(infoDictionary: [String: Any]?) -> String {
+        "Glimpse \(marketing(infoDictionary)) (\(build(infoDictionary)))"
+    }
+
+    static func marketing(_ infoDictionary: [String: Any]?) -> String {
+        value(infoDictionary, key: "CFBundleShortVersionString")
+    }
+
+    static func build(_ infoDictionary: [String: Any]?) -> String {
+        value(infoDictionary, key: "CFBundleVersion")
+    }
+
+    private static func value(_ infoDictionary: [String: Any]?, key: String) -> String {
+        guard let text = infoDictionary?[key] as? String,
+              !text.trimmingCharacters(in: .whitespaces).isEmpty else { return missing }
+        return text
+    }
+}
+
 struct AboutView: View {
     @State private var updater: SparkleUpdater
     @State private var diagnosticState: DiagnosticState = .idle
@@ -43,11 +67,11 @@ struct AboutView: View {
     }
 
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        AppVersionText.marketing(Bundle.main.infoDictionary)
     }
 
     private var buildNumber: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+        AppVersionText.build(Bundle.main.infoDictionary)
     }
 
     var body: some View {

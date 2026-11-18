@@ -12,6 +12,7 @@ struct PreferencesView: View {
     private let recordingWindow: @MainActor () -> NSWindow?
     private let section: SettingsSection?
     private let calendarActions: SettingsCalendarActions?
+    private let openAbout: (@MainActor () -> Void)?
 
     init(
         store: StoreOf<PreferencesFeature>,
@@ -19,6 +20,7 @@ struct PreferencesView: View {
         notificationCenter: NotificationCenter = .default,
         onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)? = nil,
         calendarActions: SettingsCalendarActions? = nil,
+        openAbout: (@MainActor () -> Void)? = nil,
         section: SettingsSection? = nil,
         recordingWindow: @escaping @MainActor () -> NSWindow? = { nil }
     ) {
@@ -29,6 +31,7 @@ struct PreferencesView: View {
         self.recordingWindow = recordingWindow
         self.section = section
         self.calendarActions = calendarActions
+        self.openAbout = openAbout
     }
 
     private let allWeekdays = Array(1...7)
@@ -98,6 +101,8 @@ struct PreferencesView: View {
                 calendarSettings
             case .aiDateSearch:
                 aiSettingsRows
+            case .about:
+                aboutRow
             }
         }
         .padding(.vertical, AppDesign.Settings.classicSectionInset)
@@ -276,6 +281,24 @@ struct PreferencesView: View {
                 .font(.system(size: AppDesign.Settings.supportingFontSize))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - About
+
+    private var aboutRow: some View {
+        classicRow("About") {
+            HStack(alignment: .firstTextBaseline, spacing: AppDesign.Settings.rowSpacing) {
+                Text(AppVersionText.productLine(infoDictionary: Bundle.main.infoDictionary))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Button("About Glimpse…") { openAbout?() }
+                    .buttonStyle(.bordered)
+                    .disabled(openAbout == nil)
+                    .accessibilityLabel("About Glimpse")
+                    .accessibilityHint("Opens the About window with updates, diagnostics and links")
+                    .help("Updates, diagnostics and links")
+            }
         }
     }
 

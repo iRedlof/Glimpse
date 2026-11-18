@@ -24,7 +24,7 @@ Candidate **v1.4.29/build36** replaces the public v1.4.28/build35 footer and Set
 - **Filled background mode** — solid pill style for the menu bar item
 - **Workday highlighting** — configure which days are workdays
 - **Pin window** — keep the calendar visible while working
-- **Settings window** — one scrollable page with Opening Glimpse, Menu bar, Calendar, and AI date search categories, reached from the labeled Settings footer action or ⌘,
+- **Settings window** — one scrollable page with Opening Glimpse, Menu bar, Calendar, AI date search, and About (version plus the About window) categories, reached from the labeled Settings footer action or ⌘,
 - **Auto-updates** — inline status in About, guarded retry after failed checks, and an official release link when updating is unavailable
 - **Shortcuts.app** — "Show Glimpse Calendar" available via Siri and Shortcuts
 - **Launch at login** — actual macOS registration status, with a shortcut to approve it in Login Items
