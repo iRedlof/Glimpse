@@ -79,7 +79,6 @@ enum AppDesign {
         static let layoutTolerance: CGFloat = 0.5
         static let screenInset: CGFloat = 10
         static let windowGap: CGFloat = 12
-        static let linkSpacing: CGFloat = 14
         static let previewBaselineOffset: CGFloat = 4.5
     }
 
@@ -91,14 +90,25 @@ enum AppDesign {
         static let leadingInset: CGFloat = 14
         static let trailingInset: CGFloat = 6
         static let dividerHeight: CGFloat = 16
-        static let confirmationInset: CGFloat = 12
+        /// Quit confirmation halves: neutral Cancel fill; red Quit darkens on hover/press.
+        static let confirmationCancelOpacity: Double = 0.06
+        static let confirmationCancelHoverOpacity: Double = 0.1
+        static let confirmationCancelPressedOpacity: Double = 0.16
+        static let confirmationDestructiveHoverShade: Double = 0.08
+        static let confirmationDestructivePressedShade: Double = 0.18
         static let hoverBackgroundOpacity: Double = 0.08
         static let pressedBackgroundOpacity: Double = 0.14
         static let pinnedBackgroundOpacity: Double = 0.14
 
+        /// Only a legacy scroller takes layout width; overlay scrollers draw over content.
         @MainActor
         static var scrollbarClearance: CGFloat {
-            NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
+            scrollbarClearance(for: NSScroller.preferredScrollerStyle)
+        }
+
+        @MainActor
+        static func scrollbarClearance(for style: NSScroller.Style) -> CGFloat {
+            style == .legacy ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0
         }
     }
 

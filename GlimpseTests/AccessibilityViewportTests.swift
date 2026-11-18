@@ -550,17 +550,22 @@ struct AccessibilityViewportTests {
             let nodes = fixture.contrastNodes()
             let cancel = try #require(nodes.first { $0.role == .button && $0.label == "Cancel quitting Glimpse" })
             let confirm = try #require(nodes.first { $0.role == .button && $0.label == "Confirm quitting Glimpse" })
-            let prompt = try #require(nodes.first {
+            #expect(confirm.help == "Quit Glimpse?")
+            // Voice Control: the visible titles must be speakable targets.
+            #expect(confirm.inputLabels.contains("Quit Glimpse") && confirm.inputLabels.contains("Quit"))
+            #expect(cancel.inputLabels.contains("Cancel"))
+            #expect(!nodes.contains {
                 $0.role == .staticText && ($0.label == "Quit Glimpse?" || $0.value as? String == "Quit Glimpse?")
-            })
+            }, "The question moves into the Quit button; no prompt label takes footer space")
             for button in [cancel, confirm] {
                 try #require(button.object.accessibilityWindow?() as? NSWindow === panel && button.enabled)
-                #expect(abs(button.frame.height - 28) < 0.5)
+                #expect(abs(button.frame.height - AppDesign.Footer.height) < 0.5)
                 #expect(abs(button.frame.midY - originalMidY) < 0.5)
             }
-            #expect(cancel.frame.minX >= prompt.frame.maxX)
-            #expect(cancel.frame.minX - prompt.frame.maxX <= 12)
-            #expect(abs(confirm.frame.minX - cancel.frame.maxX - 8) < 0.5)
+            // Cancel fills the left half and Quit the right half of the full panel content width.
+            #expect(abs(confirm.frame.minX - cancel.frame.maxX) < 0.5)
+            #expect(abs(confirm.frame.width - cancel.frame.width) < 0.5)
+            #expect(abs(cancel.frame.width + confirm.frame.width - PanelGeometry.contentWidth) < 0.5)
             #expect(panel.frame == originalFrame && hosting.bounds == originalBounds)
             #expect(!nodes.contains { $0.role == .button && $0.label == "Quit Glimpse" })
             #expect(fixture.protectedEffects.value == 0)

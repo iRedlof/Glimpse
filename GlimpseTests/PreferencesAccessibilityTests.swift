@@ -33,7 +33,7 @@ struct PreferencesAccessibilityTests {
             let weekday = try host.control(named: "Week starts on")
             #expect(weekday.role == .popUpButton)
             #expect(weekday.value as? String == Calendar.current.weekdaySymbols[1])
-        case .general:
+        case .general, .about:
                 Issue.record("This role matrix covers the three categories with selected preference values")
         }
     }
@@ -75,6 +75,37 @@ struct PreferencesAccessibilityTests {
         #expect(fixture.receipts.value.displaySaves == [changed, before])
         #expect(fixture.receipts.value.calendarNotifications == 0)
         #expect(fixture.receipts.value.forbidden == 0)
+    }
+
+    @Test(arguments: [false, true])
+    func aboutSectionShowsVersionAndOpensAboutOnce(hasAction: Bool) async throws {
+        let fixture = PreferencesAccessibilityFixture(state: .init())
+        let opened = LockIsolated(0)
+        var action: (@MainActor () -> Void)?
+        if hasAction { action = { @MainActor in opened.withValue { $0 += 1 } } }
+        let host = fixture.host(section: .about, openAbout: action)
+        defer { host.close(); fixture.close() }
+        try await host.settle()
+        let version = AppVersionText.productLine(infoDictionary: Bundle.main.infoDictionary)
+        let texts = host.elements().filter { $0.role == .staticText }
+        let textValues = texts.flatMap { node -> [String] in
+            [node.label, node.value as? String].compactMap { $0 }
+        }
+        #expect(textValues.contains(version), "Expected \(version); observed \(host.treeDescription)")
+        #expect(textValues.contains("About") || textValues.contains("About:"),
+                "The About section keeps the classic right-aligned row label")
+        let about = try host.control(named: "About Glimpse")
+        #expect(about.role == .button)
+        #expect(about.enabled == hasAction, "Without an About destination the button is disabled, never a no-op")
+        // AXHelp has one writer: a competing .accessibilityHint would replace this string.
+        #expect(about.help == PreferencesView.aboutHelp)
+        if hasAction {
+            #expect(about.press())
+            try await host.settle(until: { opened.value == 1 })
+        }
+        #expect(opened.value == (hasAction ? 1 : 0))
+        #expect(fixture.receipts.value.forbidden == 0)
+        #expect(fixture.receipts.value.displaySaves.isEmpty && fixture.receipts.value.aiSaves.isEmpty)
     }
 
     @Test
@@ -184,7 +215,7 @@ struct PreferencesAccessibilityTests {
         // Classic pane: no visible titles; each category is a labeled AXGroup.
         let headings = host.elements().filter(isSettingsSectionGroup)
         #expect(headings.map { $0.label ?? ($0.value as? String) ?? "" } ==
-                ["Opening Glimpse", "Menu bar", "Calendar", "AI date search"])
+                ["Opening Glimpse", "Menu bar", "Calendar", "AI date search", "About"])
         let scroll = try #require(accessibilityScrollView(in: host.hosting))
         let document = try #require(scroll.documentView)
         if isMinimum {
@@ -207,7 +238,7 @@ struct PreferencesAccessibilityTests {
                      "Show month in menu bar", "Show date in menu bar", "Show year in menu bar",
                      "Filled background", "Week starts on"] +
             Calendar.current.weekdaySymbols.map { "\($0) workday" } +
-            ["Enable AI date search"] + (showAI ? ["AI provider"] : [])
+            ["Enable AI date search"] + (showAI ? ["AI provider"] : []) + ["About Glimpse"]
         for name in names {
             let node = try host.control(named: name)
             document.scrollToVisible(host.rect(node.frame, in: document))
@@ -529,11 +560,13 @@ final class PreferencesAccessibilityFixture {
         ]
     }
 
-    func host(section: SettingsSection = .general) -> AccessibilityTestHost {
+    func host(
+        section: SettingsSection = .general, openAbout: (@MainActor () -> Void)? = nil
+    ) -> AccessibilityTestHost {
         AccessibilityTestHost(width: 600, height: 600) {
             PreferencesView(
                 store: store, hotkeyPreferences: hotkeyModel,
-                notificationCenter: notifications, section: section
+                notificationCenter: notifications, openAbout: openAbout, section: section
             )
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -555,5 +588,49 @@ final class PreferencesAccessibilityFixture {
     func close() {
         for observer in observers { notifications.removeObserver(observer) }
         hotkey.cleanupDefaults()
+    }
+}
+
+@Suite
+struct AppVersionTextTests {
+    @Test
+    func productLineCombinesMarketingVersionAndBuild() {
+        let info: [String: Any] = ["CFBundleShortVersionString": "1.5.1", "CFBundleVersion": "52"]
+        #expect(AppVersionText.productLine(infoDictionary: info) == "Glimpse 1.5.1 (52)")
+        #expect(AppVersionText.marketing(info) == "1.5.1")
+        #expect(AppVersionText.build(info) == "52")
+    }
+
+    @Test
+    func missingOrMalformedValuesReadAsDash() {
+        let cases: [[String: Any]?] = [
+            nil, [:], ["CFBundleShortVersionString": "", "CFBundleVersion": "  "],
+            ["CFBundleShortVersionString": 15, "CFBundleVersion": 52],
+        ]
+        for info in cases {
+            #expect(AppVersionText.productLine(infoDictionary: info) == "Glimpse — (—)")
+        }
+    }
+
+    @Test
+    func bundledProductLineMatchesInfoPlist() {
+        let info = Bundle.main.infoDictionary
+        let marketing = info?["CFBundleShortVersionString"] as? String
+        let build = info?["CFBundleVersion"] as? String
+        #expect(marketing?.isEmpty == false && build?.isEmpty == false)
+        #expect(AppVersionText.productLine(infoDictionary: info) ==
+                "Glimpse \(marketing ?? "") (\(build ?? ""))")
+    }
+}
+
+@MainActor
+struct FooterScrollbarClearanceTests {
+    @Test
+    func onlyLegacyScrollersReserveFooterWidth() {
+        #expect(AppDesign.Footer.scrollbarClearance(for: .overlay) == 0)
+        let legacy = AppDesign.Footer.scrollbarClearance(for: .legacy)
+        #expect(legacy == NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) && legacy > 0)
+        #expect(AppDesign.Footer.scrollbarClearance ==
+                AppDesign.Footer.scrollbarClearance(for: NSScroller.preferredScrollerStyle))
     }
 }

@@ -959,55 +959,48 @@ struct CalendarPopoverView: View {
         .transition(.identity)
     }
 
+    /// The confirmation takes over the whole footer bar: Cancel fills the left half,
+    /// the destructive Quit the right half, each a full-height hit target.
     private var quitConfirmation: some View {
-        HStack(spacing: AppDesign.Spacing.sm) {
-            Text("Quit Glimpse?")
-                .font(.subheadline.weight(.medium))
-
+        HStack(spacing: 0) {
             Button(action: cancelQuitConfirmation) {
                 Text("Cancel")
-                    .font(.caption.weight(.medium))
-                    .padding(.horizontal, AppDesign.Spacing.sm + 2)
-                    .frame(height: AppDesign.Control.iconTargetSize)
-                    .background(
-                        RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
-                            .fill(Color.secondary.opacity(0.12))
-                    )
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
                     .overlay { CalendarKeyboardFocusOutline() }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(CalendarQuitHalfButtonStyle(role: .cancel))
             .modifier(CalendarControlReturn(
                 owner: .quitCancel, context: keyboardContext, action: cancelQuitConfirmation,
                 observe: keyboardObservation, focus: $controlFocus
             ))
             .accessibilityLabel("Cancel quitting Glimpse")
+            .accessibilityInputLabels(["Cancel", "Cancel quitting Glimpse"])
             .help("Cancel quitting Glimpse")
 
             Button(action: confirmQuit) {
-                Text("Quit")
-                    .font(.caption.weight(.semibold))
+                Text("Quit Glimpse")
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, AppDesign.Spacing.sm + 2)
-                    .frame(height: AppDesign.Control.iconTargetSize)
-                    .background(
-                        RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm + 2)
-                            .fill(AppDesign.Colors.calendarSolidFill(.red, in: environment))
-                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
                     .overlay { CalendarKeyboardFocusOutline(color: .white) }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(CalendarQuitHalfButtonStyle(role: .destructive))
             .modifier(CalendarControlReturn(
                 owner: .quitConfirm, context: keyboardContext, action: confirmQuit,
                 observe: keyboardObservation, focus: $controlFocus
             ))
             .accessibilityLabel("Confirm quitting Glimpse")
-            .help("Quit Glimpse")
+            // Voice Control matches the visible text, not the AX label.
+            .accessibilityInputLabels(["Quit Glimpse", "Quit", "Confirm quitting Glimpse"])
+            // .help is AXHelp on macOS (as is .accessibilityHint): one string carries the question.
+            .help("Quit Glimpse?")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
         .frame(height: AppDesign.Footer.height)
-        .padding(.horizontal, AppDesign.Footer.confirmationInset)
+        .padding(.trailing, layout.isOverflowing ? AppDesign.Footer.scrollbarClearance : 0)
         .onAppear { applyPendingFooterFocus(.quitCancel) }
         .transition(.identity)
     }
@@ -1189,6 +1182,42 @@ struct CalendarFooterControls: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(name)
         .help(name)
+    }
+}
+
+/// One half of the footer Quit confirmation: a flat full-cell fill with pressed/hover feedback.
+private struct CalendarQuitHalfButtonStyle: ButtonStyle {
+    enum Role { case cancel, destructive }
+    let role: Role
+
+    func makeBody(configuration: Configuration) -> some View {
+        CalendarQuitHalfAppearance(label: configuration.label, role: role, isPressed: configuration.isPressed)
+    }
+}
+
+private struct CalendarQuitHalfAppearance<Label: View>: View {
+    let label: Label
+    let role: CalendarQuitHalfButtonStyle.Role
+    let isPressed: Bool
+    @Environment(\.self) private var environment
+    @State private var isHovered = false
+
+    var body: some View {
+        label
+            .background {
+                switch role {
+                case .cancel:
+                    Color.primary.opacity(isPressed ? AppDesign.Footer.confirmationCancelPressedOpacity
+                        : isHovered ? AppDesign.Footer.confirmationCancelHoverOpacity
+                        : AppDesign.Footer.confirmationCancelOpacity)
+                case .destructive:
+                    // Darken (never lighten) on press so white text keeps its contrast.
+                    AppDesign.Colors.calendarSolidFill(.red, in: environment)
+                        .overlay(Color.black.opacity(isPressed ? AppDesign.Footer.confirmationDestructivePressedShade
+                            : isHovered ? AppDesign.Footer.confirmationDestructiveHoverShade : 0))
+                }
+            }
+            .onHover { isHovered = $0 }
     }
 }
 

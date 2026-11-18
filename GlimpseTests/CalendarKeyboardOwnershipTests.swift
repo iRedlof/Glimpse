@@ -70,86 +70,43 @@ struct CalendarKeyboardOwnershipTests {
     }
 
     @Test
-    func settingsMovedAboutAndCalendarActionsDispatchOnce() async throws {
+    func settingsAboutSectionIsLastAndDispatchesOnceWithoutWindowFooter() async throws {
         let settings = SettingsWindowTestFixture()
         defer { settings.close() }
         try await settings.open()
+        try await settings.reveal(.about)
         let saved = settings.saved.value
-        for name in ["About Glimpse", "Open Calendar app"] {
-            let matches = settings.nodes().filter {
-                ($0.role == .button || $0.role == .link) && $0.label == name
-            }
-            print("GLIMPSE_SETTINGS_ACTION name=\(name) roles=\(settings.nodes().filter { $0.label == name }.compactMap { $0.role?.rawValue })")
-            try #require(matches.count == 1)
-            let node = try #require(matches.first)
-            try #require(node.object.accessibilityWindow?() as? NSWindow === settings.controller.window)
-            try #require(node.press())
-            await settings.settle()
-        }
-        #expect(settings.actionReceipts.value == ["about": 1, "calendar": 1])
-        #expect(settings.saved.value == saved)
-    }
-
-    @Test(arguments: ["return", "escape", "escapeHeld", "explicitQuit"])
-    func settingsQuitSheetUsesNativeCancelAndRestoresOwnedFocus(dismissal: String) async throws {
-        let calendar = try CalendarKeyboardRootFixture(maximumHeight: 300)
-        let settings = SettingsWindowTestFixture()
-        defer { settings.close(); calendar.close() }
-        try await calendar.openThroughShowOwner()
-        calendar.panel.setPinned(true)
-        await calendar.settleRendering()
-        let frame = calendar.panel.frame
-        let month = calendar.store.displayedMonth
-        let reopens = calendar.reopenActions.value
-        try await settings.open(calendar: calendar.panel)
         let owner = try #require(settings.controller.window)
-        func quit() throws -> AccessibilityTestNode {
-            try #require(settings.nodes().first {
-                ($0.role == .button || $0.role == .link) && $0.label == "Quit Glimpse"
-            })
+        let root = try #require(owner.contentView)
+        let scroll = try #require(accessibilityScrollView(in: root))
+        let document = try #require(scroll.documentView)
+        // The whole page is the scroll document: no fixed footer chrome below it.
+        let rootBounds = root.bounds
+        let scrollInRoot = root.convert(scroll.bounds, from: scroll)
+        #expect(abs(scrollInRoot.height - rootBounds.height) <= AppDesign.Settings.layoutTolerance,
+                "Scroll viewport \(scrollInRoot) must fill the window content \(rootBounds)")
+        let nodes = settings.nodes()
+        let headings = nodes.filter(isSettingsSectionGroup).map { $0.label ?? ($0.value as? String) ?? "" }
+        #expect(headings.last == "About")
+        for removed in ["Open Calendar app", "Quit Glimpse"] {
+            #expect(!nodes.contains { $0.label == removed }, "\(removed) must not remain in Settings")
         }
-        try #require(owner.makeFirstResponder(nil))
-        for _ in 0..<40 {
-            if try quit().object.isAccessibilityFocused?() == true { break }
-            try calendar.send(.tab, toWindow: owner)
-            await settings.settle()
-        }
-        try #require(try quit().object.isAccessibilityFocused?() == true)
-        try #require(try quit().press())
+        let version = AppVersionText.productLine(infoDictionary: Bundle.main.infoDictionary)
+        #expect(nodes.contains { $0.role == .staticText && ($0.label == version || ($0.value as? String) == version) })
+        let matches = nodes.filter { $0.role == .button && $0.label == "About Glimpse" }
+        try #require(matches.count == 1)
+        let about = try #require(matches.first)
+        try #require(about.enabled)
+        try #require(about.object.accessibilityWindow?() as? NSWindow === owner)
+        let documentFrame = owner.convertToScreen(document.convert(document.bounds, to: nil))
+        #expect(documentFrame.insetBy(dx: -1, dy: -1).contains(about.frame),
+                "About Glimpse must live in the scroll document")
+        try settings.expectVisible(about, rowLabel: "About")
+        try #require(about.press())
         await settings.settle()
-        let sheet = try #require(owner.attachedSheet)
-        try #require(sheet.isVisible && sheet.isKeyWindow && NSApp.keyWindow === sheet)
-        #expect(settings.actionReceipts.value["quit", default: 0] == 0)
-        #expect(sheet.defaultButtonCell?.title == "Cancel")
-        switch dismissal {
-        case "return": try calendar.send(.returnKey, toWindow: sheet)
-        case "escape": try calendar.send(.escape, toWindow: sheet)
-        case "escapeHeld":
-            // A held Escape: its repeats after the sheet ends must not close Settings.
-            try calendar.sendPhase(.escape, phase: .down, toWindow: sheet)
-            await settings.settle()
-            #expect(owner.attachedSheet == nil)
-            try calendar.sendPhase(.escape, phase: .repeatPress, toWindow: owner)
-            try calendar.sendPhase(.escape, phase: .repeatPress, toWindow: owner)
-            await settings.settle()
-            try calendar.sendPhase(.escape, phase: .up, toWindow: owner)
-        default:
-            var views = sheet.contentView.map { [$0] } ?? []
-            var buttons: [NSButton] = []
-            while let view = views.popLast() {
-                if let button = view as? NSButton { buttons.append(button) }
-                views.append(contentsOf: view.subviews)
-            }
-            let button = try #require(buttons.first { $0.title == "Quit" })
-            button.performClick(nil)
-        }
-        await settings.settle()
-        #expect(owner.attachedSheet == nil)
-        #expect(settings.actionReceipts.value["quit", default: 0] == (dismissal == "explicitQuit" ? 1 : 0))
-        #expect(owner.isVisible && owner.isKeyWindow && NSApp.keyWindow === owner)
-        #expect(try quit().object.isAccessibilityFocused?() == true)
-        #expect(calendar.panel.isPinned && calendar.panel.isVisible && calendar.panel.frame == frame)
-        #expect(calendar.store.displayedMonth == month && calendar.reopenActions.value == reopens)
+        #expect(settings.actionReceipts.value == ["about": 1])
+        #expect(settings.saved.value == saved)
+        #expect(owner.isVisible)
     }
 
     @Test
@@ -186,6 +143,7 @@ struct CalendarKeyboardOwnershipTests {
         #expect(ordinaryOwner.contentRect(forFrameRect: ordinaryOwner.frame).size == ordinaryContentSize)
         #expect(settings.controller.window === ordinaryOwner && ordinaryOwner.contentView === ordinaryRoot)
         var ordinaryProviderObserved = false
+        var ordinaryAboutObserved = false
         let ordinaryInitialViewport = try #require(accessibilityScrollView(in: ordinaryRoot))
         let ordinaryInitialDocument = try #require(ordinaryInitialViewport.documentView)
         // Lower-row reveal is only observable when the document actually scrolls at this size.
@@ -198,7 +156,6 @@ struct CalendarKeyboardOwnershipTests {
         var ordinaryLowerRowObserved = false
         for step in 0..<40 {
             let ordinaryClipXBeforeTab = ordinaryInitialViewport.contentView.bounds.origin.x
-            let ordinaryClipYBeforeTab = ordinaryInitialViewport.contentView.bounds.origin.y
             try calendar.send(.tab, toWindow: ordinaryOwner)
             await settings.settle()
             let nativeFocused = ordinaryRoot.accessibilityFocusedUIElement
@@ -220,6 +177,10 @@ struct CalendarKeyboardOwnershipTests {
             let providerFocused = provider?.object.isAccessibilityFocused?() == true ||
                 (ownedNativeTarget?.role == .popUpButton && ownedNativeTarget?.label == "AI provider")
             ordinaryProviderObserved = ordinaryProviderObserved || providerFocused
+            let about = ordinaryNodes.first { $0.role == .button && $0.label == "About Glimpse" }
+            let aboutFocused = about?.object.isAccessibilityFocused?() == true ||
+                (ownedNativeTarget?.role == .button && ownedNativeTarget?.label == "About Glimpse")
+            ordinaryAboutObserved = ordinaryAboutObserved || aboutFocused
             var admittedControl: NSRect?
             var admittedRow: NSRect?
             var controlVisible = false
@@ -233,15 +194,7 @@ struct CalendarKeyboardOwnershipTests {
             let responderDescendsFromScrollView = responderView.flatMap { view in
                 viewport.map { view.isDescendant(of: $0) }
             } ?? false
-            // The utility links sit in fixed window chrome below the scroll document.
-            let fixedFooterLabels: Set<String> = ["About Glimpse", "Open Calendar app", "Quit Glimpse"]
-            // Structural identity: owned, inside the window content, outside the scroll view.
-            // A resolved AX label must also be one of the utility links.
-            let isFixedFooterTarget = !responderDescendsFromScrollView && !responderDescendsFromDocument
-                && responderDescendsFromRoot && responderView !== ordinaryRoot
-                && (ownedNativeTarget?.label).map { fixedFooterLabels.contains($0) } != false
-            var admittedFixed: NSRect?
-            var fixedVisible = false
+            // Settings has no fixed footer chrome: every Tab target lives in the scroll document.
             let rawDocumentControl = responderView.flatMap { view -> NSRect? in
                 guard view.window === ordinaryOwner, ordinaryOwner.firstResponder === view,
                       settings.controller.window === ordinaryOwner, ordinaryOwner.contentView === ordinaryRoot,
@@ -250,7 +203,7 @@ struct CalendarKeyboardOwnershipTests {
                 }
                 return document.convert(view.bounds, from: view)
             }
-            if !isFixedFooterTarget, let responderView, let viewport, let document,
+            if let responderView, let viewport, let document,
                let control = rawDocumentControl,
                settings.controller.window === ordinaryOwner, ordinaryOwner.contentView === ordinaryRoot,
                ordinaryRoot.window === ordinaryOwner, ordinaryOwner.firstResponder === responderView,
@@ -279,38 +232,22 @@ struct CalendarKeyboardOwnershipTests {
                     ordinaryLowerRowObserved = ordinaryLowerRowObserved || lowerRow
                 }
             }
-            if isFixedFooterTarget, let responderView, let viewport,
-               settings.controller.window === ordinaryOwner, ordinaryOwner.contentView === ordinaryRoot,
-               ordinaryOwner.firstResponder === responderView, responderView.window === ordinaryOwner,
-               responderDescendsFromRoot {
-                let fixed = ordinaryRoot.convert(responderView.bounds, from: responderView)
-                let viewportInRoot = ordinaryRoot.convert(viewport.bounds, from: viewport)
-                let finitePositive = [fixed, viewportInRoot].allSatisfy {
-                    [$0.minX, $0.minY, $0.maxX, $0.maxY].allSatisfy(\.isFinite) && $0.width > 0 && $0.height > 0
-                }
-                if finitePositive {
-                    admittedFixed = fixed
-                    fixedVisible = ordinaryRoot.bounds.contains(fixed) && !fixed.intersects(viewportInRoot)
-                }
-            }
-            print("GLIMPSE_SETTINGS_ORDINARY_ROOT step=\(step) responderDescendsFromScrollView=\(responderDescendsFromScrollView) fixedFooter=\(isFixedFooterTarget) admittedFixed=\(String(describing: admittedFixed)) providerAXPresent=\(provider != nil) providerFocused=\(providerFocused) providerAXFrame=\(String(describing: provider?.frame)) rowLabelAXPresent=\(rowLabel != nil) rowLabelAXFrame=\(String(describing: rowLabel?.frame)) responderClass=\(ordinaryOwner.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil") responderViewOwned=\(responderView?.window === ordinaryOwner) responderBounds=\(String(describing: responderView?.bounds)) responderDescendsFromDocument=\(responderDescendsFromDocument) responderDescendsFromRoot=\(responderDescendsFromRoot) rawDocumentControl=\(String(describing: rawDocumentControl)) proxyFrame=\(String(describing: proxyFrame)) admittedControl=\(String(describing: admittedControl)) admittedRow28Plus8=\(String(describing: admittedRow)) controlVisible=\(controlVisible) rowVisible=\(rowVisible) nativeTargetOwned=\(ownedNativeTarget != nil) nativeTargetClass=\(ownedNativeTarget.map { String(reflecting: type(of: $0.object)) } ?? "nil") nativeTargetLabel=\(String((ownedNativeTarget?.label ?? "<nil>").prefix(200))) nativeTargetFrame=\(String(describing: ownedNativeTarget?.frame)) contentMinSize=\(ordinaryOwner.contentMinSize) rootBounds=\(ordinaryRoot.bounds) documentBounds=\(String(describing: document?.bounds)) clipBounds=\(String(describing: viewport?.contentView.bounds)) clipXBeforeTab=\(ordinaryClipXBeforeTab) clipXAfterTab=\(String(describing: viewport?.contentView.bounds.origin.x))")
+            print("GLIMPSE_SETTINGS_ORDINARY_ROOT step=\(step) responderDescendsFromScrollView=\(responderDescendsFromScrollView) aboutFocused=\(aboutFocused) providerAXPresent=\(provider != nil) providerFocused=\(providerFocused) providerAXFrame=\(String(describing: provider?.frame)) rowLabelAXPresent=\(rowLabel != nil) rowLabelAXFrame=\(String(describing: rowLabel?.frame)) responderClass=\(ordinaryOwner.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil") responderViewOwned=\(responderView?.window === ordinaryOwner) responderBounds=\(String(describing: responderView?.bounds)) responderDescendsFromDocument=\(responderDescendsFromDocument) responderDescendsFromRoot=\(responderDescendsFromRoot) rawDocumentControl=\(String(describing: rawDocumentControl)) proxyFrame=\(String(describing: proxyFrame)) admittedControl=\(String(describing: admittedControl)) admittedRow28Plus8=\(String(describing: admittedRow)) controlVisible=\(controlVisible) rowVisible=\(rowVisible) nativeTargetOwned=\(ownedNativeTarget != nil) nativeTargetClass=\(ownedNativeTarget.map { String(reflecting: type(of: $0.object)) } ?? "nil") nativeTargetLabel=\(String((ownedNativeTarget?.label ?? "<nil>").prefix(200))) nativeTargetFrame=\(String(describing: ownedNativeTarget?.frame)) contentMinSize=\(ordinaryOwner.contentMinSize) rootBounds=\(ordinaryRoot.bounds) documentBounds=\(String(describing: document?.bounds)) clipBounds=\(String(describing: viewport?.contentView.bounds)) clipXBeforeTab=\(ordinaryClipXBeforeTab) clipXAfterTab=\(String(describing: viewport?.contentView.bounds.origin.x))")
             #expect(settings.controller.window === ordinaryOwner && ordinaryOwner.contentView === ordinaryRoot)
-            #expect((admittedControl != nil) != (admittedFixed != nil),
-                    "Every completed ordinary Tab target must satisfy exactly one owned document or fixed-footer admission")
+            #expect(admittedControl != nil,
+                    "Every completed ordinary Tab target must be an owned control inside the scroll document")
+            #expect(responderDescendsFromScrollView)
             #expect(viewport?.contentView.bounds.origin.x == ordinaryClipXBeforeTab)
             if admittedControl != nil {
                 #expect(controlVisible && rowVisible)
             }
-            if admittedFixed != nil {
-                #expect(fixedVisible, "A fixed footer control stays inside window content, outside the document clip")
-                #expect(viewport?.contentView.bounds.origin.y == ordinaryClipYBeforeTab,
-                        "Fixed footer focus must not scroll the settings document")
-            }
-            if providerFocused { break }
+            if aboutFocused { break }
         }
         #expect(ordinaryAdmittedTargets > 0)
+        #expect(ordinaryProviderObserved && ordinaryAboutObserved,
+                "Ordinary Tab traversal must reach the AI provider and then the last-section About button")
         if ordinaryDocumentOverflows { #expect(ordinaryLowerRowObserved) }
-        print("GLIMPSE_SETTINGS_ORDINARY_ROOT_SUMMARY providerObserved=\(ordinaryProviderObserved) admittedTargets=\(ordinaryAdmittedTargets) lowerRowObserved=\(ordinaryLowerRowObserved) replacementProof=false")
+        print("GLIMPSE_SETTINGS_ORDINARY_ROOT_SUMMARY providerObserved=\(ordinaryProviderObserved) aboutObserved=\(ordinaryAboutObserved) admittedTargets=\(ordinaryAdmittedTargets) lowerRowObserved=\(ordinaryLowerRowObserved) replacementProof=false")
         ordinaryOwner.setContentSize(ordinaryContentSize)
         await settings.settle()
         #expect(ordinaryOwner.contentRect(forFrameRect: ordinaryOwner.frame).size == ordinaryContentSize)
@@ -406,18 +343,20 @@ struct CalendarKeyboardOwnershipTests {
                 }
                 print("GLIMPSE_SETTINGS_REPLACEMENT_GEOMETRY step=\(step) proxyFrame=\(String(describing: proxyFrame)) providerAXFrame=\(String(describing: observedProvider?.frame)) rowLabelAXPresent=\(rowLabel != nil) rowLabelAXFrame=\(String(describing: rowLabel?.frame)) documentBounds=\(String(describing: traversalViewport?.documentView?.bounds)) clipBounds=\(String(describing: traversalViewport?.contentView.bounds)) contentMinSize=\(owner.contentMinSize)")
             }
-            if focusedLabels().contains("AI provider") { break }
+            if focusedLabels().contains("About Glimpse") { break }
         }
         // Classic pane on-screen order (full keyboard access): every native control
-        // after Launch at login, ending at the AI provider popup.
+        // after Launch at login, ending at the last section's About button.
         let ordered = Array(settingsTraversalOrder.dropFirst())
         let positions = try ordered.map { name in try #require(traversed.firstIndex(of: name)) }
         #expect(positions == positions.sorted())
         let provider = try #require(settings.nodes().first { $0.label == "AI provider" && $0.role == .popUpButton })
         try settings.expectVisible(provider, rowLabel: "AI date search")
+        let about = try #require(settings.nodes().first { $0.label == "About Glimpse" && $0.role == .button })
+        try settings.expectVisible(about, rowLabel: "About")
         let reverseOrdered = Array(settingsTraversalOrder.reversed())
         var reverseTraversed = focusedLabels()
-        try #require(reverseTraversed.contains("AI provider"))
+        try #require(reverseTraversed.contains("About Glimpse"))
         for _ in 0..<40 {
             try calendar.send(.backTab, toWindow: owner)
             await settings.settle()
@@ -1936,7 +1875,7 @@ struct CalendarKeyboardOwnershipTests {
         let document = try #require(scroll.documentView)
         let headings = settings.nodes().filter(isSettingsSectionGroup)
         #expect(headings.map { $0.label ?? ($0.value as? String) ?? "" } ==
-                ["Opening Glimpse", "Menu bar", "Calendar", "AI date search"])
+                ["Opening Glimpse", "Menu bar", "Calendar", "AI date search", "About"])
         #expect(!scroll.hasHorizontalScroller)
         for section in SettingsSection.allCases {
             try await settings.reveal(section)
@@ -2194,8 +2133,19 @@ struct CalendarKeyboardOwnershipTests {
         #expect(fixture.terminationReceipts == 0 && fixture.actions.value.isEmpty)
         let cancel = try fixture.ownedControl("Cancel quitting Glimpse")
         let confirm = try fixture.ownedControl("Confirm quitting Glimpse")
-        #expect(abs(cancel.frame.height - 28) < 0.5 && abs(confirm.frame.height - 28) < 0.5)
-        #expect(abs(cancel.frame.midY - normal.midY) < 0.5)
+        // The confirmation takes over the footer bar: two equal, full-height halves.
+        // Only a legacy scroller (overflowing document) may reserve the trailing edge.
+        let scrollerClearance = fixture.panel.layoutState.isOverflowing ? AppDesign.Footer.scrollbarClearance : 0
+        for half in [cancel.frame, confirm.frame] {
+            #expect(abs(half.height - AppDesign.Footer.height) < 0.5)
+            #expect(abs(half.midY - normal.midY) < 0.5)
+        }
+        #expect(abs(confirm.frame.minX - cancel.frame.maxX) < 0.5)
+        #expect(abs(confirm.frame.width - cancel.frame.width) < 0.5)
+        #expect(abs(cancel.frame.width + confirm.frame.width - (PanelGeometry.contentWidth - scrollerClearance)) < 0.5)
+        #expect(!fixture.accessibilityNodes().contains {
+            $0.role == .staticText && ($0.label == "Quit Glimpse?" || ($0.value as? String) == "Quit Glimpse?")
+        }, "No separate prompt label takes footer space")
         if ProcessInfo.processInfo.environment["GLIMPSE_KEYBOARD_ARTIFACT_DIR"] != nil {
             try fixture.saveFocusedDateBitmap(
                 fixture.panel.convertToScreen(fixture.hosting.convert(fixture.hosting.bounds, to: nil)),
@@ -2529,9 +2479,7 @@ private final class SettingsWindowTestFixture {
         let actions = actionReceipts
         controller = SettingsWindowController(
             store: store, hotkeyPreferences: model, notificationCenter: notifications,
-            onAbout: { actions.withValue { $0["about", default: 0] += 1 } },
-            onOpenCalendar: { actions.withValue { $0["calendar", default: 0] += 1 } },
-            onQuit: { actions.withValue { $0["quit", default: 0] += 1 } }
+            onAbout: { actions.withValue { $0["about", default: 0] += 1 } }
         )
         let changes = recordingChanges
         recordingObserver = NotificationCenter.default.addObserver(
@@ -2675,6 +2623,8 @@ private final class SettingsWindowTestFixture {
         case .aiDateSearch:
             targets = [("Enable AI date search", .checkBox, "AI date search")] +
                 (store.showAISearch ? [("AI provider", .popUpButton, "AI date search")] : [])
+        case .about:
+            targets = [("About Glimpse", .button, "About")]
         }
         let revealFrame = try targets.reduce(node.frame) { frame, target in
             let control = try #require(tree.first {
@@ -2774,7 +2724,8 @@ private final class SettingsWindowTestFixture {
             .map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("keyboard-rendering", isDirectory: true)
         try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        try data.write(to: base.appendingPathComponent(name + ".png"), options: .withoutOverwriting)
+        // Overwrite: reruns into the same artifact directory must not fail (Code=516).
+        try data.write(to: base.appendingPathComponent(name + ".png"), options: .atomic)
     }
 
     func aiSwitchBitmap() throws -> Data {
@@ -3970,14 +3921,14 @@ func isSettingsSectionGroup(_ node: AccessibilityTestNode) -> Bool {
         && SettingsSection.allCases.contains { $0.heading == node.label }
 }
 
-/// Native Tab order of the classic Settings pane, Launch at login through AI provider,
+/// Native Tab order of the classic Settings pane, Launch at login through About Glimpse,
 /// with the default fixture state (shortcut requested but not enabled, AI search on).
 @MainActor
 let settingsTraversalOrder: [String] = [
     "Launch at login", "Set and enable shortcut", "Global shortcut", "Keep global shortcut off",
     "Pin calendar", "Show icon in menu bar", "Show day of week in menu bar", "Show month in menu bar",
     "Show date in menu bar", "Show year in menu bar", "Filled background", "Week starts on"
-] + Calendar.current.weekdaySymbols.map { "\($0) workday" } + ["Enable AI date search", "AI provider"]
+] + Calendar.current.weekdaySymbols.map { "\($0) workday" } + ["Enable AI date search", "AI provider", "About Glimpse"]
 
 /// Left-column row label (accessibility label, no colon) that owns each traversal target.
 @MainActor
@@ -3996,7 +3947,8 @@ let settingsTraversalRowLabels: [String: String] = {
         "Filled background": "Style",
         "Week starts on": "Week starts on",
         "Enable AI date search": "AI date search",
-        "AI provider": "AI date search"
+        "AI provider": "AI date search",
+        "About Glimpse": "About"
     ]
     for day in Calendar.current.weekdaySymbols { labels["\(day) workday"] = "Workdays" }
     return labels

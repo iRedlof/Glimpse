@@ -212,4 +212,4 @@ grep 'CURRENT_PROJECT_VERSION' Glimpse.xcodeproj/project.pbxproj | head -1 | sed
 - App source files: ~40
 - GlimpseCore source files: ~21
 - Test files: ~45
-- Total tests: 212 GlimpseCore + 385 app default run (+ 45 keyboard, 11 AI and 13 agenda key-panel tests in the quality gate; 4 opt-in live AI checks)
+- Total tests: 214 GlimpseCore + 400 app default run (+ 44 keyboard, 11 AI and 13 agenda key-panel tests in the quality gate; 4 opt-in live AI checks)
