@@ -1,23 +1,23 @@
 {
-  "version": "1.5.2",
-  "build": "39",
-  "scope": "Sparkle in-app update can install in the sandbox: SUEnableInstallerLauncherService and the -spks/-spki mach-lookup exceptions.",
+  "version": "1.5.3",
+  "build": "40",
+  "scope": "Half-and-half Quit confirmation in the calendar footer; Settings footer removed and About moved to the last Settings section.",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-17-sparkle-sandbox-install.md"
+      "evidence": "docs/superpowers/reviews/2026-11-17-footer-quit-halves-settings-about.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-17-sparkle-sandbox-install.md"
+      "evidence": "docs/superpowers/reviews/2026-11-17-footer-quit-halves-settings-about.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-17-sparkle-sandbox-install.md"
+      "evidence": "docs/superpowers/reviews/2026-11-17-footer-quit-halves-settings-about.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-17-sparkle-sandbox-install.md"
+      "evidence": "docs/superpowers/reviews/2026-11-17-footer-quit-halves-settings-about.md"
     }
   }
 }
