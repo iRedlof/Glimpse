@@ -551,6 +551,9 @@ struct AccessibilityViewportTests {
             let cancel = try #require(nodes.first { $0.role == .button && $0.label == "Cancel quitting Glimpse" })
             let confirm = try #require(nodes.first { $0.role == .button && $0.label == "Confirm quitting Glimpse" })
             #expect(confirm.help == "Quit Glimpse?")
+            // Voice Control: the visible titles must be speakable targets.
+            #expect(confirm.inputLabels.contains("Quit Glimpse") && confirm.inputLabels.contains("Quit"))
+            #expect(cancel.inputLabels.contains("Cancel"))
             #expect(!nodes.contains {
                 $0.role == .staticText && ($0.label == "Quit Glimpse?" || $0.value as? String == "Quit Glimpse?")
             }, "The question moves into the Quit button; no prompt label takes footer space")

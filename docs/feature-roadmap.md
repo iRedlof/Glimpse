@@ -9,7 +9,7 @@ Reported bugs lead the current rollout. New feature work is paused until the bug
 | Paused | Show remaining loaded events | Source implemented and independently reviewed; native acceptance pending | Reach events beyond five without another calendar request; collapse from the same button |
 | Paused | Jump directly to a known date | Source implemented and independently reviewed; combined native acceptance pending | Enter Gregorian YYYY-MM-DD locally in the existing field; phrases retain AI behavior |
 | Reliability | Crash/disappearance, restart launch and performance | Diagnostics available; original other-Mac crash unreproduced; real restart deferred by user | Reliable availability and lower resource use, measured rather than assumed |
-| Research | Useful event actions | No permitted exact-event/occurrence reveal API found; Open Calendar remains the app launcher | Truthful Calendar launch; exact-event navigation is not promised |
+| Research | Useful event actions | No permitted exact-event/occurrence reveal API found. The Open Calendar app launcher was removed with the Settings footer at the owner's request (2026-11-17); Glimpse has no Calendar launcher now | Exact-event navigation is not promised; any launcher returns only on an explicit owner request |
 
 ## Release status
 

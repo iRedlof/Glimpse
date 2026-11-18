@@ -12,6 +12,7 @@ struct AccessibilityTestNode {
     var label: String? { object.accessibilityLabel?() }
     var value: Any? { object.accessibilityValue?() }
     var help: String? { object.accessibilityHelp?() }
+    var inputLabels: [String] { object.accessibilityUserInputLabels?() ?? [] }
     var frame: NSRect { object.accessibilityFrame?() ?? .zero }
     var enabled: Bool { object.isAccessibilityEnabled?() ?? false }
     var selected: Bool { object.isAccessibilitySelected?() ?? false }

@@ -2724,7 +2724,8 @@ private final class SettingsWindowTestFixture {
             .map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("keyboard-rendering", isDirectory: true)
         try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        try data.write(to: base.appendingPathComponent(name + ".png"), options: .withoutOverwriting)
+        // Overwrite: reruns into the same artifact directory must not fail (Code=516).
+        try data.write(to: base.appendingPathComponent(name + ".png"), options: .atomic)
     }
 
     func aiSwitchBitmap() throws -> Data {

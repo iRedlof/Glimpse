@@ -976,6 +976,7 @@ struct CalendarPopoverView: View {
                 observe: keyboardObservation, focus: $controlFocus
             ))
             .accessibilityLabel("Cancel quitting Glimpse")
+            .accessibilityInputLabels(["Cancel", "Cancel quitting Glimpse"])
             .help("Cancel quitting Glimpse")
 
             Button(action: confirmQuit) {
@@ -992,7 +993,9 @@ struct CalendarPopoverView: View {
                 observe: keyboardObservation, focus: $controlFocus
             ))
             .accessibilityLabel("Confirm quitting Glimpse")
-            .accessibilityHint("Quit Glimpse?")
+            // Voice Control matches the visible text, not the AX label.
+            .accessibilityInputLabels(["Quit Glimpse", "Quit", "Confirm quitting Glimpse"])
+            // .help is AXHelp on macOS (as is .accessibilityHint): one string carries the question.
             .help("Quit Glimpse?")
         }
         .frame(maxWidth: .infinity)

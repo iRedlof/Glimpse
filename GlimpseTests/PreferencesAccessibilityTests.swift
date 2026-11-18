@@ -97,6 +97,8 @@ struct PreferencesAccessibilityTests {
         let about = try host.control(named: "About Glimpse")
         #expect(about.role == .button)
         #expect(about.enabled == hasAction, "Without an About destination the button is disabled, never a no-op")
+        // AXHelp has one writer: a competing .accessibilityHint would replace this string.
+        #expect(about.help == PreferencesView.aboutHelp)
         if hasAction {
             #expect(about.press())
             try await host.settle(until: { opened.value == 1 })
@@ -618,5 +620,17 @@ struct AppVersionTextTests {
         #expect(marketing?.isEmpty == false && build?.isEmpty == false)
         #expect(AppVersionText.productLine(infoDictionary: info) ==
                 "Glimpse \(marketing ?? "") (\(build ?? ""))")
+    }
+}
+
+@MainActor
+struct FooterScrollbarClearanceTests {
+    @Test
+    func onlyLegacyScrollersReserveFooterWidth() {
+        #expect(AppDesign.Footer.scrollbarClearance(for: .overlay) == 0)
+        let legacy = AppDesign.Footer.scrollbarClearance(for: .legacy)
+        #expect(legacy == NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) && legacy > 0)
+        #expect(AppDesign.Footer.scrollbarClearance ==
+                AppDesign.Footer.scrollbarClearance(for: NSScroller.preferredScrollerStyle))
     }
 }

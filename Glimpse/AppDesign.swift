@@ -100,9 +100,15 @@ enum AppDesign {
         static let pressedBackgroundOpacity: Double = 0.14
         static let pinnedBackgroundOpacity: Double = 0.14
 
+        /// Only a legacy scroller takes layout width; overlay scrollers draw over content.
         @MainActor
         static var scrollbarClearance: CGFloat {
-            NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
+            scrollbarClearance(for: NSScroller.preferredScrollerStyle)
+        }
+
+        @MainActor
+        static func scrollbarClearance(for style: NSScroller.Style) -> CGFloat {
+            style == .legacy ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0
         }
     }
 

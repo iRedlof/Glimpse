@@ -286,6 +286,8 @@ struct PreferencesView: View {
 
     // MARK: - About
 
+    static let aboutHelp = "Opens the About window with updates, diagnostics and links"
+
     private var aboutRow: some View {
         classicRow("About") {
             HStack(alignment: .firstTextBaseline, spacing: AppDesign.Settings.rowSpacing) {
@@ -296,8 +298,8 @@ struct PreferencesView: View {
                     .buttonStyle(.bordered)
                     .disabled(openAbout == nil)
                     .accessibilityLabel("About Glimpse")
-                    .accessibilityHint("Opens the About window with updates, diagnostics and links")
-                    .help("Updates, diagnostics and links")
+                    // .help is AXHelp on macOS (as is .accessibilityHint): keep one string.
+                    .help(Self.aboutHelp)
             }
         }
     }
