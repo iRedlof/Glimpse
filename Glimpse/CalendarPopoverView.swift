@@ -37,6 +37,8 @@ struct CalendarPopoverView: View {
     @State private var keyboardSession = 0
     @State private var keyboardOwnerRelay = CalendarKeyboardOwnerRelay()
     @State private var showQuitConfirm: Bool = false
+    /// The Cancel/Quit focus ring: only after keyboard use, never left behind by a mouse click.
+    @State private var quitFocusRingVisible = false
     @State private var pendingFooterFocus: CalendarKeyboardOwner?
     @State private var consumesQuitEscapeRepeats = false
     private let caretHeight = CalendarPanel.caretHeight
@@ -968,7 +970,7 @@ struct CalendarPopoverView: View {
                     .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .overlay { CalendarKeyboardFocusOutline() }
+                    .overlay { CalendarKeyboardFocusOutline(visible: quitFocusRingVisible) }
             }
             .buttonStyle(CalendarQuitHalfButtonStyle(role: .cancel))
             .modifier(CalendarControlReturn(
@@ -985,7 +987,7 @@ struct CalendarPopoverView: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .overlay { CalendarKeyboardFocusOutline(color: .white) }
+                    .overlay { CalendarKeyboardFocusOutline(color: .white, visible: quitFocusRingVisible) }
             }
             .buttonStyle(CalendarQuitHalfButtonStyle(role: .destructive))
             .modifier(CalendarControlReturn(
@@ -1002,6 +1004,10 @@ struct CalendarPopoverView: View {
         .frame(height: AppDesign.Footer.height)
         .padding(.trailing, layout.isOverflowing ? AppDesign.Footer.scrollbarClearance : 0)
         .onAppear { applyPendingFooterFocus(.quitCancel) }
+        // Tab between the halves is keyboard use: show the ring from then on
+        .onChange(of: controlFocus) { _, _ in
+            if calendarFocusRingVisible(after: NSApp.currentEvent?.type) { quitFocusRingVisible = true }
+        }
         .transition(.identity)
     }
 
@@ -1010,6 +1016,7 @@ struct CalendarPopoverView: View {
         editorFocusGeneration += 1
         pendingFooterFocus = .quitCancel
         controlFocus = nil
+        quitFocusRingVisible = calendarFocusRingVisible(after: NSApp.currentEvent?.type)
         showQuitConfirm = true
     }
 
