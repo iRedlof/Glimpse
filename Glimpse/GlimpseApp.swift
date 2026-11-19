@@ -33,7 +33,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsController = SettingsWindowController(
                 onAISettingsChange: { [weak calendarStatusItem] enabled, preference in
                     calendarStatusItem?.synchronizeAISettings(enabled: enabled, preference: preference)
-                }
+                },
+                updater: .shared
             )
         }
         let placement = calendarStatusItem.prepareForSettingsPresentation()
@@ -56,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(
         _ sender: NSApplication, hasVisibleWindows: Bool
     ) -> Bool {
-        // About-window visibility is independent of the reusable calendar panel.
+        // Settings-window visibility is independent of the reusable calendar panel.
         do {
             try showCommand.requestShow()
         } catch {

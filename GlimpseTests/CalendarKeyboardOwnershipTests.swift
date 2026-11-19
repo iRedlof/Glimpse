@@ -70,10 +70,11 @@ struct CalendarKeyboardOwnershipTests {
     }
 
     @Test
-    func settingsAboutSectionIsLastAndDispatchesOnceWithoutWindowFooter() async throws {
+    func settingsUpdatesAndAboutAreLastSectionsAndDispatchOnceWithoutWindowFooter() async throws {
         let settings = SettingsWindowTestFixture()
         defer { settings.close() }
         try await settings.open()
+        try await settings.reveal(.updates)
         try await settings.reveal(.about)
         let saved = settings.saved.value
         let owner = try #require(settings.controller.window)
@@ -87,26 +88,95 @@ struct CalendarKeyboardOwnershipTests {
                 "Scroll viewport \(scrollInRoot) must fill the window content \(rootBounds)")
         let nodes = settings.nodes()
         let headings = nodes.filter(isSettingsSectionGroup).map { $0.label ?? ($0.value as? String) ?? "" }
-        #expect(headings.last == "About")
-        for removed in ["Open Calendar app", "Quit Glimpse"] {
+        #expect(Array(headings.suffix(2)) == ["Updates", "About"])
+        for removed in ["Open Calendar app", "Quit Glimpse", "About Glimpse"] {
             #expect(!nodes.contains { $0.label == removed }, "\(removed) must not remain in Settings")
         }
         let version = AppVersionText.productLine(infoDictionary: Bundle.main.infoDictionary)
         #expect(nodes.contains { $0.role == .staticText && ($0.label == version || ($0.value as? String) == version) })
-        let matches = nodes.filter { $0.role == .button && $0.label == "About Glimpse" }
-        try #require(matches.count == 1)
-        let about = try #require(matches.first)
-        try #require(about.enabled)
-        try #require(about.object.accessibilityWindow?() as? NSWindow === owner)
         let documentFrame = owner.convertToScreen(document.convert(document.bounds, to: nil))
-        #expect(documentFrame.insetBy(dx: -1, dy: -1).contains(about.frame),
-                "About Glimpse must live in the scroll document")
-        try settings.expectVisible(about, rowLabel: "About")
-        try #require(about.press())
+        var controls: [String: AccessibilityTestNode] = [:]
+        for (label, role, row) in [
+            ("Check for updates automatically", NSAccessibility.Role.checkBox, "Updates"),
+            ("Check for updates now", .button, "Updates"),
+            ("Export diagnostics", .link, "About"), ("Glimpse website", .link, "About"),
+            ("Glimpse support", .link, "About"),
+        ] {
+            let matches = nodes.filter { $0.role == role && $0.label == label }
+            try #require(matches.count == 1, "\(label) must appear exactly once")
+            let control = try #require(matches.first)
+            try #require(control.enabled)
+            try #require(control.object.accessibilityWindow?() as? NSWindow === owner)
+            #expect(documentFrame.insetBy(dx: -1, dy: -1).contains(control.frame),
+                    "\(label) must live in the scroll document")
+            try settings.expectVisible(control, rowLabel: row)
+            controls[label] = control
+        }
+        try #require(try #require(controls["Check for updates now"]).press())
         await settings.settle()
-        #expect(settings.actionReceipts.value == ["about": 1])
+        #expect(settings.updates.backend.checkCount == 1 && settings.updates.driver.status == .checking)
+        try #require(try #require(controls["Export diagnostics"]).press())
+        await settings.settle()
+        #expect(settings.diagnostics.suggestedNames.count == 1)
+        settings.diagnostics.completions.first?(nil)
+        for label in ["Glimpse website", "Glimpse support"] {
+            try #require(try #require(controls[label]).press())
+            await settings.settle()
+        }
+        #expect(settings.openedURLs.value.map(\.absoluteString) == [
+            "https://github.com/iRedlof/Glimpse", "https://github.com/iRedlof/Glimpse/issues"
+        ])
+        #expect(settings.diagnostics.exportRequests.isEmpty)
         #expect(settings.saved.value == saved)
         #expect(owner.isVisible)
+    }
+
+    /// Owned renders of the Settings window in every Sparkle status, light and dark.
+    @Test(arguments: [
+        "idle", "initialization", "checking", "latest", "no-update", "check-error", "update-error",
+        "available", "downloading", "extracting", "ready"
+    ], [false, true])
+    func settingsUpdateStatesRenderInPlace(state: String, dark: Bool) async throws {
+        let settings = SettingsWindowTestFixture(updaterStartError: state == "initialization" ? updateTestError : nil)
+        defer { settings.close() }
+        try await prepare(state, on: settings.updates)
+        let available = try #require(NSScreen.screens.first).visibleFrame
+        try await settings.open(visibleFrame: available)
+        let owner = try #require(settings.controller.window)
+        owner.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        let frame = owner.frame
+        try await settings.reveal(.about)
+        try await settings.reveal(.updates)
+        try settings.loadAccessibilityWindowTree()
+        let nodes = settings.nodes()
+        let statusCopy: String
+        switch state {
+        case "idle": statusCopy = "Check for updates automatically"
+        case "initialization": statusCopy = "Updates are unavailable."
+        case "checking": statusCopy = "Checking…"
+        case "latest": statusCopy = UpdateCheckTimeText.upToDate(checkedAt: updateFixtureNow, now: Date())
+        case "no-update": statusCopy = "No installable update was found."
+        case "check-error": statusCopy = "Couldn’t check for updates."
+        case "update-error": statusCopy = "The update couldn’t be completed."
+        case "available": statusCopy = "Version \(updateFixtureVersion) available"
+        case "downloading": statusCopy = "Downloading… 40%"
+        case "extracting": statusCopy = "Installing…"
+        default: statusCopy = UpdateStatusText.ready(version: updateFixtureVersion)
+        }
+        let status = try #require(nodes.first {
+            $0.label == statusCopy || ($0.value as? String) == statusCopy
+        }, "\(state) must show \(statusCopy)")
+        try settings.expectVisible(status, rowLabel: "Updates")
+        let about = try #require(nodes.first { $0.role == .link && $0.label == settingsLastTabStop })
+        try settings.expectVisible(about, rowLabel: "About")
+        #expect(owner.frame == frame, "Status changes never resize the window")
+        let root = try #require(owner.contentView)
+        let scroll = try #require(accessibilityScrollView(in: root))
+        let document = try #require(scroll.documentView)
+        #expect(!scroll.hasHorizontalScroller)
+        #expect(document.frame.height <= scroll.contentView.bounds.height + AppDesign.Settings.layoutTolerance,
+                "\(state): document \(document.frame.height) must fit the clip \(scroll.contentView.bounds.height)")
+        try settings.saveBitmap(name: "settings-updates-\(state)-\(dark ? "dark" : "light")")
     }
 
     @Test
@@ -143,7 +213,7 @@ struct CalendarKeyboardOwnershipTests {
         #expect(ordinaryOwner.contentRect(forFrameRect: ordinaryOwner.frame).size == ordinaryContentSize)
         #expect(settings.controller.window === ordinaryOwner && ordinaryOwner.contentView === ordinaryRoot)
         var ordinaryProviderObserved = false
-        var ordinaryAboutObserved = false
+        var ordinaryLastObserved = false
         let ordinaryInitialViewport = try #require(accessibilityScrollView(in: ordinaryRoot))
         let ordinaryInitialDocument = try #require(ordinaryInitialViewport.documentView)
         // Lower-row reveal is only observable when the document actually scrolls at this size.
@@ -177,10 +247,10 @@ struct CalendarKeyboardOwnershipTests {
             let providerFocused = provider?.object.isAccessibilityFocused?() == true ||
                 (ownedNativeTarget?.role == .popUpButton && ownedNativeTarget?.label == "AI provider")
             ordinaryProviderObserved = ordinaryProviderObserved || providerFocused
-            let about = ordinaryNodes.first { $0.role == .button && $0.label == "About Glimpse" }
-            let aboutFocused = about?.object.isAccessibilityFocused?() == true ||
-                (ownedNativeTarget?.role == .button && ownedNativeTarget?.label == "About Glimpse")
-            ordinaryAboutObserved = ordinaryAboutObserved || aboutFocused
+            let last = ordinaryNodes.first { $0.role == .link && $0.label == settingsLastTabStop }
+            let lastFocused = last?.object.isAccessibilityFocused?() == true ||
+                (ownedNativeTarget?.role == .link && ownedNativeTarget?.label == settingsLastTabStop)
+            ordinaryLastObserved = ordinaryLastObserved || lastFocused
             var admittedControl: NSRect?
             var admittedRow: NSRect?
             var controlVisible = false
@@ -232,7 +302,7 @@ struct CalendarKeyboardOwnershipTests {
                     ordinaryLowerRowObserved = ordinaryLowerRowObserved || lowerRow
                 }
             }
-            print("GLIMPSE_SETTINGS_ORDINARY_ROOT step=\(step) responderDescendsFromScrollView=\(responderDescendsFromScrollView) aboutFocused=\(aboutFocused) providerAXPresent=\(provider != nil) providerFocused=\(providerFocused) providerAXFrame=\(String(describing: provider?.frame)) rowLabelAXPresent=\(rowLabel != nil) rowLabelAXFrame=\(String(describing: rowLabel?.frame)) responderClass=\(ordinaryOwner.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil") responderViewOwned=\(responderView?.window === ordinaryOwner) responderBounds=\(String(describing: responderView?.bounds)) responderDescendsFromDocument=\(responderDescendsFromDocument) responderDescendsFromRoot=\(responderDescendsFromRoot) rawDocumentControl=\(String(describing: rawDocumentControl)) proxyFrame=\(String(describing: proxyFrame)) admittedControl=\(String(describing: admittedControl)) admittedRow28Plus8=\(String(describing: admittedRow)) controlVisible=\(controlVisible) rowVisible=\(rowVisible) nativeTargetOwned=\(ownedNativeTarget != nil) nativeTargetClass=\(ownedNativeTarget.map { String(reflecting: type(of: $0.object)) } ?? "nil") nativeTargetLabel=\(String((ownedNativeTarget?.label ?? "<nil>").prefix(200))) nativeTargetFrame=\(String(describing: ownedNativeTarget?.frame)) contentMinSize=\(ordinaryOwner.contentMinSize) rootBounds=\(ordinaryRoot.bounds) documentBounds=\(String(describing: document?.bounds)) clipBounds=\(String(describing: viewport?.contentView.bounds)) clipXBeforeTab=\(ordinaryClipXBeforeTab) clipXAfterTab=\(String(describing: viewport?.contentView.bounds.origin.x))")
+            print("GLIMPSE_SETTINGS_ORDINARY_ROOT step=\(step) responderDescendsFromScrollView=\(responderDescendsFromScrollView) lastFocused=\(lastFocused) providerAXPresent=\(provider != nil) providerFocused=\(providerFocused) providerAXFrame=\(String(describing: provider?.frame)) rowLabelAXPresent=\(rowLabel != nil) rowLabelAXFrame=\(String(describing: rowLabel?.frame)) responderClass=\(ordinaryOwner.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "nil") responderViewOwned=\(responderView?.window === ordinaryOwner) responderBounds=\(String(describing: responderView?.bounds)) responderDescendsFromDocument=\(responderDescendsFromDocument) responderDescendsFromRoot=\(responderDescendsFromRoot) rawDocumentControl=\(String(describing: rawDocumentControl)) proxyFrame=\(String(describing: proxyFrame)) admittedControl=\(String(describing: admittedControl)) admittedRow28Plus8=\(String(describing: admittedRow)) controlVisible=\(controlVisible) rowVisible=\(rowVisible) nativeTargetOwned=\(ownedNativeTarget != nil) nativeTargetClass=\(ownedNativeTarget.map { String(reflecting: type(of: $0.object)) } ?? "nil") nativeTargetLabel=\(String((ownedNativeTarget?.label ?? "<nil>").prefix(200))) nativeTargetFrame=\(String(describing: ownedNativeTarget?.frame)) contentMinSize=\(ordinaryOwner.contentMinSize) rootBounds=\(ordinaryRoot.bounds) documentBounds=\(String(describing: document?.bounds)) clipBounds=\(String(describing: viewport?.contentView.bounds)) clipXBeforeTab=\(ordinaryClipXBeforeTab) clipXAfterTab=\(String(describing: viewport?.contentView.bounds.origin.x))")
             #expect(settings.controller.window === ordinaryOwner && ordinaryOwner.contentView === ordinaryRoot)
             #expect(admittedControl != nil,
                     "Every completed ordinary Tab target must be an owned control inside the scroll document")
@@ -241,13 +311,13 @@ struct CalendarKeyboardOwnershipTests {
             if admittedControl != nil {
                 #expect(controlVisible && rowVisible)
             }
-            if aboutFocused { break }
+            if lastFocused { break }
         }
         #expect(ordinaryAdmittedTargets > 0)
-        #expect(ordinaryProviderObserved && ordinaryAboutObserved,
-                "Ordinary Tab traversal must reach the AI provider and then the last-section About button")
+        #expect(ordinaryProviderObserved && ordinaryLastObserved,
+                "Ordinary Tab traversal must reach the AI provider and then the last About link")
         if ordinaryDocumentOverflows { #expect(ordinaryLowerRowObserved) }
-        print("GLIMPSE_SETTINGS_ORDINARY_ROOT_SUMMARY providerObserved=\(ordinaryProviderObserved) aboutObserved=\(ordinaryAboutObserved) admittedTargets=\(ordinaryAdmittedTargets) lowerRowObserved=\(ordinaryLowerRowObserved) replacementProof=false")
+        print("GLIMPSE_SETTINGS_ORDINARY_ROOT_SUMMARY providerObserved=\(ordinaryProviderObserved) lastObserved=\(ordinaryLastObserved) admittedTargets=\(ordinaryAdmittedTargets) lowerRowObserved=\(ordinaryLowerRowObserved) replacementProof=false")
         ordinaryOwner.setContentSize(ordinaryContentSize)
         await settings.settle()
         #expect(ordinaryOwner.contentRect(forFrameRect: ordinaryOwner.frame).size == ordinaryContentSize)
@@ -343,20 +413,24 @@ struct CalendarKeyboardOwnershipTests {
                 }
                 print("GLIMPSE_SETTINGS_REPLACEMENT_GEOMETRY step=\(step) proxyFrame=\(String(describing: proxyFrame)) providerAXFrame=\(String(describing: observedProvider?.frame)) rowLabelAXPresent=\(rowLabel != nil) rowLabelAXFrame=\(String(describing: rowLabel?.frame)) documentBounds=\(String(describing: traversalViewport?.documentView?.bounds)) clipBounds=\(String(describing: traversalViewport?.contentView.bounds)) contentMinSize=\(owner.contentMinSize)")
             }
-            if focusedLabels().contains("About Glimpse") { break }
+            if focusedLabels().contains(settingsLastTabStop) { break }
         }
         // Classic pane on-screen order (full keyboard access): every native control
-        // after Launch at login, ending at the last section's About button.
+        // after Launch at login, through Updates, ending at the last About link.
         let ordered = Array(settingsTraversalOrder.dropFirst())
         let positions = try ordered.map { name in try #require(traversed.firstIndex(of: name)) }
         #expect(positions == positions.sorted())
         let provider = try #require(settings.nodes().first { $0.label == "AI provider" && $0.role == .popUpButton })
         try settings.expectVisible(provider, rowLabel: "AI date search")
-        let about = try #require(settings.nodes().first { $0.label == "About Glimpse" && $0.role == .button })
+        let updates = try #require(settings.nodes().first {
+            $0.label == "Check for updates now" && $0.role == .button
+        })
+        try settings.expectVisible(updates, rowLabel: "Updates")
+        let about = try #require(settings.nodes().first { $0.label == settingsLastTabStop && $0.role == .link })
         try settings.expectVisible(about, rowLabel: "About")
         let reverseOrdered = Array(settingsTraversalOrder.reversed())
         var reverseTraversed = focusedLabels()
-        try #require(reverseTraversed.contains("About Glimpse"))
+        try #require(reverseTraversed.contains(settingsLastTabStop))
         for _ in 0..<40 {
             try calendar.send(.backTab, toWindow: owner)
             await settings.settle()
@@ -1875,7 +1949,7 @@ struct CalendarKeyboardOwnershipTests {
         let document = try #require(scroll.documentView)
         let headings = settings.nodes().filter(isSettingsSectionGroup)
         #expect(headings.map { $0.label ?? ($0.value as? String) ?? "" } ==
-                ["Opening Glimpse", "Menu bar", "Calendar", "AI date search", "About"])
+                ["Opening Glimpse", "Menu bar", "Calendar", "AI date search", "Updates", "About"])
         #expect(!scroll.hasHorizontalScroller)
         for section in SettingsSection.allCases {
             try await settings.reveal(section)
@@ -2283,9 +2357,8 @@ struct CalendarKeyboardOwnershipTests {
     func focusedUpdateActionKeepsNativeKeyboardActivation(dark: Bool) async throws {
         let fixture = UpdaterFixture()
         let sender = try CalendarKeyboardRootFixture()
-        let host = AboutUpdateHost(
+        let host = UpdateSectionHost(
             updater: fixture.updater,
-            fullAbout: true,
             appearance: NSAppearance(named: dark ? .darkAqua : .aqua)
         )
         defer { host.close(); sender.close(); fixture.delay.drain() }
@@ -2297,11 +2370,11 @@ struct CalendarKeyboardOwnershipTests {
         await host.settle(ownsKey: true)
         try sender.loadOwnedAccessibilityTree()
         for _ in 0..<6 {
-            if host.control("Check for updates")?.object.isAccessibilityFocused?() == true { break }
+            if host.control("Check for updates now")?.object.isAccessibilityFocused?() == true { break }
             try sender.send(.tab, toWindow: host.window)
             await host.settle(ownsKey: true)
         }
-        let check = try #require(host.control("Check for updates"))
+        let check = try #require(host.control("Check for updates now"))
         try #require(check.object.isAccessibilityFocused?() == true)
         #expect(check.accessibilityRole() == .button && check.isAccessibilityEnabled())
         #expect(fixture.backend.checkCount == 0 && fixture.driver.status == .idle)
@@ -2441,7 +2514,9 @@ private final class SettingsWindowTestFixture {
     let hotkey = HotkeyFixture()
     let notifications = NotificationCenter()
     let recordingChanges = LockIsolated<[Bool]>([])
-    let actionReceipts = LockIsolated<[String: Int]>([:])
+    let openedURLs = LockIsolated<[URL]>([])
+    let updates: UpdaterFixture
+    let diagnostics = DiagnosticsExportFixture()
     let preferencesClient: PreferencesClient
     let launchAtLoginClient: LaunchAtLoginClient
     let store: StoreOf<PreferencesFeature>
@@ -2450,7 +2525,8 @@ private final class SettingsWindowTestFixture {
     private var recordingObserver: NSObjectProtocol?
     private var accessibilityPrepared = false
 
-    init() {
+    init(updaterStartError: Error? = nil) {
+        updates = UpdaterFixture(startError: updaterStartError)
         let saved = saved
         let login = login
         preferencesClient = .init(
@@ -2476,10 +2552,9 @@ private final class SettingsWindowTestFixture {
             $0.launchAtLoginClient = launchAtLoginClient
         }
         model = HotkeyPreferencesModel(hotkey: hotkey.hotkey, defaults: hotkey.defaults, handler: {})
-        let actions = actionReceipts
         controller = SettingsWindowController(
             store: store, hotkeyPreferences: model, notificationCenter: notifications,
-            onAbout: { actions.withValue { $0["about", default: 0] += 1 } }
+            updater: updates.updater, diagnostics: diagnostics.model
         )
         let changes = recordingChanges
         recordingObserver = NotificationCenter.default.addObserver(
@@ -2527,8 +2602,13 @@ private final class SettingsWindowTestFixture {
             }
             // Attach the AX-enabled root before key presentation, matching production.
             owner.orderOut(nil)
+            let opened = openedURLs
             let replacement = NSHostingView(rootView: AnyView(
                 hosting.rootView.environment(\.accessibilityEnabled, true)
+                    .environment(\.openURL, OpenURLAction { url in
+                        opened.withValue { $0.append(url) }
+                        return .handled
+                    })
             ))
             replacement.sizingOptions = []
             owner.contentView = replacement
@@ -2623,8 +2703,11 @@ private final class SettingsWindowTestFixture {
         case .aiDateSearch:
             targets = [("Enable AI date search", .checkBox, "AI date search")] +
                 (store.showAISearch ? [("AI provider", .popUpButton, "AI date search")] : [])
+        case .updates:
+            // The checkbox is present in every update status; Check Now is not.
+            targets = [("Check for updates automatically", .checkBox, "Updates")]
         case .about:
-            targets = [("About Glimpse", .button, "About")]
+            targets = [("Export diagnostics", .link, "About"), (settingsLastTabStop, .link, "About")]
         }
         let revealFrame = try targets.reduce(node.frame) { frame, target in
             let control = try #require(tree.first {
@@ -2787,6 +2870,7 @@ private final class SettingsWindowTestFixture {
         }
         controller.window?.contentView = nil
         controller.window?.close()
+        updates.delay.drain()
         login.finish()
         if let recordingObserver { NotificationCenter.default.removeObserver(recordingObserver) }
         hotkey.cleanupDefaults()
@@ -2904,6 +2988,7 @@ private final class ShortcutRecorderWindowFixture {
             PreferencesView(
                 store: preferences.store, hotkeyPreferences: preferences.hotkeyModel,
                 notificationCenter: preferences.notifications,
+                updater: preferences.updates.updater, diagnostics: preferences.diagnostics.model,
                 recordingWindow: { [weak owner] in owner }
             ).environment(\.accessibilityEnabled, true)
         ))
@@ -3921,14 +4006,20 @@ func isSettingsSectionGroup(_ node: AccessibilityTestNode) -> Bool {
         && SettingsSection.allCases.contains { $0.heading == node.label }
 }
 
-/// Native Tab order of the classic Settings pane, Launch at login through About Glimpse,
-/// with the default fixture state (shortcut requested but not enabled, AI search on).
+/// The last native Tab stop in Settings: the About row's Support link.
+let settingsLastTabStop = "Glimpse support"
+
+/// Native Tab order of the classic Settings pane, Launch at login through the About links,
+/// with the default fixture state (shortcut requested but not enabled, AI search on, idle updates).
 @MainActor
 let settingsTraversalOrder: [String] = [
     "Launch at login", "Set and enable shortcut", "Global shortcut", "Keep global shortcut off",
     "Pin calendar", "Show icon in menu bar", "Show day of week in menu bar", "Show month in menu bar",
     "Show date in menu bar", "Show year in menu bar", "Filled background", "Week starts on"
-] + Calendar.current.weekdaySymbols.map { "\($0) workday" } + ["Enable AI date search", "AI provider", "About Glimpse"]
+] + Calendar.current.weekdaySymbols.map { "\($0) workday" } + [
+    "Enable AI date search", "AI provider", "Check for updates automatically", "Check for updates now",
+    "Export diagnostics", "Glimpse website", settingsLastTabStop
+]
 
 /// Left-column row label (accessibility label, no colon) that owns each traversal target.
 @MainActor
@@ -3948,7 +4039,11 @@ let settingsTraversalRowLabels: [String: String] = {
         "Week starts on": "Week starts on",
         "Enable AI date search": "AI date search",
         "AI provider": "AI date search",
-        "About Glimpse": "About"
+        "Check for updates automatically": "Updates",
+        "Check for updates now": "Updates",
+        "Export diagnostics": "About",
+        "Glimpse website": "About",
+        settingsLastTabStop: "About"
     ]
     for day in Calendar.current.weekdaySymbols { labels["\(day) workday"] = "Workdays" }
     return labels

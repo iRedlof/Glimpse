@@ -34,7 +34,6 @@
 		DD00000000000000000088 /* CalendarControlAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000089 /* CalendarControlAccessibilityTests.swift */; };
 		DD00000000000000000086 /* PreferencesAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000087 /* PreferencesAccessibilityTests.swift */; };
 		DD00000000000000000084 /* AccessibilityTestHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000085 /* AccessibilityTestHost.swift */; };
-		DD00000000000000000082 /* AboutUpdateSectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000083 /* AboutUpdateSectionTests.swift */; };
 		DD00000000000000000080 /* SparkleUpdaterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000081 /* SparkleUpdaterTests.swift */; };
 		DD0000000000000000008C /* SparkleSandboxInstallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000008D /* SparkleSandboxInstallTests.swift */; };
 		DD0000000000000000007C /* PanelLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000007D /* PanelLayoutTests.swift */; };
@@ -47,6 +46,7 @@
 		AA00000000000000000001 /* GlimpseApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000010 /* GlimpseApp.swift */; };
 		AA00000000000000000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000011 /* Assets.xcassets */; };
 		DD00000000000000000005 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000014 /* PrivacyInfo.xcprivacy */; };
+		DD0000000000000000008E /* Glimpse.entitlements in Resources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000013 /* Glimpse.entitlements */; };
 		AA00000000000000000003 /* CalendarPopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000015 /* CalendarPopoverView.swift */; };
 		AA00000000000000000004 /* DateIconRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000016 /* DateIconRenderer.swift */; };
 		AA00000000000000000006 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000018 /* PreferencesView.swift */; };
@@ -62,8 +62,12 @@
 		DD00000000000000000007 /* SparkleUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000016 /* SparkleUpdater.swift */; };
 		DD00000000000000000008 /* ProxyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000017 /* ProxyProvider.swift */; };
 		DD0000000000000000000A /* ProxyConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000019 /* ProxyConfig.swift */; };
+		DD00000000000000000000C2 /* SettingsUpdatesSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000C3 /* SettingsUpdatesSection.swift */; };
+		DD00000000000000000000C4 /* SettingsAboutSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000C5 /* SettingsAboutSection.swift */; };
+		DD00000000000000000000C6 /* DiagnosticsExportModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000C7 /* DiagnosticsExportModel.swift */; };
+		DD00000000000000000000C8 /* SettingsUpdatesSectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000C9 /* SettingsUpdatesSectionTests.swift */; };
+		DD00000000000000000000CA /* SettingsAboutSectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000CB /* SettingsAboutSectionTests.swift */; };
 		DD00000000000000000009 /* DiagnosticsExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000018 /* DiagnosticsExport.swift */; };
-		DD0000000000000000000B /* AboutWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000001A /* AboutWindow.swift */; };
 		DD00000000000000000006 /* MonthBorderShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000015 /* MonthBorderShape.swift */; };
 		CC00000000000000000001 /* GlimpseCore in Frameworks */ = {isa = PBXBuildFile; productRef = CC00000000000000000002 /* GlimpseCore */; };
 		BB00000000000000000022 /* MonthBorderShapeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000012 /* MonthBorderShapeTests.swift */; };
@@ -118,7 +122,6 @@
 		DD00000000000000000089 /* CalendarControlAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarControlAccessibilityTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000087 /* PreferencesAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesAccessibilityTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000085 /* AccessibilityTestHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTestHost.swift; sourceTree = "<group>"; };
-		DD00000000000000000083 /* AboutUpdateSectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutUpdateSectionTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000081 /* SparkleUpdaterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdaterTests.swift; sourceTree = "<group>"; };
 		DD0000000000000000008D /* SparkleSandboxInstallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleSandboxInstallTests.swift; sourceTree = "<group>"; };
 		DD0000000000000000007D /* PanelLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelLayoutTests.swift; sourceTree = "<group>"; };
@@ -149,8 +152,12 @@
 		DD00000000000000000016 /* SparkleUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdater.swift; sourceTree = "<group>"; };
 		DD00000000000000000017 /* ProxyProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyProvider.swift; sourceTree = "<group>"; };
 		DD00000000000000000019 /* ProxyConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyConfig.swift; sourceTree = "<group>"; };
+		DD00000000000000000000C3 /* SettingsUpdatesSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUpdatesSection.swift; sourceTree = "<group>"; };
+		DD00000000000000000000C5 /* SettingsAboutSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAboutSection.swift; sourceTree = "<group>"; };
+		DD00000000000000000000C7 /* DiagnosticsExportModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsExportModel.swift; sourceTree = "<group>"; };
+		DD00000000000000000000C9 /* SettingsUpdatesSectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUpdatesSectionTests.swift; sourceTree = "<group>"; };
+		DD00000000000000000000CB /* SettingsAboutSectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAboutSectionTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000018 /* DiagnosticsExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsExport.swift; sourceTree = "<group>"; };
-		DD0000000000000000001A /* AboutWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutWindow.swift; sourceTree = "<group>"; };
 		DD00000000000000000014 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BB00000000000000000007 /* GlimpseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GlimpseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB00000000000000000012 /* MonthBorderShapeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthBorderShapeTests.swift; sourceTree = "<group>"; };
@@ -234,7 +241,9 @@
 				DD00000000000000000017 /* ProxyProvider.swift */,
 				DD00000000000000000019 /* ProxyConfig.swift */,
 				DD00000000000000000018 /* DiagnosticsExport.swift */,
-				DD0000000000000000001A /* AboutWindow.swift */,
+				DD00000000000000000000C3 /* SettingsUpdatesSection.swift */,
+				DD00000000000000000000C5 /* SettingsAboutSection.swift */,
+				DD00000000000000000000C7 /* DiagnosticsExportModel.swift */,
 				AA00000000000000000011 /* Assets.xcassets */,
 				AA00000000000000000012 /* Info.plist */,
 				AA00000000000000000013 /* Glimpse.entitlements */,
@@ -265,7 +274,8 @@
 				DD00000000000000000089 /* CalendarControlAccessibilityTests.swift */,
 				DD00000000000000000087 /* PreferencesAccessibilityTests.swift */,
 				DD00000000000000000085 /* AccessibilityTestHost.swift */,
-				DD00000000000000000083 /* AboutUpdateSectionTests.swift */,
+				DD00000000000000000000C9 /* SettingsUpdatesSectionTests.swift */,
+				DD00000000000000000000CB /* SettingsAboutSectionTests.swift */,
 				DD00000000000000000081 /* SparkleUpdaterTests.swift */,
 				DD0000000000000000008D /* SparkleSandboxInstallTests.swift */,
 				DD0000000000000000007D /* PanelLayoutTests.swift */,
@@ -320,6 +330,7 @@
 			buildPhases = (
 				BB00000000000000000005 /* Sources */,
 				BB00000000000000000006 /* Frameworks */,
+				DD0000000000000000008F /* Resources */,
 			);
 			buildRules = (
 			);
@@ -373,6 +384,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DD0000000000000000008F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DD0000000000000000008E /* Glimpse.entitlements in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -416,7 +435,9 @@
 				DD00000000000000000008 /* ProxyProvider.swift in Sources */,
 				DD0000000000000000000A /* ProxyConfig.swift in Sources */,
 				DD00000000000000000009 /* DiagnosticsExport.swift in Sources */,
-				DD0000000000000000000B /* AboutWindow.swift in Sources */,
+				DD00000000000000000000C2 /* SettingsUpdatesSection.swift in Sources */,
+				DD00000000000000000000C4 /* SettingsAboutSection.swift in Sources */,
+				DD00000000000000000000C6 /* DiagnosticsExportModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -434,7 +455,8 @@
 				DD00000000000000000088 /* CalendarControlAccessibilityTests.swift in Sources */,
 				DD00000000000000000086 /* PreferencesAccessibilityTests.swift in Sources */,
 				DD00000000000000000084 /* AccessibilityTestHost.swift in Sources */,
-				DD00000000000000000082 /* AboutUpdateSectionTests.swift in Sources */,
+				DD00000000000000000000C8 /* SettingsUpdatesSectionTests.swift in Sources */,
+				DD00000000000000000000CA /* SettingsAboutSectionTests.swift in Sources */,
 				DD00000000000000000080 /* SparkleUpdaterTests.swift in Sources */,
 				DD0000000000000000008C /* SparkleSandboxInstallTests.swift in Sources */,
 				DD0000000000000000007C /* PanelLayoutTests.swift in Sources */,
@@ -530,7 +552,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 40;
+				CURRENT_PROJECT_VERSION = 41;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -538,7 +560,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.5.3;
+				MARKETING_VERSION = 1.5.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -555,7 +577,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 40;
+				CURRENT_PROJECT_VERSION = 41;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -563,7 +585,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.5.3;
+				MARKETING_VERSION = 1.5.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -578,9 +600,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 40;
+				CURRENT_PROJECT_VERSION = 41;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.5.3;
+				MARKETING_VERSION = 1.5.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -595,9 +617,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 40;
+				CURRENT_PROJECT_VERSION = 41;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.5.3;
+				MARKETING_VERSION = 1.5.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

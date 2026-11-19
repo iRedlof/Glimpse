@@ -44,7 +44,6 @@ enum AppDesign {
         static let todayBackgroundOpacity: Double = 0.10
         static let dismissTargetSize: CGFloat = 24
         static let focusLineWidth: CGFloat = 2
-        static let aboutFocusLineWidth: CGFloat = 1
         static let focusInset: CGFloat = 2
         static let focusCornerRadius: CGFloat = 4
 
@@ -55,10 +54,11 @@ enum AppDesign {
     }
 
     enum Settings {
-        static let contentSize = CGSize(width: 480, height: 490)
+        static let contentSize = CGSize(width: 480, height: 600)
         /// The page is never shorter than its content (fit() still clamps to tiny screens),
         /// because SwiftUI Tab routing skips rows fully clipped by the scroll view.
-        static let minimumContentSize = CGSize(width: 440, height: 490)
+        /// 600pt holds every row at 440pt wide, including the Updates status and its errors.
+        static let minimumContentSize = CGSize(width: 440, height: 600)
         static let contentInset: CGFloat = 20
         static let labelFontSize: CGFloat = 13
         static let supportingFontSize: CGFloat = 11.5
@@ -80,6 +80,7 @@ enum AppDesign {
         static let screenInset: CGFloat = 10
         static let windowGap: CGFloat = 12
         static let previewBaselineOffset: CGFloat = 4.5
+        static let downloadProgressWidth: CGFloat = 120
     }
 
     enum Footer {

@@ -693,7 +693,8 @@ private final class AgendaRefreshFixture {
             store: preferences, hotkeyPreferences: hotkeyModel, notificationCenter: center,
             onAISettingsChange: { [weak panel] enabled, preference in
                 panel?.aiSettingsDidChange?(enabled, preference)
-            }
+            },
+            updater: UpdaterFixture().updater
         )
         let root: CalendarPopoverView
         if center === NotificationCenter.default {

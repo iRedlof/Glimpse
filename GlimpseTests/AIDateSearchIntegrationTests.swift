@@ -630,7 +630,8 @@ private final class SettingsAIIntegrationHost {
             store: root.preferences, hotkeyPreferences: root.hotkeyModel,
             onAISettingsChange: { [weak statusItem] enabled, preference in
                 statusItem?.synchronizeAISettings(enabled: enabled, preference: preference)
-            }
+            },
+            updater: UpdaterFixture().updater
         )
     }
 

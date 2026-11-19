@@ -173,7 +173,7 @@ struct CalendarPopoverView: View {
                         reader.scrollTo("panel-header", anchor: .center)
                     case .searchPrompt, .searchDismiss, .editor:
                         reader.scrollTo("panel-ai-input", anchor: .center)
-                    case .footerQuit, .footerAbout, .footerPin, .footerCalendar, .footerSettings,
+                    case .footerQuit, .footerPin, .footerCalendar, .footerSettings,
                          .quitCancel, .quitConfirm:
                         reader.scrollTo("panel-footer", anchor: .bottom)
                     default: break

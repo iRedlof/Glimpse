@@ -6,8 +6,8 @@ import Testing
 @Suite(.serialized) @MainActor
 struct FixtureHostingCleanupTests {
     @Test
-    func aboutCloseReleasesHostingAfterScopeExit() async throws {
-        let probe = try await closeAboutHost()
+    func updateSectionCloseReleasesHostingAfterScopeExit() async throws {
+        let probe = try await closeUpdateSectionHost()
         try await expectHostingRelease(probe)
     }
 
@@ -17,11 +17,11 @@ struct FixtureHostingCleanupTests {
         try await expectHostingRelease(probe)
     }
 
-    private func closeAboutHost() async throws -> HostingReleaseProbe {
+    private func closeUpdateSectionHost() async throws -> HostingReleaseProbe {
         let fixture = UpdaterFixture()
-        let host = AboutUpdateHost(updater: fixture.updater, fullAbout: false)
+        let host = UpdateSectionHost(updater: fixture.updater)
         let probe = HostingReleaseProbe(
-            kind: "about", host: host, hosting: host.window.contentView
+            kind: "updates", host: host, hosting: host.window.contentView
         )
         defer {
             host.close()
@@ -30,7 +30,7 @@ struct FixtureHostingCleanupTests {
         await host.settle()
         let treeCount = host.elements().count
         let subjectsPresent = probe.hostAlive && probe.hostingAlive
-        try #require(subjectsPresent && treeCount > 0, "Measure a real settled About host")
+        try #require(subjectsPresent && treeCount > 0, "Measure a real settled update section host")
         probe.record("settled-before-close")
         return probe
     }

@@ -1,23 +1,23 @@
 {
-  "version": "1.5.3",
-  "build": "40",
-  "scope": "Half-and-half Quit confirmation in the calendar footer; Settings footer removed and About moved to the last Settings section.",
+  "version": "1.5.4",
+  "build": "41",
+  "scope": "Updates section (auto-check, Check Now, inline status) and slim About line in Settings replace the About window.",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-17-footer-quit-halves-settings-about.md"
+      "evidence": "docs/superpowers/reviews/2026-11-18-updates-about-in-settings.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-17-footer-quit-halves-settings-about.md"
+      "evidence": "docs/superpowers/reviews/2026-11-18-updates-about-in-settings.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-17-footer-quit-halves-settings-about.md"
+      "evidence": "docs/superpowers/reviews/2026-11-18-updates-about-in-settings.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-17-footer-quit-halves-settings-about.md"
+      "evidence": "docs/superpowers/reviews/2026-11-18-updates-about-in-settings.md"
     }
   }
 }

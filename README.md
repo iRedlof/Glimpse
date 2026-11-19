@@ -1,6 +1,6 @@
 # Glimpse
 
-[![Version](https://img.shields.io/badge/version-1.5.3-green)](https://github.com/iRedlof/Glimpse/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.5.4-green)](https://github.com/iRedlof/Glimpse/releases/latest)
 [![Download](https://img.shields.io/badge/download-DMG-brightgreen)](https://github.com/iRedlof/Glimpse/releases/latest)
 
 [![Release](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml/badge.svg)](https://github.com/iRedlof/Glimpse/actions/workflows/release.yml)
@@ -24,8 +24,8 @@ Candidate **v1.4.29/build36** replaces the public v1.4.28/build35 footer and Set
 - **Filled background mode** — solid pill style for the menu bar item
 - **Workday highlighting** — configure which days are workdays
 - **Pin window** — keep the calendar visible while working
-- **Settings window** — one scrollable page with Opening Glimpse, Menu bar, Calendar, AI date search, and About (version plus the About window) categories, reached from the labeled Settings footer action or ⌘,
-- **Auto-updates** — inline status in About, guarded retry after failed checks, and an official release link when updating is unavailable
+- **Settings window** — one scrollable page with Opening Glimpse, Menu bar, Calendar, AI date search, Updates, and About (version, Diagnostics…, Website, Support) sections, reached from the labeled Settings footer action or ⌘,
+- **Auto-updates** — automatic-check toggle, Check Now, and inline status in the Settings Updates section, guarded retry after failed checks, and an official release link when updating is unavailable
 - **Shortcuts.app** — "Show Glimpse Calendar" available via Siri and Shortcuts
 - **Launch at login** — actual macOS registration status, with a shortcut to approve it in Login Items
 
@@ -117,7 +117,9 @@ Glimpse/                             # App target
 ├── ProxyProvider.swift              # Auris proxy API integration
 ├── ProxyConfig.swift                # XOR-obfuscated auth
 ├── SparkleUpdater.swift             # Inline update UI with SPUUserDriver
-├── AboutWindow.swift                # Version, updates, diagnostics
+├── SettingsUpdatesSection.swift     # Settings Updates: auto-check, Check Now, inline status
+├── SettingsAboutSection.swift       # Settings About: version, Diagnostics…, Website, Support
+├── DiagnosticsExportModel.swift     # Diagnostics export flow
 ├── AppDesign.swift                  # Design tokens
 ├── AppLogger.swift                  # os.Logger categories
 ├── PrivacyInfo.xcprivacy

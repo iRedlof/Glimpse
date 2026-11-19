@@ -31,7 +31,7 @@ struct CalendarKeyboardRouterTests {
 
     @Test(arguments: [
         CalendarKeyboardOwner.previousMonth, .today, .nextMonth, .searchPrompt, .searchDismiss,
-        .footerQuit, .footerAbout, .footerPin, .footerCalendar, .footerSettings, .quitCancel, .quitConfirm
+        .footerQuit, .footerPin, .footerCalendar, .footerSettings, .quitCancel, .quitConfirm
     ])
     func fixedControlReturnAndSpaceActivateOnceWithRepeatConsumed(owner: CalendarKeyboardOwner) {
         #expect(CalendarKeyboardRouter.local(
@@ -60,7 +60,7 @@ struct CalendarKeyboardRouterTests {
     func disabledFixedControlsCannotActivate() {
         let activationKeys: [CalendarKeyboardKey] = [.returnKey, .keypadEnter, .space]
         for owner in [CalendarKeyboardOwner.previousMonth, .today, .nextMonth, .searchPrompt, .searchDismiss,
-                      .footerQuit, .footerAbout, .footerPin, .footerCalendar, .footerSettings, .quitCancel, .quitConfirm] {
+                      .footerQuit, .footerPin, .footerCalendar, .footerSettings, .quitCancel, .quitConfirm] {
             for key in activationKeys {
                 for phase in [CalendarKeyboardPhase.down, .repeatPress] {
                     #expect(CalendarKeyboardRouter.local(
@@ -221,7 +221,7 @@ struct CalendarKeyboardRouterTests {
     }
 
     @Test(arguments: [
-        CalendarKeyboardOwner.footerQuit, .footerAbout, .footerPin, .footerCalendar,
+        CalendarKeyboardOwner.footerQuit, .footerPin, .footerCalendar,
         .footerSettings, .quitCancel, .quitConfirm
     ], [CalendarKeyboardKey.returnKey, .keypadEnter, .space])
     func footerAndConfirmationRequireCurrentContext(
