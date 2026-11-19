@@ -89,7 +89,8 @@ struct SparkleUpdaterTests {
                 acknowledgements += 1
             }
             #expect(fixture.driver.status == .latest)
-            #expect(!fixture.updater.canCheckForUpdates)
+            // Check Now stays available beside an up-to-date result.
+            #expect(fixture.updater.canCheckForUpdates)
             _ = await fixture.delay.waitForRequest(0)
         } else {
             fixture.driver.showUpdaterError(updateTestError) { acknowledgements += 1 }
@@ -690,6 +691,11 @@ struct UpdateChoiceTests {
     }
 }
 
+/// 2026-11-18 09:41:00 UTC: the fixture clock for update-check times.
+let updateFixtureNow = Date(timeIntervalSince1970: 1_794_994_860)
+/// A realistic next release, matching the picked Settings mock ("Version 1.5.4 available").
+let updateFixtureVersion = "1.5.4"
+
 /// The double replaces native I/O only; driver transitions remain production code.
 @MainActor
 final class UpdateBackend {
@@ -698,6 +704,9 @@ final class UpdateBackend {
     var canCheck = true
     var startError: Error?
     var onCheck: (() -> Void)?
+    var automaticChecks = true
+    var automaticCheckWrites: [Bool] = []
+    var lastCheckDate: Date?
     private var observer: (@MainActor (Bool) -> Void)?
 
     var client: UpdaterClient {
@@ -715,7 +724,13 @@ final class UpdateBackend {
             checkForUpdates: {
                 self.checkCount += 1
                 self.onCheck?()
-            }
+            },
+            automaticallyChecksForUpdates: { self.automaticChecks },
+            setAutomaticallyChecksForUpdates: {
+                self.automaticCheckWrites.append($0)
+                self.automaticChecks = $0
+            },
+            lastUpdateCheckDate: { self.lastCheckDate }
         )
     }
 
@@ -732,11 +747,16 @@ final class UpdaterFixture {
     let driver: InlineUpdateDriver
     let updater: SparkleUpdater
 
-    init(startError: Error? = nil) {
+    init(
+        startError: Error? = nil, automaticChecks: Bool = true, lastCheckDate: Date? = nil,
+        now: Date = updateFixtureNow
+    ) {
         let backend = UpdateBackend()
         backend.startError = startError
+        backend.automaticChecks = automaticChecks
+        backend.lastCheckDate = lastCheckDate
         let delay = ControlledUpdateDelay()
-        let driver = InlineUpdateDriver(delay: { try await delay.sleep($0) })
+        let driver = InlineUpdateDriver(delay: { try await delay.sleep($0) }, now: { now })
         self.backend = backend
         self.delay = delay
         self.driver = driver
@@ -993,4 +1013,142 @@ struct UpdateResultTests {
 @MainActor
 private func drainUpdateExecutor() async {
     for _ in 0..<8 { await Task.yield() }
+}
+
+@MainActor
+struct SettingsUpdateModelTests {
+    @Test(arguments: [false, true])
+    func automaticChecksMirrorSparkleAndWriteThrough(initial: Bool) {
+        let fixture = UpdaterFixture(automaticChecks: initial)
+        defer { fixture.delay.drain() }
+        #expect(fixture.updater.canChangeAutomaticChecks)
+        #expect(fixture.updater.automaticallyChecksForUpdates == initial)
+        fixture.updater.setAutomaticallyChecksForUpdates(!initial)
+        #expect(fixture.backend.automaticCheckWrites == [!initial])
+        #expect(fixture.updater.automaticallyChecksForUpdates == !initial)
+        #expect(fixture.backend.checkCount == 0)
+    }
+
+    @Test
+    func automaticChecksCannotChangeWithoutSparkle() {
+        let fixture = UpdaterFixture(startError: updateTestError)
+        defer { fixture.delay.drain() }
+        #expect(!fixture.updater.canChangeAutomaticChecks)
+        #expect(!fixture.updater.automaticallyChecksForUpdates)
+        fixture.updater.setAutomaticallyChecksForUpdates(true)
+        #expect(fixture.backend.automaticCheckWrites.isEmpty)
+        #expect(fixture.updater.lastUpdateCheckDate == nil)
+    }
+
+    @Test
+    func lastCheckDateComesFromSparkleAtStart() {
+        let fixture = UpdaterFixture(lastCheckDate: updateFixtureNow)
+        defer { fixture.delay.drain() }
+        #expect(fixture.updater.lastUpdateCheckDate == updateFixtureNow)
+        #expect(UpdaterFixture().updater.lastUpdateCheckDate == nil)
+    }
+
+    /// A silent background check only changes Sparkle's persisted date; the mirror must follow it.
+    @Test
+    func lastCheckDateRefreshesOnDemandAndOnStatusChanges() {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        let background = updateFixtureNow.addingTimeInterval(-3_600)
+        fixture.backend.lastCheckDate = background
+        #expect(fixture.updater.lastUpdateCheckDate == nil, "Mirrored, not read through")
+        fixture.updater.refreshLastUpdateCheckDate()
+        #expect(fixture.updater.lastUpdateCheckDate == background)
+        fixture.backend.lastCheckDate = updateFixtureNow
+        fixture.driver.showUserInitiatedUpdateCheck(cancellation: {})
+        #expect(fixture.updater.lastUpdateCheckDate == updateFixtureNow)
+    }
+
+    @Test
+    func lastCheckDateNeverRefreshesWithoutSparkle() {
+        let fixture = UpdaterFixture(startError: updateTestError, lastCheckDate: updateFixtureNow)
+        defer { fixture.delay.drain() }
+        fixture.updater.refreshLastUpdateCheckDate()
+        fixture.driver.showUserInitiatedUpdateCheck(cancellation: {})
+        #expect(fixture.updater.lastUpdateCheckDate == nil)
+    }
+
+    @Test
+    func offeredVersionLastsUntilInstallIsDismissed() throws {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        fixture.driver.presentUpdate(version: updateFixtureVersion) { _ in }
+        fixture.driver.chooseUpdate(.install, id: try #require(fixture.driver.updateChoiceID))
+        fixture.driver.showDownloadInitiated(cancellation: {})
+        fixture.driver.showDownloadDidStartExtractingUpdate()
+        fixture.driver.showReady { _ in }
+        #expect(fixture.driver.updateVersion == updateFixtureVersion)
+        fixture.driver.dismissUpdateInstallation()
+        #expect(fixture.driver.updateVersion == nil)
+        fixture.driver.presentUpdate(version: updateFixtureVersion) { _ in }
+        fixture.driver.showUserInitiatedUpdateCheck(cancellation: {})
+        #expect(fixture.driver.updateVersion == nil, "A new check forgets the previous offer")
+    }
+
+    @Test
+    func latestRecordsCheckTimeAndAllowsAnImmediateRecheck() async {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion), acknowledgement: {})
+        let request = await fixture.delay.waitForRequest(0)
+        #expect(fixture.driver.status == .latest)
+        #expect(fixture.driver.lastUpToDateDate == updateFixtureNow)
+        #expect(fixture.updater.canCheckForUpdates)
+        fixture.updater.checkForUpdates()
+        #expect(fixture.backend.checkCount == 1)
+        #expect(fixture.driver.status == .checking)
+        // The superseded dismissal cannot reset the new check.
+        fixture.delay.resumeSuccessfully(request.id)
+        _ = await fixture.delay.waitForReturn(request.id)
+        await Task.yield()
+        #expect(fixture.driver.status == .checking)
+        #expect(fixture.driver.lastUpToDateDate == updateFixtureNow)
+    }
+
+    @Test
+    func offeredUpdateClearsTheUpToDateTime() async {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .onLatestVersion), acknowledgement: {})
+        #expect(fixture.driver.lastUpToDateDate != nil)
+        fixture.driver.presentUpdate(version: "2.0") { _ in }
+        #expect(fixture.driver.lastUpToDateDate == nil)
+    }
+
+    @Test
+    func nonLatestOutcomesDoNotClaimUpToDate() {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        fixture.driver.showUpdateNotFoundWithError(noUpdateTestError(reason: .systemIsTooOld), acknowledgement: {})
+        fixture.driver.showUserInitiatedUpdateCheck(cancellation: {})
+        fixture.driver.showUpdaterError(updateTestError, acknowledgement: {})
+        #expect(fixture.driver.lastUpToDateDate == nil)
+    }
+
+    @Test
+    func downloadProgressTracksExpectedLengthAndResets() {
+        let fixture = UpdaterFixture()
+        defer { fixture.delay.drain() }
+        let driver = fixture.driver
+        driver.showDownloadInitiated(cancellation: {})
+        #expect(driver.status == .downloading && driver.downloadProgress == nil)
+        driver.showDownloadDidReceiveData(ofLength: 10)
+        #expect(driver.downloadProgress == nil, "Unknown length never invents a fraction")
+        driver.showDownloadDidReceiveExpectedContentLength(1_000)
+        #expect(driver.downloadProgress == 0)
+        driver.showDownloadDidReceiveData(ofLength: 400)
+        #expect(driver.downloadProgress == 0.4)
+        driver.showDownloadDidReceiveData(ofLength: 900)
+        #expect(driver.downloadProgress == 1, "Extra bytes clamp at complete")
+        driver.showDownloadDidReceiveData(ofLength: .max)
+        #expect(driver.downloadProgress == 1, "Overflow saturates")
+        driver.showDownloadInitiated(cancellation: {})
+        #expect(driver.downloadProgress == nil)
+        driver.showDownloadDidReceiveExpectedContentLength(0)
+        #expect(driver.downloadProgress == nil)
+    }
 }

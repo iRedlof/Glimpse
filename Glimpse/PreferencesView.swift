@@ -12,7 +12,8 @@ struct PreferencesView: View {
     private let recordingWindow: @MainActor () -> NSWindow?
     private let section: SettingsSection?
     private let calendarActions: SettingsCalendarActions?
-    private let openAbout: (@MainActor () -> Void)?
+    private let updater: SparkleUpdater
+    private let diagnostics: DiagnosticsExportModel
 
     init(
         store: StoreOf<PreferencesFeature>,
@@ -20,7 +21,8 @@ struct PreferencesView: View {
         notificationCenter: NotificationCenter = .default,
         onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)? = nil,
         calendarActions: SettingsCalendarActions? = nil,
-        openAbout: (@MainActor () -> Void)? = nil,
+        updater: SparkleUpdater,
+        diagnostics: DiagnosticsExportModel,
         section: SettingsSection? = nil,
         recordingWindow: @escaping @MainActor () -> NSWindow? = { nil }
     ) {
@@ -31,7 +33,8 @@ struct PreferencesView: View {
         self.recordingWindow = recordingWindow
         self.section = section
         self.calendarActions = calendarActions
-        self.openAbout = openAbout
+        self.updater = updater
+        self.diagnostics = diagnostics
     }
 
     private let allWeekdays = Array(1...7)
@@ -101,8 +104,10 @@ struct PreferencesView: View {
                 calendarSettings
             case .aiDateSearch:
                 aiSettingsRows
+            case .updates:
+                classicRow("Updates") { SettingsUpdatesSection(updater: updater) }
             case .about:
-                aboutRow
+                classicRow("About") { SettingsAboutSection(diagnostics: diagnostics) }
             }
         }
         .padding(.vertical, AppDesign.Settings.classicSectionInset)
@@ -169,7 +174,7 @@ struct PreferencesView: View {
             ("Year", "Show year in menu bar", \.showYear, { .setShowYear($0) }),
         ]
 
-        return SettingsCheckboxFlow(
+        return SettingsFlowLayout(
             spacing: AppDesign.Settings.checkboxSpacing, lineSpacing: AppDesign.Settings.statusSpacing
         ) {
             ForEach(options, id: \.0) { label, accessibilityName, keyPath, action in
@@ -206,7 +211,7 @@ struct PreferencesView: View {
                 .fixedSize()
             }
             classicRow("Workdays") {
-                SettingsCheckboxFlow(
+                SettingsFlowLayout(
                     spacing: AppDesign.Settings.workdaySpacing,
                     minimumCellWidth: AppDesign.Settings.workdayMinimumWidth
                 ) {
@@ -281,26 +286,6 @@ struct PreferencesView: View {
                 .font(.system(size: AppDesign.Settings.supportingFontSize))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    // MARK: - About
-
-    static let aboutHelp = "Opens the About window with updates, diagnostics and links"
-
-    private var aboutRow: some View {
-        classicRow("About") {
-            HStack(alignment: .firstTextBaseline, spacing: AppDesign.Settings.rowSpacing) {
-                Text(AppVersionText.productLine(infoDictionary: Bundle.main.infoDictionary))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Button("About Glimpse…") { openAbout?() }
-                    .buttonStyle(.bordered)
-                    .disabled(openAbout == nil)
-                    .accessibilityLabel("About Glimpse")
-                    // .help is AXHelp on macOS (as is .accessibilityHint): keep one string.
-                    .help(Self.aboutHelp)
-            }
         }
     }
 
@@ -506,8 +491,8 @@ struct PreferencesView: View {
 }
 
 /// Measures native checkbox labels before wrapping, preserving document/focus order.
-/// Workdays use equally sized adaptive cells; menu-bar choices use their natural widths.
-private struct SettingsCheckboxFlow: Layout {
+/// Workdays use equally sized adaptive cells; menu-bar choices and About links use natural widths.
+struct SettingsFlowLayout: Layout {
     var spacing: CGFloat
     var lineSpacing: CGFloat? = nil
     var minimumCellWidth: CGFloat? = nil

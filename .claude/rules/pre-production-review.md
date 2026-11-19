@@ -69,7 +69,7 @@ Run these checks before any release or significant merge.
 - InlineUpdateDriver handles all SPUUserDriver callbacks
 
 ### A4.2 Update UI
-- All UpdateStatus cases handled in About window
+- All UpdateStatus cases handled in the Settings Updates section
 - Install/Skip buttons wire to correct pendingReply callbacks
 - Auto-dismiss after 5 seconds for "latest version" status
 

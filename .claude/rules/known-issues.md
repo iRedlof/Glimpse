@@ -21,8 +21,10 @@ them unless explicitly asked — the rationale for each is documented here.
    pane). SwiftUI's focus routing skips rows fully clipped by the Settings scroll view
    (workdays, AI search, and the former footer Quit link; Settings no longer has a footer) even though the AppKit key-view loop contains all of
    them in order (probe: 31 entries). Mitigated: the window's minimum content height equals
-   its full content height (490pt), so normal resizing can't clip rows. Remains possible
-   only on screens whose usable height is below ~520pt, where fit() clamps the minimum.
+   its full content height (600pt, including the Updates and About rows), so normal resizing
+   can't clip rows. Remains possible only on screens whose usable height is below ~630pt,
+   where fit() clamps the minimum, and for the rare macOS-requirement update guidance
+   (newer/older macOS, about 640–680pt tall), where the page scrolls until it is dismissed.
    v1.4.27's layout reached offscreen rows; root cause not identified (section
    accessibility containers ruled out).
 
@@ -46,6 +48,6 @@ them unless explicitly asked — the rationale for each is documented here.
 ## Test Status
 
 - GlimpseCore: 214 tests, 14 suites — `cd GlimpseCore && swift test`
-- App tests: 400 default-run tests — `xcodebuild test`; key-panel suites (keyboard 44, AI 11, agenda 13) run in the quality gate
+- App tests: 428 default-run tests — `xcodebuild test`; key-panel suites (keyboard 45, AI 11, agenda 13) run in the quality gate
 - Live AI golden check (opt-in, 4 queries): `TEST_RUNNER_GLIMPSE_LIVE_AI=foundationModels`
 - All pass

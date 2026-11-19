@@ -73,8 +73,10 @@ open Glimpse.xcodeproj
 | `ScheduleCopy.swift` | User-facing and VoiceOver copy for the create flow |
 | `ProxyProvider.swift` | Auris proxy REST API integration |
 | `ProxyConfig.swift` | XOR-obfuscated app secret, device ID, auth headers |
-| `SparkleUpdater.swift` | Inline update UI with SPUUserDriver (all status states) |
-| `AboutWindow.swift` | Floating window with version, updates, diagnostics, links |
+| `SparkleUpdater.swift` | Sparkle updater + inline SPUUserDriver (all status states, download progress, last check) |
+| `SettingsUpdatesSection.swift` | Settings "Updates:" row: automatic checks, Check Now, inline status for every `UpdateStatus` |
+| `SettingsAboutSection.swift` | Settings "About:" row: version, Diagnostics…/Website/Support links, `AppVersionText`, `GlimpseLinks` |
+| `DiagnosticsExportModel.swift` | Diagnostics… flow: save panel, export, Show in Finder (injectable seams) |
 | `AppDesign.swift` | Design tokens (spacing, colors, corner radius, animation) |
 | `AppLogger.swift` | os.Logger categories |
 

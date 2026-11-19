@@ -33,7 +33,7 @@ struct PreferencesAccessibilityTests {
             let weekday = try host.control(named: "Week starts on")
             #expect(weekday.role == .popUpButton)
             #expect(weekday.value as? String == Calendar.current.weekdaySymbols[1])
-        case .general, .about:
+        case .general, .updates, .about:
                 Issue.record("This role matrix covers the three categories with selected preference values")
         }
     }
@@ -77,35 +77,134 @@ struct PreferencesAccessibilityTests {
         #expect(fixture.receipts.value.forbidden == 0)
     }
 
-    @Test(arguments: [false, true])
-    func aboutSectionShowsVersionAndOpensAboutOnce(hasAction: Bool) async throws {
+    @Test
+    func aboutSectionShowsVersionAndItsThreeLinks() async throws {
         let fixture = PreferencesAccessibilityFixture(state: .init())
-        let opened = LockIsolated(0)
-        var action: (@MainActor () -> Void)?
-        if hasAction { action = { @MainActor in opened.withValue { $0 += 1 } } }
-        let host = fixture.host(section: .about, openAbout: action)
+        let host = fixture.host(section: .about)
         defer { host.close(); fixture.close() }
         try await host.settle()
         let version = AppVersionText.productLine(infoDictionary: Bundle.main.infoDictionary)
-        let texts = host.elements().filter { $0.role == .staticText }
-        let textValues = texts.flatMap { node -> [String] in
+        let textValues = host.elements().filter { $0.role == .staticText }.flatMap { node -> [String] in
             [node.label, node.value as? String].compactMap { $0 }
         }
         #expect(textValues.contains(version), "Expected \(version); observed \(host.treeDescription)")
         #expect(textValues.contains("About") || textValues.contains("About:"),
                 "The About section keeps the classic right-aligned row label")
-        let about = try host.control(named: "About Glimpse")
-        #expect(about.role == .button)
-        #expect(about.enabled == hasAction, "Without an About destination the button is disabled, never a no-op")
-        // AXHelp has one writer: a competing .accessibilityHint would replace this string.
-        #expect(about.help == PreferencesView.aboutHelp)
-        if hasAction {
-            #expect(about.press())
-            try await host.settle(until: { opened.value == 1 })
+        #expect(!host.elements().contains { $0.label == "About Glimpse" }, "No separate About window remains")
+        let links = host.elements().filter { $0.role == .link }.compactMap(\.label)
+        #expect(links == ["Export diagnostics", "Glimpse website", "Glimpse support"])
+        #expect(!host.elements().contains { $0.role == .button }, "About actions are native links")
+        for (label, title) in [("Export diagnostics", "Diagnostics…"), ("Glimpse website", "Website"),
+                               ("Glimpse support", "Support")] {
+            let node = try host.control(named: label)
+            #expect(node.enabled)
+            #expect(node.inputLabels.contains(title), "Voice Control can say the visible title \(title)")
         }
-        #expect(opened.value == (hasAction ? 1 : 0))
+
+        #expect(try host.control(named: "Export diagnostics").press())
+        try await host.settle(until: { fixture.diagnostics.suggestedNames.count == 1 })
+        #expect(fixture.diagnostics.model.state == .choosingDestination)
+        #expect(try !host.control(named: "Export diagnostics").enabled, "One save panel at a time")
+        let destination = URL(fileURLWithPath: "/tmp/Glimpse-Diagnostics-fixture.txt")
+        fixture.diagnostics.completions.first?(destination)
+        try await host.settle(until: { host.elements().contains { ($0.value as? String) == "Exporting diagnostics…" } })
+        await fixture.diagnostics.waitForExportRequest()
+        await fixture.diagnostics.finishExport()
+        try await host.settle(until: { host.elements().contains { ($0.value as? String) == "Diagnostics saved." } })
+        #expect(try host.control(named: "Show diagnostics in Finder").press())
+        try await host.settle(until: { fixture.diagnostics.revealed == [destination] })
+
+        for (label, url) in [("Glimpse website", "https://github.com/iRedlof/Glimpse"),
+                             ("Glimpse support", "https://github.com/iRedlof/Glimpse/issues")] {
+            #expect(try host.control(named: label).press())
+            try await host.settle(until: { fixture.openedURLs.value.last?.absoluteString == url })
+        }
+        #expect(fixture.openedURLs.value.count == 2)
         #expect(fixture.receipts.value.forbidden == 0)
         #expect(fixture.receipts.value.displaySaves.isEmpty && fixture.receipts.value.aiSaves.isEmpty)
+    }
+
+    @Test
+    func diagnosticsFailureOffersTryAgain() async throws {
+        let fixture = PreferencesAccessibilityFixture(state: .init())
+        fixture.diagnostics.exportError = NSError(
+            domain: "GlimpseTests.Diagnostics", code: 1, userInfo: [NSLocalizedDescriptionKey: "Disk full"]
+        )
+        let host = fixture.host(section: .about)
+        defer { host.close(); fixture.close() }
+        try await host.settle()
+        fixture.diagnostics.model.begin()
+        fixture.diagnostics.completions.first?(URL(fileURLWithPath: "/tmp/fixture.txt"))
+        await fixture.diagnostics.waitForExportRequest()
+        await fixture.diagnostics.finishExport()
+        try await host.settle(until: {
+            host.elements().contains { ($0.value as? String) == "Couldn’t export diagnostics: Disk full" }
+        })
+        #expect(try host.control(named: "Try exporting diagnostics again").press())
+        try await host.settle(until: { fixture.diagnostics.completions.count == 2 })
+        #expect(fixture.diagnostics.model.state == .choosingDestination)
+    }
+
+    @Test
+    func updatesSectionHasAutomaticChecksAndCheckNow() async throws {
+        let fixture = PreferencesAccessibilityFixture(state: .init())
+        let host = fixture.host(section: .updates)
+        defer { host.close(); fixture.close() }
+        try await host.settle()
+        let textValues = host.elements().filter { $0.role == .staticText }.flatMap { node -> [String] in
+            [node.label, node.value as? String].compactMap { $0 }
+        }
+        #expect(textValues.contains("Updates") || textValues.contains("Updates:"))
+        let automatic = try host.control(named: "Check for updates automatically")
+        #expect(automatic.role == .checkBox && automatic.enabled)
+        #expect((automatic.value as? NSNumber)?.boolValue == true)
+        let check = try host.control(named: "Check for updates now")
+        #expect(check.role == .button && check.enabled)
+        #expect(check.inputLabels.contains("Check Now"))
+        #expect(check.press())
+        try await host.settle(until: { fixture.updates.backend.checkCount == 1 })
+        #expect(fixture.updates.driver.status == .checking)
+        #expect(fixture.receipts.value.forbidden == 0)
+    }
+
+    /// The production Settings root at its default size, in every update status.
+    /// Set GLIMPSE_UPDATES_ARTIFACT_DIR to keep PNG renders (owned non-key host).
+    @Test(arguments: [
+        "idle", "checking", "latest", "no-update", "check-error", "update-error",
+        "available", "downloading", "extracting", "ready"
+    ], [false, true])
+    func settingsRootShowsEachUpdateStatusWithoutScrolling(state: String, dark: Bool) async throws {
+        let fixture = PreferencesAccessibilityFixture(state: .init())
+        try await prepare(state, on: fixture.updates)
+        let host = fixture.rootHost()
+        host.window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        defer { host.close(); fixture.close() }
+        try await host.settle()
+        try host.loadAccessibilityWindowTree()
+        try await host.settle()
+        let scroll = try #require(accessibilityScrollView(in: host.hosting))
+        let document = try #require(scroll.documentView)
+        #expect(document.frame.height <= scroll.contentView.bounds.height + AppDesign.Settings.layoutTolerance,
+                "\(state): document \(document.frame.height) must fit \(scroll.contentView.bounds.height)")
+        #expect(host.elements().contains { $0.role == .checkBox && $0.label == "Check for updates automatically" })
+        #expect(host.elements().contains { $0.role == .link && $0.label == "Glimpse support" })
+        try fixture.saveRender(host, named: "settings-root-updates-\(state)-\(dark ? "dark" : "light")")
+    }
+
+    @Test
+    func initializationFailureRootRender() async throws {
+        let fixture = PreferencesAccessibilityFixture(state: .init(), updaterStartError: updateTestError)
+        for dark in [false, true] {
+            let host = fixture.rootHost()
+            host.window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+            try await host.settle()
+            try host.loadAccessibilityWindowTree()
+            try await host.settle()
+            #expect(host.elements().contains { ($0.value as? String) == "Updates are unavailable." })
+            try fixture.saveRender(host, named: "settings-root-updates-initialization-\(dark ? "dark" : "light")")
+            host.close()
+        }
+        fixture.close()
     }
 
     @Test
@@ -215,7 +314,7 @@ struct PreferencesAccessibilityTests {
         // Classic pane: no visible titles; each category is a labeled AXGroup.
         let headings = host.elements().filter(isSettingsSectionGroup)
         #expect(headings.map { $0.label ?? ($0.value as? String) ?? "" } ==
-                ["Opening Glimpse", "Menu bar", "Calendar", "AI date search", "About"])
+                ["Opening Glimpse", "Menu bar", "Calendar", "AI date search", "Updates", "About"])
         let scroll = try #require(accessibilityScrollView(in: host.hosting))
         let document = try #require(scroll.documentView)
         if isMinimum {
@@ -231,14 +330,16 @@ struct PreferencesAccessibilityTests {
         let nativeCheckboxes: Set<String> = [
             "Launch at login", "Global shortcut", "Show icon in menu bar", "Show day of week in menu bar",
             "Show month in menu bar", "Show date in menu bar", "Show year in menu bar",
-            "Filled background", "Enable AI date search"
+            "Filled background", "Enable AI date search", "Check for updates automatically"
         ]
         let names = ["Launch at login", "Set and enable shortcut", "Global shortcut",
                      "Show icon in menu bar", "Show day of week in menu bar",
                      "Show month in menu bar", "Show date in menu bar", "Show year in menu bar",
                      "Filled background", "Week starts on"] +
             Calendar.current.weekdaySymbols.map { "\($0) workday" } +
-            ["Enable AI date search"] + (showAI ? ["AI provider"] : []) + ["About Glimpse"]
+            ["Enable AI date search"] + (showAI ? ["AI provider"] : []) +
+            ["Check for updates automatically", "Check for updates now",
+             "Export diagnostics", "Glimpse website", "Glimpse support"]
         for name in names {
             let node = try host.control(named: name)
             document.scrollToVisible(host.rect(node.frame, in: document))
@@ -519,9 +620,14 @@ final class PreferencesAccessibilityFixture {
     let hotkeyModel: HotkeyPreferencesModel
     let notifications = NotificationCenter()
     let receipts = LockIsolated(PreferencesActionReceipts())
+    let updates: UpdaterFixture
+    let calendarActions = SettingsCalendarActions()
+    let diagnostics = DiagnosticsExportFixture()
+    let openedURLs = LockIsolated<[URL]>([])
     private var observers: [NSObjectProtocol] = []
 
-    init(state: PreferencesFeature.State, allowWorkdayWrites: Bool = false) {
+    init(state: PreferencesFeature.State, allowWorkdayWrites: Bool = false, updaterStartError: Error? = nil) {
+        updates = UpdaterFixture(startError: updaterStartError)
         let receipts = receipts
         store = Store(initialState: state) { PreferencesFeature() } withDependencies: {
             $0.preferencesClient = .init(
@@ -560,17 +666,43 @@ final class PreferencesAccessibilityFixture {
         ]
     }
 
-    func host(
-        section: SettingsSection = .general, openAbout: (@MainActor () -> Void)? = nil
-    ) -> AccessibilityTestHost {
-        AccessibilityTestHost(width: 600, height: 600) {
+    func host(section: SettingsSection = .general) -> AccessibilityTestHost {
+        let opened = openedURLs
+        return AccessibilityTestHost(width: 600, height: 600) {
             PreferencesView(
                 store: store, hotkeyPreferences: hotkeyModel,
-                notificationCenter: notifications, openAbout: openAbout, section: section
+                notificationCenter: notifications,
+                updater: updates.updater, diagnostics: diagnostics.model, section: section
             )
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .environment(\.openURL, OpenURLAction { url in
+                opened.withValue { $0.append(url) }
+                return .handled
+            })
         }
+    }
+
+    /// The real Settings root at the window's default content size.
+    func rootHost() -> AccessibilityTestHost {
+        let size = AppDesign.Settings.contentSize
+        return AccessibilityTestHost(width: size.width, height: size.height) {
+            SettingsRootView(
+                store: store, hotkeyPreferences: hotkeyModel, notificationCenter: notifications,
+                onAISettingsChange: nil, recordingWindow: { nil }, calendarActions: calendarActions,
+                updater: updates.updater, diagnostics: diagnostics.model
+            )
+        }
+    }
+
+    func saveRender(_ host: AccessibilityTestHost, named name: String) throws {
+        guard let path = ProcessInfo.processInfo.environment["GLIMPSE_UPDATES_ARTIFACT_DIR"] else { return }
+        let destination = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        let bitmap = try #require(host.hosting.bitmapImageRepForCachingDisplay(in: host.hosting.bounds))
+        host.hosting.cacheDisplay(in: host.hosting.bounds, to: bitmap)
+        let png = try #require(bitmap.representation(using: .png, properties: [:]))
+        try png.write(to: destination.appendingPathComponent("\(name).png"), options: .atomic)
     }
 
     func documentHost(width: CGFloat, height: CGFloat) -> AccessibilityTestHost {
@@ -578,7 +710,8 @@ final class PreferencesAccessibilityFixture {
             ScrollView(.vertical) {
                 PreferencesView(
                     store: store, hotkeyPreferences: hotkeyModel,
-                    notificationCenter: notifications
+                    notificationCenter: notifications,
+                    updater: updates.updater, diagnostics: diagnostics.model
                 )
                 .padding(AppDesign.Settings.contentInset)
             }
@@ -587,6 +720,7 @@ final class PreferencesAccessibilityFixture {
 
     func close() {
         for observer in observers { notifications.removeObserver(observer) }
+        updates.delay.drain()
         hotkey.cleanupDefaults()
     }
 }

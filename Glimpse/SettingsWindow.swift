@@ -5,7 +5,7 @@ import Observation
 import SwiftUI
 
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, menuBar, calendar, aiDateSearch, about
+    case general, menuBar, calendar, aiDateSearch, updates, about
 
     var id: Self { self }
 
@@ -15,6 +15,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .menuBar: "Menu bar"
         case .calendar: "Calendar"
         case .aiDateSearch: "AI date search"
+        case .updates: "Updates"
         case .about: "About"
         }
     }
@@ -301,10 +302,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     let hotkeyPreferences: HotkeyPreferencesModel
     let calendarPriority = SettingsCalendarPriority()
     let calendarActions = SettingsCalendarActions()
+    let updater: SparkleUpdater
+    let diagnostics: DiagnosticsExportModel
     private(set) var window: NSWindow?
     private let notificationCenter: NotificationCenter
     private let onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)?
-    private let onAbout: @MainActor () -> Void
     private weak var minimumSizedContentView: NSView?
     private var minimumContentSizeConstraints: [NSLayoutConstraint] = []
     // Assigned once during initialization; NotificationCenter removal is thread-safe.
@@ -315,7 +317,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         hotkeyPreferences: HotkeyPreferencesModel? = nil,
         notificationCenter: NotificationCenter = .default,
         onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)? = nil,
-        onAbout: @escaping @MainActor () -> Void = { AboutWindow.show() }
+        updater: SparkleUpdater,
+        diagnostics: DiagnosticsExportModel = DiagnosticsExportModel()
     ) {
         self.store = store ?? Store(initialState: PreferencesFeature.State.live()) {
             PreferencesFeature()
@@ -323,7 +326,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         self.hotkeyPreferences = hotkeyPreferences ?? HotkeyPreferencesModel()
         self.notificationCenter = notificationCenter
         self.onAISettingsChange = onAISettingsChange
-        self.onAbout = onAbout
+        self.updater = updater
+        self.diagnostics = diagnostics
         super.init()
         applicationObservers = [
             notificationCenter.addObserver(
@@ -363,7 +367,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 notificationCenter: notificationCenter, onAISettingsChange: onAISettingsChange,
                 recordingWindow: { [weak self] in self?.window },
                 calendarActions: calendarActions,
-                about: { [weak self] in self?.onAbout() }
+                updater: updater, diagnostics: diagnostics
             ))
             hosting.sizingOptions = []
             owner.contentView = hosting
@@ -384,6 +388,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         }
         // orderOut/orderFront reuse does not re-run SwiftUI onAppear.
         store.send(.onAppear)
+        // A silent background check doesn't reach the driver; re-read Sparkle's last check time.
+        updater.refreshLastUpdateCheckDate()
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
         calendarPriority.settingsWasPresented()

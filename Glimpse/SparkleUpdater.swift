@@ -43,6 +43,9 @@ struct UpdaterClient {
     var canCheckForUpdates: () -> Bool
     var observeCanCheckForUpdates: (@escaping @MainActor (Bool) -> Void) -> AnyCancellable
     var checkForUpdates: () -> Void
+    var automaticallyChecksForUpdates: () -> Bool
+    var setAutomaticallyChecksForUpdates: (Bool) -> Void
+    var lastUpdateCheckDate: () -> Date?
 
     static func live(userDriver: InlineUpdateDriver) -> Self {
         let updater = SPUUpdater(
@@ -57,7 +60,10 @@ struct UpdaterClient {
             observeCanCheckForUpdates: { receive in
                 updater.publisher(for: \.canCheckForUpdates).sink { receive($0) }
             },
-            checkForUpdates: { updater.checkForUpdates() }
+            checkForUpdates: { updater.checkForUpdates() },
+            automaticallyChecksForUpdates: { updater.automaticallyChecksForUpdates },
+            setAutomaticallyChecksForUpdates: { updater.automaticallyChecksForUpdates = $0 },
+            lastUpdateCheckDate: { updater.lastUpdateCheckDate }
         )
     }
 }
@@ -74,23 +80,28 @@ final class SparkleUpdater {
     private var initializationSucceeded = false
     private var observedCanCheckForUpdates = false
     private var cancellable: AnyCancellable?
+    /// Mirrors Sparkle's persisted preference so SwiftUI observes changes.
+    private(set) var automaticallyChecksForUpdates = false
 
     var canCheckForUpdates: Bool {
         guard initializationSucceeded, observedCanCheckForUpdates,
               userDriver.updateChoiceID == nil, userDriver.installChoiceID == nil
         else { return false }
         switch userDriver.status {
-        case .idle, .error, .noUpdate:
+        case .idle, .latest, .error, .noUpdate:
             return true
         default:
             return false
         }
     }
 
-    var availableVersion: String? {
-        if case .available(let version) = userDriver.status { return version }
-        return nil
-    }
+    /// The automatic-check preference can only change once Sparkle has started.
+    var canChangeAutomaticChecks: Bool { initializationSucceeded }
+
+    /// Mirrors Sparkle's persisted time of its most recent check (any outcome) so SwiftUI observes it.
+    /// Sparkle doesn't publish background checks, so this refreshes on every driver status change
+    /// and whenever Settings is shown (`refreshLastUpdateCheckDate()`).
+    private(set) var lastUpdateCheckDate: Date?
 
     private convenience init() {
         let driver = InlineUpdateDriver()
@@ -106,6 +117,9 @@ final class SparkleUpdater {
         do {
             try client.start()
             initializationSucceeded = true
+            automaticallyChecksForUpdates = client.automaticallyChecksForUpdates()
+            lastUpdateCheckDate = client.lastUpdateCheckDate()
+            userDriver.onStatusChange = { [weak self] in self?.refreshLastUpdateCheckDate() }
             AppLogger.general.info("Sparkle updater started")
         } catch {
             userDriver.showInitializationFailure()
@@ -119,6 +133,20 @@ final class SparkleUpdater {
         userDriver.beginUserInitiatedCheck()
         client.checkForUpdates()
     }
+
+    func refreshLastUpdateCheckDate() {
+        guard initializationSucceeded else { return }
+        let latest = client.lastUpdateCheckDate()
+        // Only write real changes so observers don't re-render for nothing.
+        if latest != lastUpdateCheckDate { lastUpdateCheckDate = latest }
+    }
+
+    func setAutomaticallyChecksForUpdates(_ enabled: Bool) {
+        guard canChangeAutomaticChecks else { return }
+        client.setAutomaticallyChecksForUpdates(enabled)
+        // Read back: Sparkle owns the persisted value.
+        automaticallyChecksForUpdates = client.automaticallyChecksForUpdates()
+    }
 }
 
 // MARK: - Inline User Driver
@@ -126,24 +154,40 @@ final class SparkleUpdater {
 @Observable
 @MainActor
 final class InlineUpdateDriver: NSObject, SPUUserDriver {
-    var status: UpdateStatus = .idle
+    var status: UpdateStatus = .idle {
+        didSet { onStatusChange?() }
+    }
+    /// Called after every status change (the updater refreshes its mirrored check date).
+    @ObservationIgnored var onStatusChange: (@MainActor () -> Void)?
+    /// The version offered by the current update, kept through download and install.
+    private(set) var updateVersion: String?
     private var pendingReply: ((SPUUserUpdateChoice) -> Void)?
     private var pendingInstallReply: ((SPUUserUpdateChoice) -> Void)?
     private(set) var updateChoiceID: UUID?
     private(set) var installChoiceID: UUID?
+    /// When this session last saw Sparkle report the latest version.
+    private(set) var lastUpToDateDate: Date?
+    /// Fraction of the current download, or nil when its length is unknown.
+    private(set) var downloadProgress: Double?
+    private var expectedDownloadLength: UInt64 = 0
+    private var receivedDownloadLength: UInt64 = 0
+    private let now: @MainActor () -> Date
     private var dismissTask: Task<Void, Never>?
     private let delay: @MainActor (Duration) async throws -> Void
     private static let latestDismissDelay: Duration = .seconds(5)
     private static let maximumRequirementVersionLength = 32
 
-    init(delay: @escaping @MainActor (Duration) async throws -> Void = {
-        try await Task.sleep(for: $0)
-    }) {
+    init(
+        delay: @escaping @MainActor (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        now: @escaping @MainActor () -> Date = { Date() }
+    ) {
         self.delay = delay
+        self.now = now
         super.init()
     }
 
     func beginUserInitiatedCheck() {
+        updateVersion = nil
         publish(.checking)
     }
 
@@ -192,6 +236,8 @@ final class InlineUpdateDriver: NSObject, SPUUserDriver {
     func presentUpdate(version: String, reply: @escaping (SPUUserUpdateChoice) -> Void) {
         pendingReply = reply
         updateChoiceID = UUID()
+        lastUpToDateDate = nil
+        updateVersion = version
         publish(.available(version: version))
     }
 
@@ -220,7 +266,10 @@ final class InlineUpdateDriver: NSObject, SPUUserDriver {
     func showUpdateNotFoundWithError(_ error: Error, acknowledgement: @escaping () -> Void) {
         let result = noUpdateStatus(for: error)
         publish(result)
-        if result == .latest { scheduleLatestDismissal() }
+        if result == .latest {
+            lastUpToDateDate = now()
+            scheduleLatestDismissal()
+        }
         acknowledgement()
     }
 
@@ -288,11 +337,24 @@ final class InlineUpdateDriver: NSObject, SPUUserDriver {
     }
 
     func showDownloadInitiated(cancellation: @escaping () -> Void) {
+        expectedDownloadLength = 0
+        receivedDownloadLength = 0
+        downloadProgress = nil
         publish(.downloading)
     }
 
-    func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {}
-    func showDownloadDidReceiveData(ofLength length: UInt64) {}
+    func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {
+        expectedDownloadLength = expectedContentLength
+        receivedDownloadLength = 0
+        downloadProgress = expectedContentLength > 0 ? 0 : nil
+    }
+
+    func showDownloadDidReceiveData(ofLength length: UInt64) {
+        let (sum, overflow) = receivedDownloadLength.addingReportingOverflow(length)
+        receivedDownloadLength = overflow ? .max : sum
+        guard expectedDownloadLength > 0 else { return }
+        downloadProgress = min(1, Double(receivedDownloadLength) / Double(expectedDownloadLength))
+    }
 
     func showDownloadDidStartExtractingUpdate() {
         publish(.extracting)
@@ -320,6 +382,7 @@ final class InlineUpdateDriver: NSObject, SPUUserDriver {
         pendingInstallReply = nil
         updateChoiceID = nil
         installChoiceID = nil
+        updateVersion = nil
         switch status {
         case .initializationFailed, .error, .latest, .noUpdate:
             break
