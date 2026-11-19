@@ -1,23 +1,23 @@
 {
-  "version": "1.5.4",
-  "build": "41",
-  "scope": "Updates section (auto-check, Check Now, inline status) and slim About line in Settings replace the About window.",
+  "version": "1.5.5",
+  "build": "42",
+  "scope": "No focus ring on the footer Cancel/Quit halves when the confirmation is opened with the mouse.",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-18-updates-about-in-settings.md"
+      "evidence": "docs/superpowers/reviews/2026-11-19-quit-focus-ring.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-18-updates-about-in-settings.md"
+      "evidence": "docs/superpowers/reviews/2026-11-19-quit-focus-ring.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-18-updates-about-in-settings.md"
+      "evidence": "docs/superpowers/reviews/2026-11-19-quit-focus-ring.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-18-updates-about-in-settings.md"
+      "evidence": "docs/superpowers/reviews/2026-11-19-quit-focus-ring.md"
     }
   }
 }
