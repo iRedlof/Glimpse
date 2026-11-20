@@ -80,6 +80,7 @@ final class AIDateQueryModel {
         editorGeneration &+= 1
         isEditorOpen = true
         errorMessage = nil
+        if enabled { client.prewarm(preference) }
     }
 
     func setPanelVisible(_ visible: Bool) {
@@ -94,10 +95,15 @@ final class AIDateQueryModel {
         self.enabled = enabled
         self.preference = preference
         if !enabled { discardEditor() }
-        else if providerChanged { abandonRequest() }
+        else if providerChanged {
+            abandonRequest()
+            client.releasePrewarm()
+            if isEditorOpen { client.prewarm(preference) }
+        }
     }
 
     func discardEditor() {
+        if isEditorOpen { client.releasePrewarm() }
         editorGeneration &+= 1
         draftRevision &+= 1
         isEditorOpen = false

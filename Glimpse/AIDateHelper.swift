@@ -103,9 +103,7 @@ enum AIDateHelper {
         case .foundationModels:
             do {
                 let today = CivilDate(dependencies.now(), calendar: dependencies.calendar)
-                let instructions = AIIntentPrompt.onDeviceInstructions(
-                    today: today, timeZone: dependencies.calendar.timeZone
-                )
+                let instructions = onDeviceInstructions(today: today, calendar: dependencies.calendar)
                 try Task.checkCancellation()
                 let wire = try await dependencies.generateOnDevice(instructions, AIIntentPrompt.user(query))
                 try Task.checkCancellation()
@@ -130,6 +128,36 @@ enum AIDateHelper {
             AppLogger.general.error("AI date failure: unavailable")
             throw AIDateFailure.unavailable
         }
+    }
+
+    /// The exact instructions an on-device request uses, so a prewarmed session matches.
+    static func onDeviceInstructions(today: CivilDate, calendar: Calendar) -> String {
+        AIIntentPrompt.onDeviceInstructions(today: today, timeZone: calendar.timeZone)
+    }
+
+    /// True when `preference` would send the next request to on-device AI first.
+    static func usesOnDevice(_ provider: Provider) -> Bool {
+        provider == .foundationModels || provider == .onDeviceThenProxy
+    }
+
+    /// Prewarms an on-device session for today when the preference routes there.
+    static func prewarmOnDevice(for preference: AIProvider) {
+        guard usesOnDevice(provider(for: preference, onDeviceSupported: onDeviceSupported())) else { return }
+        #if canImport(FoundationModels)
+        if #available(macOS 26, *) {
+            let calendar = Calendar.autoupdatingCurrent
+            OnDeviceIntentGenerator.prewarm(
+                instructions: onDeviceInstructions(today: CivilDate(Date(), calendar: calendar), calendar: calendar)
+            )
+        }
+        #endif
+    }
+
+    /// Frees the prewarmed session (editor closed or provider changed).
+    static func releasePrewarmedOnDevice() {
+        #if canImport(FoundationModels)
+        if #available(macOS 26, *) { OnDeviceIntentGenerator.prewarmed.discard() }
+        #endif
     }
 
     static func providerName() -> String {

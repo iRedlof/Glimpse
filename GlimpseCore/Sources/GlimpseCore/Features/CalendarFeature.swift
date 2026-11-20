@@ -94,6 +94,10 @@ public struct CalendarFeature: Sendable {
         case calendarAccessResult(EKAuthorizationStatus)
         case calendarAccessFailed(String, EKAuthorizationStatus)
         case refreshCalendarAuthorization
+        /// The app became active (⌘G, the AI editor, a return from System Settings).
+        /// Reloads only when calendar authorization changed; EKEventStoreChanged
+        /// already covers data changes.
+        case applicationDidBecomeActive
         case retryEvents
         case eventsLoaded(date: Date, requestID: UUID, events: [CalendarEvent])
         case eventsFailed(date: Date, requestID: UUID, message: String)
@@ -286,6 +290,11 @@ public struct CalendarFeature: Sendable {
 
             case .refreshCalendarAuthorization:
                 return loadEvents(&state)
+
+            case .applicationDidBecomeActive:
+                let status = eventKitClient.authorizationStatus()
+                guard status != state.calendarAuthorizationStatus else { return .none }
+                return loadEvents(&state, authorizationStatus: status)
 
             case .retryEvents:
                 return loadEvents(&state)
@@ -481,11 +490,12 @@ public struct CalendarFeature: Sendable {
         if status != state.calendarAuthorizationStatus {
             state.calendarAccessError = nil
         }
+        let hadAccess = state.calendarAuthorizationStatus == .fullAccess
         state.calendarAuthorizationStatus = status
-        state.events = []
-        state.joinableEventID = nil
-        state.eventsError = nil
         guard status == .fullAccess else {
+            state.events = []
+            state.joinableEventID = nil
+            state.eventsError = nil
             state.eventsDate = nil
             state.eventsRequestID = nil
             state.isLoadingEvents = false
@@ -493,10 +503,19 @@ public struct CalendarFeature: Sendable {
         }
 
         let requestedDate = state.calendar.startOfDay(for: state.selectedDate ?? date.now)
+        // Stale-while-revalidate: re-fetching the day already shown (reopen, store
+        // change, refresh) keeps its events and skips the loading state, so the agenda
+        // doesn't flash or re-layout. A new day, lost access or a failed load resets.
+        let isRevalidating = hadAccess && state.eventsDate == requestedDate && state.eventsError == nil
+        if !isRevalidating {
+            state.events = []
+            state.joinableEventID = nil
+            state.eventsError = nil
+            state.isLoadingEvents = true
+        }
         let requestID = uuid()
         state.eventsDate = requestedDate
         state.eventsRequestID = requestID
-        state.isLoadingEvents = true
         return .run { send in
             do {
                 let events = try await eventKitClient.fetchEvents(requestedDate)

@@ -52,16 +52,15 @@ struct PreferencesView: View {
         return nextMeeting.segment ?? .previewSample
     }
 
+    // Called right after `store.send` returns. PreferencesFeature saves to
+    // UserDefaults synchronously in the reducer, so observers that reload from
+    // storage already see the new value; no delay is needed.
     private func notifyMenuBarChanged() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            notificationCenter.post(name: .menuBarDisplayDidChange, object: nil)
-        }
+        notificationCenter.post(name: .menuBarDisplayDidChange, object: nil)
     }
 
     private func notifyCalendarChanged() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            notificationCenter.post(name: .calendarPreferencesDidChange, object: nil)
-        }
+        notificationCenter.post(name: .calendarPreferencesDidChange, object: nil)
     }
 
     private func displayBinding(
@@ -93,9 +92,7 @@ struct PreferencesView: View {
         .foregroundStyle(.primary)
         .controlSize(.small)
         .onAppear { store.send(.onAppear) }
-        .onReceive(notificationCenter.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            store.send(.refreshLaunchAtLogin)
-        }
+        // Launch-at-login is refreshed on activation by SettingsWindowController.
     }
 
     private func settingsSection(_ section: SettingsSection) -> some View {

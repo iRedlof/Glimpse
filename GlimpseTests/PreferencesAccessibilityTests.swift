@@ -77,6 +77,21 @@ struct PreferencesAccessibilityTests {
         #expect(fixture.receipts.value.forbidden == 0)
     }
 
+    /// The reducer saves synchronously, so the menu bar is told in the same turn
+    /// (no 150 ms hop): the notification is never behind the save.
+    @Test
+    func displayChangeNotifiesInTheSameTurnAsTheSave() async throws {
+        let fixture = PreferencesAccessibilityFixture(state: .init())
+        let host = fixture.host(section: .menuBar)
+        defer { host.close(); fixture.close() }
+        try await host.settle()
+        let node = try #require(host.controls(named: "Show icon in menu bar").first ?? host.controls(named: "Icon").first)
+        #expect(node.press())
+        try await host.settle(until: { !fixture.receipts.value.displaySaves.isEmpty })
+        #expect(fixture.receipts.value.displaySaves.count == 1)
+        #expect(fixture.receipts.value.menuNotifications == 1)
+    }
+
     @Test
     func aboutSectionShowsVersionAndItsThreeLinks() async throws {
         let fixture = PreferencesAccessibilityFixture(state: .init())

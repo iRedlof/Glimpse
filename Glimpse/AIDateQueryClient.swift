@@ -19,6 +19,10 @@ struct AIDateQueryClient: Sendable {
     var resolveProvider: @Sendable (AIProvider) -> AIDateHelper.Provider
     /// nil: the provider answered but nothing usable came back.
     var interpret: @Sendable (String, AIDateHelper.Provider) async throws -> AIIntent?
+    /// Editor opened: get the provider for this preference ready (on-device prewarm).
+    var prewarm: @Sendable (AIProvider) -> Void = { _ in }
+    /// Editor closed or provider changed: free anything `prewarm` holds.
+    var releasePrewarm: @Sendable () -> Void = {}
 
     /// Configuration and provider work are evaluated only when these closures
     /// execute. Synthetic clients supply both closures explicitly.
@@ -33,7 +37,9 @@ struct AIDateQueryClient: Sendable {
                 try await AIDateHelper.interpret(
                     $0, provider: $1, dependencies: .live
                 )
-            }
+            },
+            prewarm: { AIDateHelper.prewarmOnDevice(for: $0) },
+            releasePrewarm: { AIDateHelper.releasePrewarmedOnDevice() }
         )
     }
 }

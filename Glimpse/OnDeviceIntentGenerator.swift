@@ -1,5 +1,34 @@
 import Foundation
 import GlimpseCore
+import os
+
+/// Holds at most one prewarmed, single-use session for the open AI editor.
+/// A session answers one request, so `take` always empties the slot; a session
+/// built for other instructions (e.g. the day changed) is dropped, never reused.
+final class PrewarmedSessionSlot<Session: Sendable>: Sendable {
+    private struct Entry: Sendable {
+        let instructions: String
+        let session: Session
+    }
+
+    private let entry = OSAllocatedUnfairLock<Entry?>(initialState: nil)
+
+    func store(_ session: Session, instructions: String) {
+        entry.withLock { $0 = Entry(instructions: instructions, session: session) }
+    }
+
+    /// The stored session when it was built for `instructions`; nil otherwise.
+    func take(instructions: String) -> Session? {
+        entry.withLock { stored in
+            defer { stored = nil }
+            return stored?.instructions == instructions ? stored?.session : nil
+        }
+    }
+
+    func discard() { entry.withLock { $0 = nil } }
+
+    var isEmpty: Bool { entry.withLock { $0 == nil } }
+}
 
 #if canImport(FoundationModels)
 import FoundationModels
@@ -107,11 +136,25 @@ struct GeneratedClarify {
 
 @available(macOS 26, *)
 enum OnDeviceIntentGenerator {
+    /// The session prewarmed when the editor opened, consumed by the first submit.
+    static let prewarmed = PrewarmedSessionSlot<LanguageModelSession>()
+
+    /// Loads the model and prefills the instructions while the user is still typing,
+    /// so the first on-device answer skips that latency.
+    static func prewarm(instructions: String) {
+        guard case .available = SystemLanguageModel.default.availability else { return }
+        let session = LanguageModelSession(instructions: instructions)
+        session.prewarm()
+        prewarmed.store(session, instructions: instructions)
+    }
+
     static func generate(instructions: String, prompt: String) async throws -> AIIntentWire {
         guard case .available = SystemLanguageModel.default.availability else {
+            prewarmed.discard()
             throw AIDateFailure.unavailable
         }
-        let session = LanguageModelSession(instructions: instructions)
+        // Single-use: the prewarmed session (if built for these instructions) or a fresh one.
+        let session = prewarmed.take(instructions: instructions) ?? LanguageModelSession(instructions: instructions)
         let response = try await session.respond(to: prompt, generating: GeneratedRequest.self)
         return response.content.wire
     }

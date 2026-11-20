@@ -32,6 +32,8 @@ final class CalendarStatusItem {
     private let crossScreenScheduler: (@MainActor (@escaping @MainActor () -> Void) -> Void)?
     private var pendingCrossScreenShow: UUID?
     private var midnightTimer: Timer?
+    /// The last drawn menu bar key; identical re-renders are skipped.
+    private var renderCache = MenuBarRenderCache()
     private var displayChangeObserver: Any?
     private var wakeObserver: Any?
     private var timeChangeObserver: Any?
@@ -104,6 +106,9 @@ final class CalendarStatusItem {
             // before the button's effectiveAppearance flips, so re-render on the
             // next runloop tick to read the updated appearance.
             Task { @MainActor in
+                // isDark is part of the render key, but the appearance can flip after
+                // this notification, so force the next render rather than trust the key.
+                self?.renderCache.invalidate()
                 self?.updateMenuBarDisplay()
             }
         }
@@ -194,16 +199,25 @@ final class CalendarStatusItem {
     func updateMenuBarDisplay() {
         guard let button = statusItem?.button else { return }
 
+        let now = Date()
         let options = preferencesClient.loadDisplayOptions()
-        let dateString = calendarClient.menuBarDateString(Date(), options)
+        let dateString = calendarClient.menuBarDateString(now, options)
         let isDark = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let meeting = options.showNextMeeting ? nextMeeting.segment : nil
+        let key = MenuBarRenderKey(
+            options: options, dateString: dateString, meeting: meeting, isDark: isDark,
+            thickness: NSStatusBar.system.thickness, day: Calendar.current.component(.day, from: now)
+        )
+        // Wake, clock and preference signals often change nothing that is drawn; an
+        // identical key skips the image swap, the length change and the panel re-place.
+        guard renderCache.needsRender(key) else { return }
 
         // Composite the entire item (border, fill, icon, separator, text) into the
         // button's own image. No custom subview — that drives a redraw loop on
         // macOS 26 (see MenuBarItemRenderer).
-        let meeting = options.showNextMeeting ? nextMeeting.segment : nil
         let image = MenuBarItemRenderer.render(
-            options: options, dateString: dateString, meeting: meeting, isDark: isDark
+            options: options, dateString: dateString, meeting: meeting, isDark: isDark,
+            day: key.day, thickness: key.thickness
         )
         button.image = image
         // The item is image-only, so VoiceOver needs the meeting text spelled out.

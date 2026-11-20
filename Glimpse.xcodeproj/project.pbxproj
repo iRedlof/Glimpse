@@ -31,6 +31,9 @@
 		DF00000000000000000007 /* CalendarKeyboardFocus.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF00000000000000000008 /* CalendarKeyboardFocus.swift */; };
 		DD00000000000000000000CC /* InputModality.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000CD /* InputModality.swift */; };
 		DD00000000000000000000D0 /* CalendarAgendaEventRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000D1 /* CalendarAgendaEventRow.swift */; };
+		DD00000000000000000000D8 /* DayCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000D9 /* DayCell.swift */; };
+		DD00000000000000000000DA /* DayCellTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000DB /* DayCellTests.swift */; };
+		DD00000000000000000000DC /* AIPrewarmTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000DD /* AIPrewarmTests.swift */; };
 		DD00000000000000000000D4 /* NextMeetingMenuBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000D5 /* NextMeetingMenuBar.swift */; };
 		DF00000000000000000005 /* CalendarKeyboardRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF00000000000000000006 /* CalendarKeyboardRouter.swift */; };
 		DF00000000000000000003 /* CalendarKeyboardRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF00000000000000000004 /* CalendarKeyboardRouterTests.swift */; };
@@ -125,6 +128,9 @@
 		DF00000000000000000008 /* CalendarKeyboardFocus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarKeyboardFocus.swift; sourceTree = "<group>"; };
 		DD00000000000000000000CD /* InputModality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputModality.swift; sourceTree = "<group>"; };
 		DD00000000000000000000D1 /* CalendarAgendaEventRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAgendaEventRow.swift; sourceTree = "<group>"; };
+		DD00000000000000000000D9 /* DayCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCell.swift; sourceTree = "<group>"; };
+		DD00000000000000000000DB /* DayCellTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCellTests.swift; sourceTree = "<group>"; };
+		DD00000000000000000000DD /* AIPrewarmTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIPrewarmTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000000D5 /* NextMeetingMenuBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextMeetingMenuBar.swift; sourceTree = "<group>"; };
 		DF00000000000000000006 /* CalendarKeyboardRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarKeyboardRouter.swift; sourceTree = "<group>"; };
 		DF00000000000000000004 /* CalendarKeyboardRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarKeyboardRouterTests.swift; sourceTree = "<group>"; };
@@ -230,6 +236,7 @@
 				DD00000000000000000000CD /* InputModality.swift */,
 				DD00000000000000000000D1 /* CalendarAgendaEventRow.swift */,
 				DD00000000000000000000D5 /* NextMeetingMenuBar.swift */,
+				DD00000000000000000000D9 /* DayCell.swift */,
 				AA00000000000000000016 /* DateIconRenderer.swift */,
 				AA00000000000000000018 /* PreferencesView.swift */,
 				AA0000000000000000001A /* CalendarPanel.swift */,
@@ -308,6 +315,8 @@
 				DD00000000000000000000CF /* InputModalityTests.swift */,
 				DD00000000000000000000D3 /* CalendarAgendaEventKeyboardTests.swift */,
 				DD00000000000000000000D7 /* NextMeetingMenuBarTests.swift */,
+				DD00000000000000000000DD /* AIPrewarmTests.swift */,
+				DD00000000000000000000DB /* DayCellTests.swift */,
 				DD00000000000000000000BF /* AIIntentPromptTests.swift */,
 				BB00000000000000000017 /* HotkeyComboTests.swift */,
 				DD00000000000000000051 /* DiagnosticsExportTests.swift */,
@@ -430,6 +439,7 @@
 				DD00000000000000000000CC /* InputModality.swift in Sources */,
 				DD00000000000000000000D0 /* CalendarAgendaEventRow.swift in Sources */,
 				DD00000000000000000000D4 /* NextMeetingMenuBar.swift in Sources */,
+				DD00000000000000000000D8 /* DayCell.swift in Sources */,
 				AA00000000000000000004 /* DateIconRenderer.swift in Sources */,
 				AA00000000000000000006 /* PreferencesView.swift in Sources */,
 				AA00000000000000000008 /* CalendarPanel.swift in Sources */,
@@ -495,6 +505,8 @@
 				DD00000000000000000000CE /* InputModalityTests.swift in Sources */,
 				DD00000000000000000000D2 /* CalendarAgendaEventKeyboardTests.swift in Sources */,
 				DD00000000000000000000D6 /* NextMeetingMenuBarTests.swift in Sources */,
+				DD00000000000000000000DC /* AIPrewarmTests.swift in Sources */,
+				DD00000000000000000000DA /* DayCellTests.swift in Sources */,
 				DD00000000000000000000BE /* AIIntentPromptTests.swift in Sources */,
 				BB00000000000000000027 /* HotkeyComboTests.swift in Sources */,
 				DD00000000000000000050 /* DiagnosticsExportTests.swift in Sources */,
@@ -576,7 +588,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 46;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -584,7 +596,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.5.8;
+				MARKETING_VERSION = 1.5.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -601,7 +613,7 @@
 				CODE_SIGN_ENTITLEMENTS = Glimpse/Glimpse.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 46;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Glimpse/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -609,7 +621,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.5.8;
+				MARKETING_VERSION = 1.5.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.Glimpse;
 				PRODUCT_MODULE_NAME = Glimpse;
 				PRODUCT_NAME = Glimpse;
@@ -624,9 +636,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 46;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.5.8;
+				MARKETING_VERSION = 1.5.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -641,9 +653,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 46;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.5.8;
+				MARKETING_VERSION = 1.5.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rohit.GlimpseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
