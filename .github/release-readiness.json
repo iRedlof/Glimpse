@@ -1,23 +1,23 @@
 {
-  "version": "1.5.5",
-  "build": "42",
-  "scope": "No focus ring on the footer Cancel/Quit halves when the confirmation is opened with the mouse.",
+  "version": "1.5.6",
+  "build": "43",
+  "scope": "Focus rings appear only after keyboard use across the calendar and Settings; a mouse click never leaves a ring.",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-19-quit-focus-ring.md"
+      "evidence": "docs/superpowers/reviews/2026-11-19-focus-rings-keyboard-only.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-19-quit-focus-ring.md"
+      "evidence": "docs/superpowers/reviews/2026-11-19-focus-rings-keyboard-only.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-19-quit-focus-ring.md"
+      "evidence": "docs/superpowers/reviews/2026-11-19-focus-rings-keyboard-only.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-19-quit-focus-ring.md"
+      "evidence": "docs/superpowers/reviews/2026-11-19-focus-rings-keyboard-only.md"
     }
   }
 }
