@@ -6,6 +6,14 @@ import Testing
 @testable import GlimpseCore
 
 struct EventKitClientTests {
+    @Test(arguments: [
+        (EKParticipantStatus?.none, false), (.some(.declined), true), (.some(.accepted), false),
+        (.some(.tentative), false), (.some(.pending), false), (.some(.unknown), false),
+    ])
+    func onlyAnExplicitDeclineHidesAMeeting(status: EKParticipantStatus?, declined: Bool) {
+        #expect(EventKitClient.isDeclined(currentUserStatus: status) == declined)
+    }
+
     @Test
     func canceledFetchSkipsAuthorization() async {
         let authorization = DeniedAuthorization()

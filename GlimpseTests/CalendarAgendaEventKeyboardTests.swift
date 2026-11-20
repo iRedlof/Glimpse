@@ -68,6 +68,50 @@ extension CalendarKeyboardOwnershipTests {
         #expect(calendar.calendarAppOpens.value == [expected])
     }
 
+    @Test(arguments: [CalendarOwnedKey.returnKey, .space])
+    func joinButtonFollowsItsRowInTabOrderAndOpensTheMeetingLink(key: CalendarOwnedKey) async throws {
+        let calendar = try AgendaFixture.make(meetingLink: true)
+        defer { calendar.close() }
+        try await AgendaFixture.openWithEvents(calendar)
+        // At 12:00 the next meeting is Haircut (14:00), which has the Zoom link.
+        #expect(calendar.store.joinableEventID == "haircut")
+        try await calendar.focusOwner(.agendaEvent1)
+        try calendar.send(.tab)
+        await calendar.settleRendering()
+        #expect(calendar.lastPublishedOwner == .agendaJoin)
+        let before = calendar.callbackRows.count
+        try calendar.send(key)
+        await calendar.settleRendering()
+        calendar.expectInvocation(after: before, owner: .agendaJoin, key: key == .space ? .space : .returnKey,
+                                  route: "activate")
+        #expect(calendar.actions.value == ["joinMeeting:Haircut"])
+        #expect(calendar.meetingLinkOpens.value.map(\.absoluteString) == [AgendaFixture.meetingURL])
+        #expect(calendar.calendarAppOpens.value.isEmpty)
+        #expect(calendar.previousAppRestorations == 0)
+    }
+
+    @Test
+    func commandJJoinsFromAnywhereInThePanelOnlyWhenAMeetingIsJoinable() async throws {
+        let calendar = try AgendaFixture.make(meetingLink: true)
+        defer { calendar.close() }
+        try await AgendaFixture.openWithEvents(calendar)
+        try await calendar.focusOwner(.agendaEvent0)
+        try calendar.send(.joinShortcut)
+        await calendar.settleRendering()
+        #expect(calendar.actions.value == ["joinMeeting:Haircut"])
+        #expect(calendar.meetingLinkOpens.value.map(\.absoluteString) == [AgendaFixture.meetingURL])
+
+        let plain = try AgendaFixture.make()
+        defer { plain.close() }
+        try await AgendaFixture.openWithEvents(plain)
+        try await plain.focusOwner(.agendaEvent0)
+        try plain.send(.joinShortcut)
+        await plain.settleRendering()
+        #expect(plain.store.joinableEventID == nil)
+        #expect(plain.actions.value.isEmpty)
+        #expect(plain.meetingLinkOpens.value.isEmpty)
+    }
+
     @Test
     func agendaRowEscapeStillClosesThePanelWithoutOpeningCalendar() async throws {
         let calendar = try AgendaFixture.make()
@@ -152,11 +196,13 @@ extension CalendarKeyboardOwnershipTests {
 /// Fixture wiring for agenda rows: full access with two events on the fixture's today.
 @MainActor
 enum AgendaFixture {
-    static func make(showAI: Bool = false) throws -> CalendarKeyboardRootFixture {
+    static let meetingURL = "https://zoom.us/j/555"
+
+    static func make(showAI: Bool = false, meetingLink: Bool = false) throws -> CalendarKeyboardRootFixture {
         let today = try #require(Calendar.current.date(from: DateComponents(
             year: 2030, month: 11, day: 15, hour: 12
         )))
-        let events = try events(on: today)
+        let events = try events(on: today, meetingLink: meetingLink)
         let client = EventKitClient(
             requestAccess: { true },
             fetchEvents: { _ in events },
@@ -166,7 +212,7 @@ enum AgendaFixture {
                                                eventKitClient: client)
     }
 
-    private static func events(on today: Date) throws -> [CalendarEvent] {
+    private static func events(on today: Date, meetingLink: Bool) throws -> [CalendarEvent] {
         let calendar = Calendar.current
         let standup = try #require(calendar.date(bySettingHour: 10, minute: 0, second: 0, of: today))
         let haircut = try #require(calendar.date(bySettingHour: 14, minute: 0, second: 0, of: today))
@@ -176,7 +222,8 @@ enum AgendaFixture {
                           itemIdentifier: "ITEM-STANDUP", isRecurring: true),
             CalendarEvent(id: "haircut", title: "Haircut", startDate: haircut,
                           endDate: haircut.addingTimeInterval(3_600), isAllDay: false,
-                          itemIdentifier: "ITEM-HAIRCUT")
+                          itemIdentifier: "ITEM-HAIRCUT",
+                          meetingLink: meetingLink ? URL(string: meetingURL).flatMap(MeetingLink.init(url:)) : nil)
         ]
     }
 

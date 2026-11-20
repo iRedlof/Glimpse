@@ -7,6 +7,8 @@ enum CalendarKeyboardOwner: String, CaseIterable, Hashable, Sendable {
     case scheduleAllowAccess, scheduleOpenPrivacySettings
     /// One owner per visible agenda row (rows open the event in Calendar).
     case agendaEvent0, agendaEvent1, agendaEvent2, agendaEvent3, agendaEvent4
+    /// Join on today's next/current meeting row (at most one at a time).
+    case agendaJoin
 
     /// Row owners in list order; their count is the number of rows the agenda shows.
     static let agendaEvents: [Self] = [.agendaEvent0, .agendaEvent1, .agendaEvent2, .agendaEvent3, .agendaEvent4]
@@ -140,6 +142,14 @@ enum CalendarKeyboardRouter {
     }
 
     static let undoKeyCode: UInt16 = 6
+
+    /// ⌘J joins the agenda's joinable meeting while the panel is key: an explicit,
+    /// non-repeating press with no other modifier, and only when a link is on offer.
+    static func joinsMeeting(keyCode: UInt16, commandOnly: Bool, isRepeat: Bool, canJoin: Bool) -> Bool {
+        keyCode == joinKeyCode && commandOnly && !isRepeat && canJoin
+    }
+
+    static let joinKeyCode: UInt16 = 38
 
     static func ownership(
         published: CalendarKeyboardOwner?, observed: Bool,

@@ -8,6 +8,7 @@ struct StatusItemPreview: NSViewRepresentable {
     @Environment(\.colorScheme) private var colorScheme
     let displayOptions: MenuBarDisplayOptions
     let dateString: String
+    var meeting: MenuBarMeetingSegment? = nil
 
     func makeNSView(context: Context) -> NSImageView {
         let view = NSImageView()
@@ -20,6 +21,7 @@ struct StatusItemPreview: NSViewRepresentable {
         view.image = MenuBarItemRenderer.render(
             options: displayOptions,
             dateString: dateString,
+            meeting: meeting,
             isDark: colorScheme == .dark
         )
     }

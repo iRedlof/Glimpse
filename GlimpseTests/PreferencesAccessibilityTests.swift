@@ -298,6 +298,31 @@ struct PreferencesAccessibilityTests {
         }
     }
 
+    /// Turning the next meeting on widens the preview (own line) and must still fit the
+    /// minimum window without clipping, with the toggle reachable and saving through the client.
+    @Test(arguments: [AppDesign.Settings.minimumContentSize.width, AppDesign.Settings.contentSize.width])
+    func nextMeetingOnStillFitsTheMinimumPage(width: CGFloat) async throws {
+        var state = PreferencesFeature.State()
+        state.showAISearch = true
+        state.displayOptions.showNextMeeting = true
+        let fixture = PreferencesAccessibilityFixture(state: state)
+        let host = fixture.documentHost(width: width, height: AppDesign.Settings.minimumContentSize.height)
+        defer { host.close(); fixture.close() }
+        try await host.settle()
+        try host.loadAccessibilityWindowTree()
+        try await host.settle()
+        let scroll = try #require(accessibilityScrollView(in: host.hosting))
+        let document = try #require(scroll.documentView)
+        #expect(document.frame.height <= scroll.contentView.bounds.height + AppDesign.Settings.layoutTolerance,
+                "Document \(document.frame.height) exceeds minimum clip \(scroll.contentView.bounds.height)")
+        let toggle = try host.control(named: "Show next meeting in menu bar")
+        #expect(toggle.role == .checkBox)
+        #expect(toggle.help == PreferencesView.nextMeetingHelp)
+        let preview = try #require(host.elements().first { $0.label == "Menu bar preview" })
+        #expect((preview.value as? String)?.contains("Standup in 12m") == true)
+        #expect(!scroll.hasHorizontalScroller)
+    }
+
     @Test(arguments: [CGFloat(600), AppDesign.Settings.minimumContentSize.width], [false, true])
     func categorizedDocumentHasOrderedReachableNativeControls(width: CGFloat, showAI: Bool) async throws {
         var state = PreferencesFeature.State()
@@ -330,12 +355,13 @@ struct PreferencesAccessibilityTests {
         let nativeCheckboxes: Set<String> = [
             "Launch at login", "Global shortcut", "Show icon in menu bar", "Show day of week in menu bar",
             "Show month in menu bar", "Show date in menu bar", "Show year in menu bar",
-            "Filled background", "Enable AI date search", "Check for updates automatically"
+            "Filled background", "Show next meeting in menu bar", "Enable AI date search",
+            "Check for updates automatically"
         ]
         let names = ["Launch at login", "Set and enable shortcut", "Global shortcut",
                      "Show icon in menu bar", "Show day of week in menu bar",
                      "Show month in menu bar", "Show date in menu bar", "Show year in menu bar",
-                     "Filled background", "Week starts on"] +
+                     "Filled background", "Show next meeting in menu bar", "Week starts on"] +
             Calendar.current.weekdaySymbols.map { "\($0) workday" } +
             ["Enable AI date search"] + (showAI ? ["AI provider"] : []) +
             ["Check for updates automatically", "Check for updates now",

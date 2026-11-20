@@ -2011,7 +2011,7 @@ struct CalendarKeyboardOwnershipTests {
         #expect(calendar.panel.isVisible)
     }
 
-    @Test(arguments: [NSSize(width: 600, height: 600), AppDesign.Settings.minimumContentSize])
+    @Test(arguments: [NSSize(width: 600, height: 660), AppDesign.Settings.minimumContentSize])
     func onePageControllerKeepsNativeGeometryAndSingleDocument(size: NSSize) async throws {
         let settings = SettingsWindowTestFixture()
         defer { settings.close() }
@@ -3240,6 +3240,8 @@ final class CalendarKeyboardRootFixture {
     let reopenActions = LockIsolated(0)
     /// URLs the reducer handed to the injected Calendar app client (never the live one).
     let calendarAppOpens = LockIsolated<[URL]>([])
+    /// Meeting links the reducer handed to the injected opener (never the live one).
+    let meetingLinkOpens = LockIsolated<[URL]>([])
     private let dispatch = CalendarKeyboardDispatchReceipt()
     private let focus = CalendarKeyboardFocusReceipt()
     private let callbacks = CalendarKeyboardCallbackReceipt()
@@ -3313,6 +3315,7 @@ final class CalendarKeyboardRootFixture {
         let dispatch = dispatch
         let reopenActions = reopenActions
         let calendarAppOpens = calendarAppOpens
+        let meetingLinkOpens = meetingLinkOpens
         store = Store(initialState: CalendarFeature.State(displayedMonth: today)) {
             Reduce<CalendarFeature.State, CalendarFeature.Action> { state, action in
                 let name: String?
@@ -3329,6 +3332,7 @@ final class CalendarKeyboardRootFixture {
                 case let .dateTapped(date):
                     name = "date:\(state.calendar.component(.day, from: date))"
                 case let .openEventInCalendar(event): name = "openEvent:\(event.title)"
+                case let .joinMeeting(event): name = "joinMeeting:\(event.title)"
                 default: name = nil
                 }
                 if let name {
@@ -3358,6 +3362,7 @@ final class CalendarKeyboardRootFixture {
             // The real save signal: it closes the editor through the view's observer.
             $0.scheduleEvents = .liveValue
             $0.calendarApp.open = { url in calendarAppOpens.withValue { $0.append(url) } }
+            $0.meetingLinks.open = { link in meetingLinkOpens.withValue { $0.append(link.url) } }
             $0.eventKitClient = eventKitClient ?? EventKitClient(
                 requestAccess: {
                     Issue.record("Keyboard fixture must not request calendar access")
@@ -4131,6 +4136,7 @@ private enum CalendarKeyboardFixtureError: Error {
 
 enum CalendarOwnedKey: String, Sendable {
     case tab, backTab, left, right, up, down, returnKey, keypadEnter, space, searchShortcut, closeShortcut, escape
+    case joinShortcut
 
     var code: UInt16 {
         switch self {
@@ -4144,6 +4150,7 @@ enum CalendarOwnedKey: String, Sendable {
         case .space: 49
         case .searchShortcut: 5
         case .closeShortcut: 13
+        case .joinShortcut: 38
         case .escape: 53
         }
     }
@@ -4160,6 +4167,7 @@ enum CalendarOwnedKey: String, Sendable {
         case .space: " "
         case .searchShortcut: "g"
         case .closeShortcut: "w"
+        case .joinShortcut: "j"
         case .escape: "\u{1B}"
         }
     }
@@ -4170,7 +4178,7 @@ enum CalendarOwnedKey: String, Sendable {
         switch self {
         case .backTab: .shift
         case .keypadEnter: .numericPad
-        case .searchShortcut, .closeShortcut: .command
+        case .searchShortcut, .closeShortcut, .joinShortcut: .command
         default: []
         }
     }

@@ -23,6 +23,9 @@ public struct CalendarFeature: Sendable {
         public var eventsError: String?
         /// Set when Calendar couldn't be opened for an agenda event; cleared on the next try.
         public var eventOpenError: String?
+        /// The agenda's next/current meeting today when it has a meeting link: its row
+        /// shows Join and ⌘J opens it. Nil for other days and link-less meetings.
+        public var joinableEventID: String?
         public var calendarAuthorizationStatus: EKAuthorizationStatus = .notDetermined
         public var isRequestingCalendarAccess = false
         public var calendarAccessError: String?
@@ -38,6 +41,12 @@ public struct CalendarFeature: Sendable {
         public var aiAnswer: DateAnswer?
 
         public var calendarAccessGranted: Bool { calendarAuthorizationStatus == .fullAccess }
+
+        /// The agenda event Join (and ⌘J) opens, if any.
+        public var joinableEvent: CalendarEvent? {
+            guard let joinableEventID else { return nil }
+            return events.first { $0.id == joinableEventID && $0.meetingLink != nil }
+        }
 
         public var selectedDateInfo: String? {
             guard let date = selectedDate else { return nil }
@@ -96,6 +105,11 @@ public struct CalendarFeature: Sendable {
         /// An agenda event row was activated: reveal it in Apple's Calendar app.
         case openEventInCalendar(CalendarEvent)
         case openEventInCalendarFailed(String)
+        /// Join was activated (button, Return on it, or ⌘J): open the meeting link.
+        case joinMeeting(CalendarEvent)
+        case joinMeetingFailed(String)
+        /// A meeting started, ended or came within the imminent window: re-pick Join.
+        case refreshJoinableMeeting
     }
 
     @Dependency(\.date) var date
@@ -105,8 +119,10 @@ public struct CalendarFeature: Sendable {
     @Dependency(\.uuid) var uuid
     @Dependency(\.scheduleEvents) var scheduleEvents
     @Dependency(\.calendarApp) var calendarApp
+    @Dependency(\.meetingLinks) var meetingLinks
+    @Dependency(\.continuousClock) var clock
 
-    private enum CancelID { case events, calendarAccess }
+    private enum CancelID { case events, calendarAccess, joinableMeeting }
 
     public init() {}
 
@@ -201,6 +217,28 @@ public struct CalendarFeature: Sendable {
                 state.eventOpenError = message
                 return .none
 
+            case let .joinMeeting(event):
+                // Only the current joinable event, with its already-validated link.
+                guard event.id == state.joinableEventID, let link = event.meetingLink else { return .none }
+                state.eventOpenError = nil
+                return .run { [meetingLinks] send in
+                    do {
+                        try await meetingLinks.open(link)
+                    } catch {
+                        AppLogger.calendar.error(
+                            "Joining meeting failed: \(error.localizedDescription, privacy: .public)"
+                        )
+                        await send(.joinMeetingFailed("Couldn’t open the meeting link."))
+                    }
+                }
+
+            case let .joinMeetingFailed(message):
+                state.eventOpenError = message
+                return .none
+
+            case .refreshJoinableMeeting:
+                return refreshJoinableMeeting(&state)
+
             case .togglePreferences:
                 state.showingPreferences.toggle()
                 return .none
@@ -209,7 +247,7 @@ public struct CalendarFeature: Sendable {
                 state.isPinned = false
                 state.isLoadingEvents = false
                 state.eventsRequestID = nil
-                return .cancel(id: CancelID.events)
+                return .merge(.cancel(id: CancelID.events), .cancel(id: CancelID.joinableMeeting))
 
             case .requestCalendarAccess:
                 guard !state.isRequestingCalendarAccess else { return .none }
@@ -264,7 +302,7 @@ public struct CalendarFeature: Sendable {
                 if state.events != events { state.eventOpenError = nil }
                 state.events = events
                 state.eventsError = nil
-                return .none
+                return refreshJoinableMeeting(&state)
 
             case let .eventsFailed(requestedDate, requestID, message):
                 guard state.eventsRequestID == requestID,
@@ -315,13 +353,16 @@ public struct CalendarFeature: Sendable {
                 state.eventsRequestID = nil
                 state.eventOpenError = nil
                 clearAIResults(&state)
-                return .merge(.cancel(id: CancelID.events), dismissSchedule(&state))
+                return .merge(
+                    .cancel(id: CancelID.events), .cancel(id: CancelID.joinableMeeting),
+                    dismissSchedule(&state)
+                )
 
             case .hiddenPreservingContext:
                 state.showingPreferences = false
                 state.isLoadingEvents = false
                 state.eventsRequestID = nil
-                return .cancel(id: CancelID.events)
+                return .merge(.cancel(id: CancelID.events), .cancel(id: CancelID.joinableMeeting))
 
             case .prepareForReopen:
                 // The NSPanel is reused via orderOut/orderFront, so SwiftUI
@@ -341,6 +382,35 @@ public struct CalendarFeature: Sendable {
                 return .merge(loadEvents(&state), dismissSchedule(&state))
             }
         }
+    }
+
+    // MARK: - Join
+
+    /// Picks the agenda's joinable meeting (today only) and, while one of today's
+    /// meetings has a link, wakes once at the next start/end/imminent instant to re-pick.
+    private func refreshJoinableMeeting(_ state: inout State) -> Effect<Action> {
+        // Link-less agendas never read the clock or schedule anything.
+        guard state.events.contains(where: { $0.meetingLink != nil }), let eventsDate = state.eventsDate
+        else {
+            state.joinableEventID = nil
+            return .cancel(id: CancelID.joinableMeeting)
+        }
+        let now = date.now
+        let calendar = state.calendar
+        guard calendar.isDate(eventsDate, inSameDayAs: now) else {
+            state.joinableEventID = nil
+            return .cancel(id: CancelID.joinableMeeting)
+        }
+        let meeting = NextMeetingSelector.select(state.events, now: now, calendar: calendar)
+        state.joinableEventID = meeting?.event.meetingLink != nil ? meeting?.event.id : nil
+        guard let transition = NextMeetingSelector.nextTransition(state.events, now: now, calendar: calendar)
+        else { return .cancel(id: CancelID.joinableMeeting) }
+        let delay = transition.timeIntervalSince(now) + NextMeetingSelector.tickLeeway
+        return .run { [clock] send in
+            try await clock.sleep(for: .milliseconds(Int((delay * 1000).rounded(.up))))
+            await send(.refreshJoinableMeeting)
+        }
+        .cancellableLatestWins(id: CancelID.joinableMeeting)
     }
 
     // MARK: - AI intents
@@ -413,6 +483,7 @@ public struct CalendarFeature: Sendable {
         }
         state.calendarAuthorizationStatus = status
         state.events = []
+        state.joinableEventID = nil
         state.eventsError = nil
         guard status == .fullAccess else {
             state.eventsDate = nil

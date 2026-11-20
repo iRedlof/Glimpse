@@ -47,6 +47,8 @@ final class CalendarStatusItem {
     // into testable static methods instead of injecting clients here.
     private let preferencesClient = PreferencesClient.liveValue
     private let calendarClient = CalendarClient.liveValue
+    private let nextMeeting: NextMeetingMenuBarController
+    private var panelHideObserver: Any?
 
     init(
         anchorProvider: (@MainActor () -> PanelAnchor?)? = nil,
@@ -55,8 +57,10 @@ final class CalendarStatusItem {
         },
         toggleVisibility: (@MainActor (CalendarPanel) -> Bool)? = nil,
         sameScreen: (@MainActor (CalendarPanel) -> Bool)? = nil,
-        crossScreenScheduler: (@MainActor (@escaping @MainActor () -> Void) -> Void)? = nil
+        crossScreenScheduler: (@MainActor (@escaping @MainActor () -> Void) -> Void)? = nil,
+        nextMeeting: NextMeetingMenuBarController = .shared
     ) {
+        self.nextMeeting = nextMeeting
         self.anchorProvider = anchorProvider
         self.panelFactory = panelFactory
         self.toggleVisibility = toggleVisibility
@@ -104,6 +108,8 @@ final class CalendarStatusItem {
             }
         }
 
+        nextMeeting.onChange = { [weak self] in self?.updateMenuBarDisplay() }
+        nextMeeting.setEnabled(preferencesClient.loadDisplayOptions().showNextMeeting)
         updateMenuBarDisplay()
         scheduleMidnightRefresh()
         registerGlobalHotkey()
@@ -119,8 +125,16 @@ final class CalendarStatusItem {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                self?.updateMenuBarDisplay()
+                guard let self else { return }
+                self.nextMeeting.setEnabled(self.preferencesClient.loadDisplayOptions().showNextMeeting)
+                self.updateMenuBarDisplay()
             }
+        }
+        // Closing the panel is when calendar access may just have been granted there.
+        panelHideObserver = NotificationCenter.default.addObserver(
+            forName: .calendarPanelWillHide, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.nextMeeting.refresh() }
         }
     }
 
@@ -138,6 +152,7 @@ final class CalendarStatusItem {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
+                self?.nextMeeting.refresh()
                 self?.updateMenuBarDisplay()
                 self?.scheduleMidnightRefresh()
                 AppLogger.statusItem.info("Refreshed after wake")
@@ -150,6 +165,7 @@ final class CalendarStatusItem {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
+                self?.nextMeeting.refresh()
                 self?.updateMenuBarDisplay()
                 self?.scheduleMidnightRefresh()
                 AppLogger.statusItem.info("Refreshed after system clock change")
@@ -185,10 +201,16 @@ final class CalendarStatusItem {
         // Composite the entire item (border, fill, icon, separator, text) into the
         // button's own image. No custom subview — that drives a redraw loop on
         // macOS 26 (see MenuBarItemRenderer).
+        let meeting = options.showNextMeeting ? nextMeeting.segment : nil
         let image = MenuBarItemRenderer.render(
-            options: options, dateString: dateString, isDark: isDark
+            options: options, dateString: dateString, meeting: meeting, isDark: isDark
         )
         button.image = image
+        // The item is image-only, so VoiceOver needs the meeting text spelled out.
+        button.setAccessibilityLabel(
+            (["Glimpse", dateString] + [meeting?.text].compactMap { $0 })
+                .filter { !$0.isEmpty }.joined(separator: ", ")
+        )
         statusItem?.length = image.size.width
         // Status-item layout applies the image width on the next runloop tick.
         DispatchQueue.main.async { [weak self] in
@@ -215,6 +237,7 @@ final class CalendarStatusItem {
 
         let timer = Timer(fire: midnight, interval: 0, repeats: false) { [weak self] _ in
             Task { @MainActor in
+                self?.nextMeeting.refresh()
                 self?.updateMenuBarDisplay()
                 self?.scheduleMidnightRefresh()
                 AppLogger.statusItem.info("Midnight refresh completed")

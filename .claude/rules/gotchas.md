@@ -61,6 +61,15 @@
   there raises a "access files on a removable volume" TCC prompt and the test hangs on
   `Data.write`. Write under /tmp, then copy the PNGs out from the shell.
 
+- **Settings minimum height must hold every row**: `AppDesign.Settings.minimumContentSize`
+  equals the tallest page (all Updates states, next-meeting preview on its own line) because
+  SwiftUI Tab skips fully clipped rows. A new Settings row needs the height raised and
+  `PreferencesAccessibilityTests` re-run at 440pt; a fixed "larger" test size must stay above it.
+
+- **Menu bar timers stop when nothing is due**: the next-meeting ticker sleeps once to the
+  next minute boundary and stops after the last meeting of the day; midnight, wake, clock,
+  time-zone and `EKEventStoreChanged` send `.refresh`. Don't turn it into a free-running timer.
+
 ## Build & Project
 
 - **Sparkle Team ID mismatch**: Pre-built Sparkle.framework has a different Team ID.

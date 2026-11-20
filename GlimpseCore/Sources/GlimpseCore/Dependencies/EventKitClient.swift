@@ -52,8 +52,15 @@ public struct EventKitClient: Sendable {
             isAllDay: event.isAllDay,
             blocksTime: blocksTime(isAllDay: event.isAllDay, availability: event.availability),
             itemIdentifier: event.calendarItemIdentifier,
-            isRecurring: event.hasRecurrenceRules
+            isRecurring: event.hasRecurrenceRules,
+            isDeclined: isDeclined(currentUserStatus: event.attendees?.first(where: \.isCurrentUser)?.participantStatus),
+            meetingLink: MeetingLinkExtractor.link(url: event.url, location: event.location, notes: event.notes)
         )
+    }
+
+    /// Only an explicit decline by the current user hides an event from "next meeting".
+    static func isDeclined(currentUserStatus: EKParticipantStatus?) -> Bool {
+        currentUserStatus == .declined
     }
 
     /// Only timed events not marked "free" make a time busy.

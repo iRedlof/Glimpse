@@ -60,7 +60,8 @@ extension PreferencesClient: DependencyKey {
                     showMonth: loadBool("showMonth", defaultValue: true),
                     showDate: loadBool("showDate", defaultValue: true),
                     showYear: loadBool("showYear", defaultValue: false),
-                    showFilledBackground: loadBool("showFilledBackground", defaultValue: false)
+                    showFilledBackground: loadBool("showFilledBackground", defaultValue: false),
+                    showNextMeeting: loadBool("showNextMeeting", defaultValue: false)
                 )
             },
             saveDisplayOptions: { options in
@@ -70,6 +71,7 @@ extension PreferencesClient: DependencyKey {
                 defaults.set(options.showDate, forKey: "showDate")
                 defaults.set(options.showYear, forKey: "showYear")
                 defaults.set(options.showFilledBackground, forKey: "showFilledBackground")
+                defaults.set(options.showNextMeeting, forKey: "showNextMeeting")
             },
             loadShowAISearch: {
                 defaults.object(forKey: "showAISearch") != nil

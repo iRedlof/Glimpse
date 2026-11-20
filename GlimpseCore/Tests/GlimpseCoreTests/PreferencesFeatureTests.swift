@@ -369,6 +369,24 @@ struct PreferencesFeatureTests {
 
         await store.receive(\.delegate.displayOptionsChanged)
     }
+
+    @Test
+    func setShowNextMeeting_savesAndNotifies() async {
+        let saved = LockIsolated<[MenuBarDisplayOptions]>([])
+        let store = TestStore(
+            initialState: PreferencesFeature.State()
+        ) {
+            PreferencesFeature()
+        } withDependencies: {
+            $0.preferencesClient.saveDisplayOptions = { options in saved.withValue { $0.append(options) } }
+        }
+
+        await store.send(.setShowNextMeeting(true)) {
+            $0.displayOptions.showNextMeeting = true
+        }
+        await store.receive(\.delegate.displayOptionsChanged)
+        #expect(saved.value.map(\.showNextMeeting) == [true])
+    }
 }
 
 struct AIProviderHelpTextTests {
