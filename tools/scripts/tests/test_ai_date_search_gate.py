@@ -80,7 +80,10 @@ if '-resultBundlePath' in args:
         for name in json.loads(os.environ['FIXTURE_PNGS']):
             (staging/name).write_bytes(b'synthetic nonempty PNG fixture')
     if phase in ('KEYBOARD','AI'):
-        done.write_text(json.dumps(phase))
+        # Publish atomically: the piped tee runs concurrently and must see
+        # either the previous phase or this one, never a truncated file.
+        staged=done.with_name(done.name+'.'+str(os.getpid()))
+        staged.write_text(json.dumps(phase)); os.replace(staged,done)
     print('synthetic '+phase+' terminal output',flush=True)
     sys.exit(options.get('native_exit',0) if phase=='AI' else
              options.get('keyboard_exit',0) if phase=='KEYBOARD' else 0)

@@ -411,6 +411,6 @@ public struct CalendarFeature: Sendable {
                 await send(.eventsFailed(date: requestedDate, requestID: requestID, message: error.localizedDescription))
             }
         }
-        .cancellable(id: CancelID.events, cancelInFlight: true)
+        .cancellableLatestWins(id: CancelID.events)
     }
 }

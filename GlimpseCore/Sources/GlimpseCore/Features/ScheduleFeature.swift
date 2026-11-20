@@ -343,7 +343,7 @@ public struct ScheduleFeature: Sendable {
                 await send(.slotsFailed(searchID: searchID, ScheduleError.from(error, fallback: .searchFailed)))
             }
         }
-        .cancellable(id: CancelID.search, cancelInFlight: true)
+        .cancellableLatestWins(id: CancelID.search)
     }
 
     private func save(_ state: inout State) -> Effect<Action> {

@@ -81,17 +81,21 @@ jobs:
   app-and-core:
     # Untrusted fork code must not execute on the persistent signing machine.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, macOS]
+    runs-on: xcode-27
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Enable macOS keyboard navigation for native focus acceptance
+        # Disposable VM image ships with Tab reaching only text fields; the
+        # keyboard ownership suite requires full keyboard navigation.
+        run: defaults write -g AppleKeyboardUIMode -int 2
       - name: Test the app and core with immutable dependency pins
         id: quality
         env:
-          GLIMPSE_BUILD_ROOT: ${{ vars.GLIMPSE_BUILD_ROOT }}
+          GLIMPSE_BUILD_ROOT: ${{ runner.temp }}/glimpse-build
           BEFORE_SHA: ${{ github.event.before }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -114,6 +118,10 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Enable macOS keyboard navigation for native focus acceptance
+        # Disposable VM image ships with Tab reaching only text fields; the
+        # keyboard ownership suite requires full keyboard navigation.
+        run: defaults write -g AppleKeyboardUIMode -int 2
       - name: Test untrusted fork on a disposable macOS runner
         id: quality
         env:

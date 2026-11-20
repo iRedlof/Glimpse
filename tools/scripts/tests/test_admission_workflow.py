@@ -251,7 +251,7 @@ class AdmissionWorkflowContracts(unittest.TestCase):
 
     def test_fork_execution_stays_on_disposable_runner(self):
         self.assertEqual(self.property("app-and-core-fork", "runs-on"), "macos-latest")
-        self.assertEqual(self.property("app-and-core", "runs-on"), "[self-hosted, macOS]")
+        self.assertEqual(self.property("app-and-core", "runs-on"), "xcode-27")
         fork_condition = self.property("app-and-core-fork", "if")
         trusted_alternatives = self.property("app-and-core", "if").split(" || ")
         self.assertEqual(len(trusted_alternatives), 2)

@@ -125,6 +125,22 @@ struct DiagnosticsExportTests {
               category: "fixture", level: "info", message: message)
     }
 
+    /// Bounds hang protection only; never a performance budget for the code under test.
+    private static let hangGuard: Duration = .seconds(30)
+
+    /// The production read/filter/format/ownership path with its wall-clock
+    /// deadline replaced by a hang guard. A busy or slow host cannot turn a
+    /// formatter or ownership assertion into a spurious timeout; deadline
+    /// delivery itself is proven by the manual-deadline fixture tests.
+    private static func untimedCollector() -> DiagnosticsExport.LogCollector {
+        DiagnosticsExport.LogCollector(
+            submitWorker: { work in
+                DispatchQueue(label: "Glimpse.DiagnosticsUntimed.\(UUID().uuidString)").async(execute: work)
+            },
+            awaitDeadline: { _ in try await Task.sleep(for: hangGuard) }
+        )
+    }
+
     private static func report(_ collect: @escaping @Sendable () async throws -> DiagnosticsExport.LogResult) async throws -> String {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("Glimpse-Collector-Report-\(UUID().uuidString)")
@@ -163,7 +179,7 @@ struct DiagnosticsExportTests {
             }
         }
         func waitForStart() async throws -> Bool {
-            let deadline = ContinuousClock.now + .seconds(1)
+            let deadline = ContinuousClock.now + DiagnosticsExportTests.hangGuard
             while startCount == 0, ContinuousClock.now < deadline {
                 try await Task.sleep(for: .milliseconds(5))
             }
@@ -518,7 +534,7 @@ struct DiagnosticsExportTests {
     }
 
     private static func collectAfterWorkerExit(_ collector: DiagnosticsExport.LogCollector) async throws -> DiagnosticsExport.LogResult {
-        let deadline = ContinuousClock.now + .seconds(2)
+        let deadline = ContinuousClock.now + hangGuard
         while true {
             do {
                 return try await collector.collect(timeout: 1, outputLimit: 1024) {
@@ -533,7 +549,7 @@ struct DiagnosticsExportTests {
 
     @Test
     func currentProcessEntriesAppearInReport() async throws {
-        let collector = DiagnosticsExport.LogCollector()
+        let collector = Self.untimedCollector()
         let report = try await Self.report {
             try await collector.collect(timeout: 1, outputLimit: 1024) {
                 AnySequence([Self.entry("current fixture <private>")])
@@ -544,7 +560,7 @@ struct DiagnosticsExportTests {
 
     @Test
     func unrelatedAndOldEntriesAreExcluded() async throws {
-        let collector = DiagnosticsExport.LogCollector()
+        let collector = Self.untimedCollector()
         let result = try await collector.collect(timeout: 1, outputLimit: 1024) {
             AnySequence([
                 Self.entry("foreign process", pid: -1),
@@ -561,7 +577,7 @@ struct DiagnosticsExportTests {
 
     @Test
     func emptyEntriesProduceValidEmptyResult() async throws {
-        let collector = DiagnosticsExport.LogCollector()
+        let collector = Self.untimedCollector()
         let result = try await collector.collect(timeout: 1, outputLimit: 1024) { AnySequence([]) }
         #expect(result.output.isEmpty)
         #expect(!result.timedOut)
@@ -574,7 +590,7 @@ struct DiagnosticsExportTests {
 
     @Test
     func unicodeByteBoundaryRemainsValid() async throws {
-        let collector = DiagnosticsExport.LogCollector()
+        let collector = Self.untimedCollector()
         let result = try await collector.collect(timeout: 1, outputLimit: 180) {
             AnySequence([Self.entry("UNICODE " + String(repeating: "🙂é", count: 80))])
         }
@@ -586,7 +602,7 @@ struct DiagnosticsExportTests {
 
     @Test
     func candidateScanIsBounded() async throws {
-        let collector = DiagnosticsExport.LogCollector()
+        let collector = Self.untimedCollector()
         let probe = ReaderProbe()
         let result = try await collector.collect(timeout: 1, outputLimit: 1024) {
             AnySequence {
@@ -693,7 +709,7 @@ struct DiagnosticsExportTests {
     }
 
     @Test
-    func productionDefaultTimerTimesOutQueuedWorkerWithinOneSecond() async throws {
+    func productionDefaultTimerTimesOutQueuedWorker() async throws {
         try await Self.withDeadlineFixture { fixture in
             let collector = fixture.collector(manualDeadline: false)
             let start = ContinuousClock.now
@@ -706,7 +722,13 @@ struct DiagnosticsExportTests {
             let elapsed = start.duration(to: .now)
             fixture.events.record("production default timer elapsed: \(elapsed)")
             #expect(result.timedOut)
-            #expect(elapsed < .seconds(1),
+            // Lower bound: the default timer honors the requested 0.2 s rather
+            // than firing early. Upper bound: it is the request's timeout, not
+            // the 10 s production default or a unit error; generous because a
+            // busy 3-core CI host has delayed this 0.2 s sleep by ~2 s.
+            #expect(elapsed >= .milliseconds(200),
+                    "Production default timer/task progress:\n\(fixture.events.description)")
+            #expect(elapsed < .seconds(8),
                     "Production default timer/task progress:\n\(fixture.events.description)")
             #expect(fixture.probe.startCount == 0)
             worker.run()
@@ -854,7 +876,7 @@ struct DiagnosticsExportTests {
 
     @Test
     func cancellationBeforeStartDoesNotRead() async throws {
-        let collector = DiagnosticsExport.LogCollector()
+        let collector = Self.untimedCollector()
         let probe = ReaderProbe()
         let waiter = Task {
             withUnsafeCurrentTask { $0?.cancel() }
@@ -870,7 +892,7 @@ struct DiagnosticsExportTests {
 
     @Test
     func cancellationDuringReadRetainsOwnership() async throws {
-        let collector = DiagnosticsExport.LogCollector()
+        let collector = Self.untimedCollector()
         let probe = ReaderProbe()
         defer {
             probe.unblock()
@@ -883,10 +905,11 @@ struct DiagnosticsExportTests {
             }
         }
         try #require(try await probe.waitForStart())
-        let start = ContinuousClock.now
         waiter.cancel()
         await #expect(throws: CancellationError.self) { try await waiter.value }
-        #expect(start.duration(to: .now) < .seconds(1))
+        // Cancellation returned while the provider is still blocked inside the
+        // read: it never joined the worker (the probe's own watchdog is 5 s).
+        #expect(probe.exitCount == 0)
         await #expect(throws: DiagnosticsExport.CollectionError.alreadyCollecting) {
             try await collector.collect(timeout: 1, outputLimit: 1024) {
                 probe.recordStart()
@@ -905,7 +928,7 @@ struct DiagnosticsExportTests {
 
     @Test
     func providerFailureReleasesOwnership() async throws {
-        let collector = DiagnosticsExport.LogCollector()
+        let collector = Self.untimedCollector()
         await #expect(throws: FixtureFailure.unavailable) {
             try await collector.collect(timeout: 1, outputLimit: 1024) { throw FixtureFailure.unavailable }
         }

@@ -87,7 +87,10 @@ if '-resultBundlePath' in args:
                 data=b''
             (staging/name).write_bytes(data)
     if phase in ('KEYBOARD','AI','AGENDA'):
-        done.write_text(json.dumps(phase))
+        # Publish atomically: the piped tee runs concurrently and must see
+        # either the previous phase or this one, never a truncated file.
+        staged=done.with_name(done.name+'.'+str(os.getpid()))
+        staged.write_text(json.dumps(phase)); os.replace(staged,done)
     print('synthetic '+phase+' terminal output',flush=True)
     sys.exit(options.get('native_exit',0) if phase=='AGENDA' else
              options.get('ai_exit',0) if phase=='AI' else 0)
