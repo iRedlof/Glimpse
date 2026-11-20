@@ -49,9 +49,11 @@ enum MenuBarItemRenderer {
         options: MenuBarDisplayOptions,
         dateString: String,
         meeting: MenuBarMeetingSegment? = nil,
-        isDark: Bool
+        isDark: Bool,
+        day: Int = Calendar.current.component(.day, from: Date()),
+        thickness: CGFloat = NSStatusBar.system.thickness
     ) -> NSImage {
-        let height = NSStatusBar.system.thickness
+        let height = thickness
         let palette = Palette.resolve(
             filled: options.showFilledBackground, imminent: meeting?.isImminent == true, isDark: isDark
         )
@@ -64,7 +66,7 @@ enum MenuBarItemRenderer {
             var x = AppDesign.StatusItem.padding
             if showIcon {
                 let iconSize = AppDesign.Icon.menuBarSize
-                DateIconRenderer.render(textColor: palette.content)
+                DateIconRenderer.render(day: day, textColor: palette.content)
                     .draw(in: NSRect(x: x, y: (height - iconSize) / 2, width: iconSize, height: iconSize))
                 x += iconSize
             }
@@ -134,4 +136,30 @@ enum MenuBarItemRenderer {
         NSRect(x: x + inner, y: inset, width: 1, height: height - inset * 2).fill()
         return x + inner + 1 + inner
     }
+}
+
+/// Everything `MenuBarItemRenderer.render` draws from. Two equal keys produce the same
+/// image, so the status item can skip re-rendering, resizing and re-placing the panel.
+struct MenuBarRenderKey: Equatable {
+    let options: MenuBarDisplayOptions
+    let dateString: String
+    let meeting: MenuBarMeetingSegment?
+    let isDark: Bool
+    let thickness: CGFloat
+    let day: Int
+}
+
+/// Remembers the last rendered key. Invalidate it when an input outside the key
+/// (e.g. the system theme, which may flip after its notification) could have changed.
+struct MenuBarRenderCache {
+    private(set) var lastKey: MenuBarRenderKey?
+
+    /// True (and remembers `key`) when `key` differs from the last rendered one.
+    mutating func needsRender(_ key: MenuBarRenderKey) -> Bool {
+        guard key != lastKey else { return false }
+        lastKey = key
+        return true
+    }
+
+    mutating func invalidate() { lastKey = nil }
 }

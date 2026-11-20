@@ -1,11 +1,15 @@
 import AppKit
 
 enum DateIconRenderer {
-    static func render(textColor: NSColor = .labelColor) -> NSImage {
+    /// - Parameter day: the day of month to draw. Captured up front (not read from the
+    ///   clock inside the draw handler) so a cached image always matches its key.
+    static func render(
+        day: Int = Calendar.current.component(.day, from: Date()),
+        textColor: NSColor = .labelColor
+    ) -> NSImage {
         let iconSize = AppDesign.Icon.menuBarSize
         let size = NSSize(width: iconSize, height: iconSize)
         let image = NSImage(size: size, flipped: false) { rect in
-            let day = Calendar.current.component(.day, from: Date())
             let dayString = "\(day)"
 
             let fontSize: CGFloat = day < 10 ? 12 : 11

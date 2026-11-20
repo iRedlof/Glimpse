@@ -1,23 +1,23 @@
 {
-  "version": "1.5.8",
-  "build": "45",
-  "scope": "Opt-in next-meeting countdown in the menu bar; Join button and Cmd-J for meeting links.",
+  "version": "1.5.9",
+  "build": "46",
+  "scope": "Performance: no agenda reload flash, lighter grid hover, fewer menu bar renders, locale-aware event times, faster first on-device AI answer.",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-20-next-meeting-menu-bar.md"
+      "evidence": "docs/superpowers/reviews/2026-11-20-perf-batch.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-20-next-meeting-menu-bar.md"
+      "evidence": "docs/superpowers/reviews/2026-11-20-perf-batch.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-20-next-meeting-menu-bar.md"
+      "evidence": "docs/superpowers/reviews/2026-11-20-perf-batch.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-20-next-meeting-menu-bar.md"
+      "evidence": "docs/superpowers/reviews/2026-11-20-perf-batch.md"
     }
   }
 }

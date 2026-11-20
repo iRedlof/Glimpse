@@ -42,10 +42,14 @@ public struct CalendarEvent: Equatable, Identifiable, Sendable {
         self.meetingLink = meetingLink
     }
 
-    public var timeString: String {
+    /// Locale-aware short time ("9:05 AM" or "09:05"). `Date.FormatStyle` is a thread-safe
+    /// value; its default locale and time zone auto-update, so one shared style is enough.
+    static let timeStyle = Date.FormatStyle(date: .omitted, time: .shortened)
+
+    public var timeString: String { timeString(style: Self.timeStyle) }
+
+    func timeString(style: Date.FormatStyle) -> String {
         if isAllDay { return "All day" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return "\(formatter.string(from: startDate)) – \(formatter.string(from: endDate))"
+        return "\(startDate.formatted(style)) – \(endDate.formatted(style))"
     }
 }

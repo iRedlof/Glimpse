@@ -26,7 +26,10 @@ struct CalendarPopoverView: View {
     @State private var scrollRouter = CalendarScrollRouter()
     @State private var scrollMonitor: Any?
     @State private var isMouseOverCalendar = false
-    @State private var hoveredDate: Date?
+    /// Bumped when the pointer leaves the grid or the panel hides; day cells own hover.
+    @State private var hoverResetToken = 0
+    /// Per-day start/number/label, rebuilt only when the grid's days change.
+    @State private var dayIndex = CalendarDayIndexCache()
     @State private var keyMonitor: Any?
     @State private var isRecordingHotkey = false
     @State private var aiQueryModel: AIDateQueryModel
@@ -99,7 +102,7 @@ struct CalendarPopoverView: View {
                                 .onHover { hovering in
                                     isMouseOverCalendar = hovering
                                     if !hovering {
-                                        hoveredDate = nil
+                                        hoverResetToken &+= 1
                                         scrollRouter.suspendNavigation()
                                     }
                                 }
@@ -151,7 +154,7 @@ struct CalendarPopoverView: View {
                 if active { reader.scrollTo("panel-ai-input", anchor: .center) }
                 else { editorFocusGeneration += 1 }
             }
-            .onChange(of: store.days.map(\.date)) { _, _ in reconcileLogicalDate() }
+            .onChange(of: store.days) { _, _ in reconcileLogicalDate() }
             .onChange(of: logicalDate) { _, date in
                 if gridHasFocus, let date { reader.scrollTo(date, anchor: .center) }
             }
@@ -206,7 +209,7 @@ struct CalendarPopoverView: View {
                 pendingFooterFocus = nil
                 consumesQuitEscapeRepeats = false
                 isMouseOverCalendar = false
-                hoveredDate = nil
+                hoverResetToken &+= 1
                 let preservesContext = notification.userInfo?[CalendarPanel.hidePreservesContextKey] as? Bool == true
                 store.send(preservesContext ? .hiddenPreservingContext : .onDisappear)
             }
@@ -254,7 +257,8 @@ struct CalendarPopoverView: View {
                 closeEditorAfterSave()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                if panel?.isVisible == true { store.send(.refreshCalendarAuthorization) }
+                // Compares authorization only; agenda data changes arrive via EKEventStoreChanged.
+                if panel?.isVisible == true { store.send(.applicationDidBecomeActive) }
             }
             .onReceive(eventChangeNotificationCenter.publisher(for: .EKEventStoreChanged)
                 .map { @Sendable _ in () }
@@ -588,6 +592,8 @@ struct CalendarPopoverView: View {
         let orderedDays = orderedWeekdaySymbols(startOfWeekday: store.startOfWeekday)
         let gridInfo = store.gridInfo
         let shortNames = Self.shortWeekdaySymbols
+        let entries = dayIndex.entries(for: days, calendar: cal)
+        let cellContext = dayCellContext(calendar: cal, keyboardFocused: keyboardFocused)
 
         if days.count != 42 {
             AppLogger.calendar.error("Expected 42 calendar days, got \(days.count)")
@@ -629,11 +635,11 @@ struct CalendarPopoverView: View {
                         ForEach(0..<6, id: \.self) { row in
                             HStack(spacing: 0) {
                                 ForEach(0..<7, id: \.self) { col in
-                                    let day = days[row * 7 + col]
+                                    let index = row * 7 + col
                                     let weekday = orderedDays[col].index
-                                    let isWorkday = store.workdays.contains(weekday)
-                                    dayCell(day, using: cal, isWorkdayColumn: isWorkday,
-                                            keyboardFocused: keyboardFocused)
+                                    dayCell(days[index], entry: entries[index],
+                                            isWorkdayColumn: store.workdays.contains(weekday),
+                                            context: cellContext)
                                 }
                             }
                         }
@@ -676,84 +682,35 @@ struct CalendarPopoverView: View {
         }
     }
 
-    private func dayCell(
-        _ day: GlimpseCore.CalendarDay,
-        using cal: Calendar,
-        isWorkdayColumn: Bool, keyboardFocused: Bool
-    ) -> some View {
-        let isToday = day.isCurrentMonth && cal.isDateInToday(day.date)
-        let dayNumber = cal.component(.day, from: day.date)
-        let isSelected = store.selectedDate.map { cal.isDate($0, inSameDayAs: day.date) } ?? false
-        let isHovered = hoveredDate.map { cal.isDate($0, inSameDayAs: day.date) } ?? false
-        let isHighlighted = store.highlightedDays.contains(cal.startOfDay(for: day.date))
+    /// Resolved once per pass: three day starts and two accent colors for all 42 cells.
+    private func dayCellContext(calendar cal: Calendar, keyboardFocused: Bool) -> DayCellContext {
+        DayCellContext(
+            todayStart: cal.startOfDay(for: Date()),
+            selectedStart: store.selectedDate.map(cal.startOfDay(for:)),
+            logicalStart: keyboardFocused ? logicalDate.map(cal.startOfDay(for:)) : nil,
+            highlightedDays: store.highlightedDays,
+            highlightSuffix: Self.highlightSuffix(store.highlight),
+            keyboardFocused: keyboardFocused,
+            showsFocusRing: inputModality.showsFocusRing,
+            hoverResetToken: hoverResetToken,
+            todayFill: AppDesign.Colors.calendarSolidFill(.accentColor, in: environment),
+            accent: AppDesign.Colors.calendarEssentialAccent(in: environment)
+        )
+    }
 
-        return Button {
-            if keyboardFocused { logicalDate = day.date }
-            store.send(.dateTapped(day.date))
-        } label: {
-            Text("\(dayNumber)")
-                .font(.system(.body, design: .rounded))
-                .fontWeight(isToday || isSelected ? .bold : .regular)
-                .foregroundStyle(foregroundColor(for: day, isToday: isToday, isSelected: isSelected))
-                .frame(maxWidth: .infinity)
-                .frame(height: AppDesign.Grid.cellHeight)
-                .background {
-                    if isToday {
-                        Circle()
-                            .fill(AppDesign.Colors.calendarSolidFill(.accentColor, in: environment))
-                            .frame(
-                                width: AppDesign.Grid.todayCircleSize,
-                                height: AppDesign.Grid.todayCircleSize
-                            )
-                    } else if isSelected {
-                        Circle()
-                            .strokeBorder(AppDesign.Colors.calendarEssentialAccent(in: environment), lineWidth: 2)
-                            .frame(
-                                width: AppDesign.Grid.todayCircleSize,
-                                height: AppDesign.Grid.todayCircleSize
-                            )
-                    } else if isHovered {
-                        Circle()
-                            .strokeBorder(Color.secondary.opacity(AppDesign.Grid.hoverBorderOpacity), lineWidth: 1)
-                            .frame(
-                                width: AppDesign.Grid.todayCircleSize,
-                                height: AppDesign.Grid.todayCircleSize
-                            )
-                    } else if isWorkdayColumn && day.isCurrentMonth {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.accentColor.opacity(AppDesign.Grid.workdayTintOpacity))
-                    }
-                }
-                .background {
-                    if isHighlighted {
-                        RoundedRectangle(cornerRadius: AppDesign.Grid.rangeHighlightCornerRadius)
-                            .fill(Color.accentColor.opacity(AppDesign.Grid.rangeHighlightOpacity))
-                    }
-                }
-                .foregroundStyle(isToday ? .white : foregroundColor(for: day, isToday: false, isSelected: isSelected))
-                .contentShape(Rectangle())
-                .overlay {
-                    if keyboardFocused, inputModality.showsFocusRing, logicalDate.map({
-                        cal.isDate($0, inSameDayAs: day.date)
-                    }) == true {
-                        RoundedRectangle(cornerRadius: AppDesign.Control.focusCornerRadius)
-                            .strokeBorder(AppDesign.Colors.calendarEssentialAccent(in: environment),
-                                          lineWidth: AppDesign.Control.focusLineWidth)
-                            .padding(AppDesign.Control.focusInset)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
-                }
+    private func dayCell(
+        _ day: GlimpseCore.CalendarDay, entry: CalendarDayEntry,
+        isWorkdayColumn: Bool, context: DayCellContext
+    ) -> some View {
+        let model = DayCellModel(day: day, entry: entry, isWorkdayColumn: isWorkdayColumn, context: context)
+        let store = store
+        let logicalDate = $logicalDate
+        return DayCell(model: model) {
+            if model.keyboardFocused { logicalDate.wrappedValue = model.date }
+            store.send(.dateTapped(model.date))
         }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .id(day.date)
-            .onHover { hovering in
-                hoveredDate = hovering ? day.date : nil
-            }
-            .accessibilityLabel(dayAccessibilityLabel(day, dayNumber: dayNumber, isToday: isToday)
-                + (isHighlighted ? Self.highlightSuffix(store.highlight) : ""))
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .equatable()
+        .id(day.date)
     }
 
     // Thread-safe, allocation-free formatting (see gotchas.md: prefer Date.FormatStyle
@@ -763,26 +720,8 @@ struct CalendarPopoverView: View {
     private static let accessibilityDateStyle = Date.FormatStyle.dateTime
         .weekday(.wide).month(.wide).day().year()
 
-    private func dayAccessibilityLabel(
-        _ day: GlimpseCore.CalendarDay, dayNumber: Int, isToday: Bool
-    ) -> String {
-        var label = day.date.formatted(Self.accessibilityDateStyle)
-        if isToday { label += ", today" }
-        if !day.isCurrentMonth { label += ", outside current month" }
-        return label
-    }
-
     nonisolated static func highlightSuffix(_ highlight: DateRangeHighlight?) -> String {
         highlight.map { ", highlighted, \($0.label)" } ?? ", highlighted"
-    }
-
-    private func foregroundColor(
-        for day: GlimpseCore.CalendarDay, isToday: Bool, isSelected: Bool = false
-    ) -> Color {
-        if isToday { return .white }
-        if isSelected { return .primary }
-        if !day.isCurrentMonth { return AppDesign.Colors.calendarContextText }
-        return .primary
     }
 
     // MARK: - Agenda Date Context

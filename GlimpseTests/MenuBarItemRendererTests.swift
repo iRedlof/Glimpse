@@ -134,6 +134,61 @@ struct MenuBarItemRendererTests {
     }
 }
 
+/// The status item re-renders only when something it draws changed (options, text,
+/// meeting, appearance, bar thickness or the icon's day); theme changes invalidate.
+struct MenuBarRenderCacheTests {
+    private func key(
+        dateString: String = "Fri", meeting: MenuBarMeetingSegment? = nil,
+        isDark: Bool = false, thickness: CGFloat = 24, day: Int = 20
+    ) -> MenuBarRenderKey {
+        MenuBarRenderKey(
+            options: MenuBarDisplayOptions(), dateString: dateString, meeting: meeting,
+            isDark: isDark, thickness: thickness, day: day
+        )
+    }
+
+    /// Feeds keys through one cache; true means that call would re-render.
+    private func renders(_ keys: [MenuBarRenderKey], invalidatingBefore: Int? = nil) -> [Bool] {
+        var cache = MenuBarRenderCache()
+        return keys.enumerated().map { index, key in
+            if index == invalidatingBefore { cache.invalidate() }
+            return cache.needsRender(key)
+        }
+    }
+
+    @Test
+    func identicalKeyIsSkipped() {
+        #expect(renders([key(), key(), key()]) == [true, false, false])
+    }
+
+    @Test(arguments: ["text", "meeting", "dark", "thickness", "day"])
+    func anyDrawnInputChangeRenders(changed: String) {
+        let next: MenuBarRenderKey = switch changed {
+        case "text": key(dateString: "Sat")
+        case "meeting": key(meeting: MenuBarMeetingSegment(text: "Standup in 5m", isImminent: true))
+        case "dark": key(isDark: true)
+        case "thickness": key(thickness: 37)
+        default: key(day: 21)
+        }
+        #expect(renders([key(), next, next]) == [true, true, false])
+    }
+
+    @Test
+    func optionsChangeRenders() {
+        var options = MenuBarDisplayOptions()
+        options.showFilledBackground.toggle()
+        let changed = MenuBarRenderKey(
+            options: options, dateString: "Fri", meeting: nil, isDark: false, thickness: 24, day: 20
+        )
+        #expect(renders([key(), changed]) == [true, true])
+    }
+
+    @Test
+    func invalidateForcesTheNextRender() {
+        #expect(renders([key(), key(), key()], invalidatingBefore: 1) == [true, true, false])
+    }
+}
+
 @MainActor
 private final class PreviewAppearanceModel: ObservableObject {
     @Published var scheme: ColorScheme = .light

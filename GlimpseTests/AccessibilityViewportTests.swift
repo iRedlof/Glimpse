@@ -360,8 +360,9 @@ struct AccessibilityViewportTests {
                 }
             }
             defer { NotificationCenter.default.removeObserver(observer) }
-            let expectedRefreshCompletions = expectsActive && scenario.authorization == .fullAccess ? 1 : 0
-            let expectedFetches = scenario.authorization == .fullAccess ? (expectsActive ? 2 : 1) : 0
+            // Activation with unchanged authorization does not re-query (EKEventStoreChanged covers data).
+            let expectedRefreshCompletions = 0
+            let expectedFetches = scenario.authorization == .fullAccess ? 1 : 0
             var activationRefreshCompleted = false
 
             @MainActor
@@ -378,11 +379,10 @@ struct AccessibilityViewportTests {
                                  && fixture.liveActivationRefreshes.value == (activationRefreshCompleted ? 1 : 0)
                                  && fixture.liveActivationCompletions.value == (activationRefreshCompleted ? expectedRefreshCompletions : 0)
                                  && fixture.liveInvalidCompletions.value == 0
-                                 && fixture.liveSyntheticFetches == (scenario.authorization == .fullAccess
-                                     ? (activationRefreshCompleted ? 2 : 1) : 0)
+                                 && fixture.liveSyntheticFetches == expectedFetches
                                  && !fixture.store.isLoadingEvents && fixture.store.eventsRequestID == nil
                                  && fixture.protectedEffects.value == 0)
-                    try fixture.expectContrastState(afterOwnedActivation: activationRefreshCompleted)
+                    try fixture.expectContrastState()
                 }
                 #expect(fixture.protectedEffects.value == 0)
             }
@@ -989,7 +989,7 @@ private final class CalendarViewportFixture {
             if observeLiveActivation {
                 Reduce<CalendarFeature.State, CalendarFeature.Action> { state, action in
                     switch action {
-                    case .refreshCalendarAuthorization:
+                    case .applicationDidBecomeActive:
                         refreshes.withValue { $0 += 1 }
                     case let .eventsLoaded(date, requestID, _), let .eventsFailed(date, requestID, _):
                         if refreshes.value > 0 {
@@ -1164,7 +1164,7 @@ private final class CalendarViewportFixture {
         return nodes
     }
 
-    func expectContrastState(afterOwnedActivation: Bool = false) throws {
+    func expectContrastState() throws {
         let scenario = try #require(contrastScenario)
         let model = try #require(contrastModel)
         let nodes = contrastNodes()
@@ -1174,11 +1174,8 @@ private final class CalendarViewportFixture {
         }
         #expect(store.days.count == 42 && store.selectedDate == expectedSelection)
         #expect(store.calendarAuthorizationStatus == scenario.authorization)
-        if afterOwnedActivation {
-            #expect(syntheticFetches.value == (scenario.authorization == .fullAccess ? 2 : 0))
-        } else {
-            #expect(syntheticFetches.value == (scenario.authorization == .fullAccess ? 1 : 0))
-        }
+        // Activation with unchanged authorization never adds a fetch.
+        #expect(syntheticFetches.value == (scenario.authorization == .fullAccess ? 1 : 0))
         #expect(protectedEffects.value == 0)
         switch scenario {
         case .selectedLoading: #expect(store.isLoadingEvents && has("Loading events…"))
