@@ -1,23 +1,23 @@
 {
-  "version": "1.5.6",
-  "build": "43",
-  "scope": "Focus rings appear only after keyboard use across the calendar and Settings; a mouse click never leaves a ring.",
+  "version": "1.5.7",
+  "build": "44",
+  "scope": "Open an agenda event in Calendar (click, Return or Space); stuck agenda after rapid refreshes fixed.",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-19-focus-rings-keyboard-only.md"
+      "evidence": "docs/superpowers/reviews/2026-11-20-open-event-in-calendar.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-19-focus-rings-keyboard-only.md"
+      "evidence": "docs/superpowers/reviews/2026-11-20-open-event-in-calendar.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-19-focus-rings-keyboard-only.md"
+      "evidence": "docs/superpowers/reviews/2026-11-20-open-event-in-calendar.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-19-focus-rings-keyboard-only.md"
+      "evidence": "docs/superpowers/reviews/2026-11-20-open-event-in-calendar.md"
     }
   }
 }
