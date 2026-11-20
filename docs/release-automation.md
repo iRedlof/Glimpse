@@ -250,8 +250,16 @@ health on machines that were not exercised.
 Required secrets remain `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD`,
 `SPARKLE_PRIVATE_KEY`, `APPLE_ID`, `APPLE_ID_PASSWORD`, and `TEAM_ID`. The
 automation imports the existing certificate and Sparkle key; it generates no
-distribution key. A trusted self-hosted runner must have Xcode, Swift, Python,
-`gh`, and `create-dmg` available.
+distribution key. The release build job still runs on the trusted self-hosted
+runner, which must have Xcode, Swift, Python, `gh`, and `create-dmg` available.
+
+The trusted quality job (`app-and-core`) runs on the GitHub-hosted `xcode-27`
+runner. Its throwaway VM is always logged in and unlocked, so the key-window
+keyboard suites no longer fail when the owner's Mac is locked or in use. The job
+enables macOS Keyboard navigation (`AppleKeyboardUIMode = 2`) before testing,
+because the hosted image ships with it off. Tests that depend on pixel layout
+allow one device pixel, since the hosted display is 1x. A gate run takes about
+11–19 minutes.
 
 CI selects exactly one valid `Developer ID Application` identity for `TEAM_ID`
 from the temporary signing keychain. A disposable executable signing probe

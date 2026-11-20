@@ -330,6 +330,10 @@ struct CalendarKeyboardOwnershipTests {
             settings.nodes().filter { $0.object.isAccessibilityFocused?() == true }
                 .compactMap(\.label)
         }
+        // Native Tab reaches buttons and checkboxes only with macOS keyboard
+        // navigation on; name that environmental cause before focus assertions.
+        try #require(NSApp.isFullKeyboardAccessEnabled,
+                     "Enable Keyboard navigation (defaults write -g AppleKeyboardUIMode -int 2)")
         try calendar.send(.tab, toWindow: owner)
         await settings.settle()
         print("GLIMPSE_SETTINGS_FOCUS first-tab=\(focusedLabels()) full-access=\(NSApp.isFullKeyboardAccessEnabled)")
@@ -837,8 +841,12 @@ struct CalendarKeyboardOwnershipTests {
         let origin = scroll.contentView.bounds.origin
         let screen = try #require(NSScreen.screens.first)
         let available = screen.visibleFrame
+        // Whole-point origin like a real visible frame: centering on an odd-height
+        // 1x screen would otherwise start the rect on a half point, and AppKit's
+        // pixel-snapped window frame would land 0.5 pt outside the margin.
         let visible = constrained
-            ? NSRect(x: available.midX - 250, y: available.midY - 160, width: 500, height: 320)
+            ? NSRect(x: (available.midX - 250).rounded(.down), y: (available.midY - 160).rounded(.down),
+                     width: 500, height: 320)
             : available
         let placement = calendar.showOwner.prepareForSettingsPresentation()
         try await settings.open(visibleFrame: visible, avoiding: placement.avoiding, calendar: placement.calendar)
@@ -2323,7 +2331,10 @@ struct CalendarKeyboardOwnershipTests {
             #expect(abs(half.midY - normal.midY) < 0.5)
         }
         #expect(abs(confirm.frame.minX - cancel.frame.maxX) < 0.5)
-        #expect(abs(confirm.frame.width - cancel.frame.width) < 0.5)
+        // An odd device-pixel width cannot split exactly: halves may differ by one
+        // device pixel (1 pt on a 1x display, 0.5 pt at 2x), never more.
+        let devicePixel = 1 / fixture.panel.backingScaleFactor
+        #expect(abs(confirm.frame.width - cancel.frame.width) <= devicePixel + 0.01)
         #expect(abs(cancel.frame.width + confirm.frame.width - (PanelGeometry.contentWidth - scrollerClearance)) < 0.5)
         #expect(!fixture.accessibilityNodes().contains {
             $0.role == .staticText && ($0.label == "Quit Glimpse?" || ($0.value as? String) == "Quit Glimpse?")

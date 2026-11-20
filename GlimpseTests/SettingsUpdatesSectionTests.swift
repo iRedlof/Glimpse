@@ -51,7 +51,10 @@ struct SettingsUpdatesSectionTests {
         let fitting = host.fittingSize
         #expect(fitting.width.isFinite && fitting.height.isFinite)
         #expect(abs(fitting.width - UpdateSectionHost.width) < 0.5)
-        #expect(host.contentBounds.height >= fitting.height - 0.5)
+        // AppKit sizes the window to the fitting height on the backing pixel
+        // grid, landing up to one device pixel short (0.5 pt at 2x, 1 pt at
+        // a 1x hosted display). Anything more would clip the guidance.
+        #expect(host.contentBounds.height >= fitting.height - host.devicePixel)
 
         var text = [expected.headline] + (expected.recovery.map { [$0] } ?? [])
         if let detail {
@@ -721,6 +724,8 @@ final class UpdateSectionHost: CustomTestStringConvertible {
     }
 
     var fittingSize: NSSize { hosting.fittingSize }
+    /// One device pixel, in points, for the window's current backing scale.
+    var devicePixel: CGFloat { 1 / window.backingScaleFactor }
     var contentBounds: NSRect { hosting.bounds }
     var screenBounds: NSRect {
         window.convertToScreen(hosting.convert(hosting.bounds, to: nil))

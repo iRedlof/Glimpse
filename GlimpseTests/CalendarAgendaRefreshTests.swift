@@ -277,10 +277,15 @@ struct CalendarAgendaRefreshTests {
             try await fixture.mountWithEmptyAgenda()
             let old = try await fixture.invalidateAndRequest()
             let actions = fixture.actions.value.filter { $0 == "refresh" }.count
+            let queries = fixture.fetches.count.value
             for _ in 0..<3 { fixture.postStoreChange() }
+            // Each burst refresh enters its own query. Wait for the last one so the
+            // "current" request below cannot be a superseded query whose successor
+            // simply has not started yet on a slower host.
             try await fixture.settle(until: {
                 fixture.actions.value.filter { $0 == "refresh" }.count == actions + 3
-            }, reason: "all burst notifications dispatch")
+                    && fixture.fetches.count.value == queries + 3
+            }, reason: "all burst notifications dispatch and enter their queries")
             try await fixture.expectCancellation(of: old)
             let latest = try await fixture.currentPendingRequest()
             let currentEvent = fixture.event("Latest burst result", on: fixture.today)
@@ -788,7 +793,7 @@ private final class AgendaRefreshFixture {
 
     func currentPendingRequest(excluding excluded: AgendaFetchRequest? = nil) async throws -> AgendaFetchRequest {
         for _ in 0..<8 { await layoutPass() }
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let deadline = ContinuousClock.now.advanced(by: Self.conditionHangGuard)
         while true {
             let requests = await fetches.snapshot()
             let current = requests.filter {
@@ -940,10 +945,14 @@ private final class AgendaRefreshFixture {
         return nodes
     }
 
+    /// Bounds polling for a condition that must become true; never a latency
+    /// budget. Generous so a busy 3-core hosted runner cannot fail a positive wait.
+    static let conditionHangGuard: Duration = .seconds(10)
+
     func settle(until predicate: @MainActor () -> Bool = { true },
                 reason: String = "agenda layout") async throws {
         for _ in 0..<8 { await layoutPass() }
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let deadline = ContinuousClock.now.advanced(by: Self.conditionHangGuard)
         while !predicate() {
             guard ContinuousClock.now < deadline else {
                 throw AgendaFixtureFailure.timeout(

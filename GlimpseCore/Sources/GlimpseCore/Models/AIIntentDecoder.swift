@@ -222,25 +222,29 @@ public enum AIIntentDecoder {
         .union(CharacterSet(charactersIn: "`\"'."))
 
     /// Every balanced `{…}` substring in order, skipping braces inside strings.
+    /// Each `{` is matched as if scanning fresh from it. One scan also settles
+    /// every `{` it reaches outside a string, since those scans proceed in step
+    /// with it, so the cost stays linear instead of rescanning from each brace.
     static func jsonObjectCandidates(in text: String) -> [String] {
         let characters = Array(text)
+        var matches = BraceMatches(count: characters.count)
         var candidates: [String] = []
-        var index = 0
-        while index < characters.count {
-            guard characters[index] == "{" else {
-                index += 1
-                continue
+        for index in characters.indices where characters[index] == "{" {
+            if !matches.isResolved(index) {
+                resolveMatches(in: characters, from: index, into: &matches)
             }
-            if let end = matchingBrace(in: characters, from: index) {
+            if let end = matches.end(of: index) {
                 candidates.append(String(characters[index...end]))
             }
-            index += 1
         }
         return candidates
     }
 
-    private static func matchingBrace(in characters: [Character], from start: Int) -> Int? {
-        var depth = 0
+    /// Scans from `start` with fresh string state, recording the matching `}`
+    /// (or none) for every `{` seen outside a string until `start` closes.
+    private static func resolveMatches(in characters: [Character], from start: Int,
+                                       into matches: inout BraceMatches) {
+        var open: [Int] = []
         var inString = false
         var escaped = false
         for index in start..<characters.count {
@@ -253,13 +257,32 @@ public enum AIIntentDecoder {
             }
             switch character {
             case "\"": inString = true
-            case "{": depth += 1
+            case "{": open.append(index)
             case "}":
-                depth -= 1
-                if depth == 0 { return index }
+                guard let opening = open.popLast() else { return }
+                matches.resolve(opening, end: index)
+                if open.isEmpty { return }
             default: break
             }
         }
-        return nil
+        for opening in open { matches.resolve(opening, end: nil) }
+    }
+
+    private struct BraceMatches {
+        private var resolved: [Bool]
+        private var ends: [Int?]
+
+        init(count: Int) {
+            resolved = Array(repeating: false, count: count)
+            ends = Array(repeating: nil, count: count)
+        }
+
+        func isResolved(_ index: Int) -> Bool { resolved[index] }
+        func end(of index: Int) -> Int? { ends[index] }
+
+        mutating func resolve(_ index: Int, end: Int?) {
+            resolved[index] = true
+            ends[index] = end
+        }
     }
 }
