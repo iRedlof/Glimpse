@@ -143,6 +143,8 @@ def settings_suite():
         ("quitConfirmationOwnsHeldActivationAndRecordsOnlyDeliberateTermination(key:)", 3),
         ("olderAIRequestCannotReclaimCancelOrReturnedQuit(cancelFirst:)", 2),
         ("focusedUpdateActionKeepsNativeKeyboardActivation(dark:)", 2),
+        ("footerQuitClickKeepsFocusWithoutRing(dark:)", 2),
+        ("settingsOpenFocusRingFollowsEntryModality(entry:dark:)", 4),
     ]
     for method, count in additions:
         identifier = "CalendarKeyboardOwnershipTests/" + method
@@ -162,6 +164,6 @@ def settings_suite():
                 for index in range(1, count + 1)
             ]
         cases(tests).append(case)
-    result.update(totalTestCount=45, passedTests=45)
-    result["devicesAndConfigurations"][0]["passedTests"] = 111
+    result.update(totalTestCount=47, passedTests=47)
+    result["devicesAndConfigurations"][0]["passedTests"] = 117
     return expected, result, tests

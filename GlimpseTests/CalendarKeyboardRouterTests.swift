@@ -289,18 +289,3 @@ struct CalendarKeyboardRouterTests {
         }
     }
 }
-
-/// The footer's Cancel/Quit ring shows only after keyboard use; a mouse click opens the confirmation without one.
-@Suite("Quit confirmation focus ring")
-struct QuitFocusRingVisibilityTests {
-    @Test func aMouseClickLeavesNoRing() {
-        #expect(!calendarFocusRingVisible(after: .leftMouseUp))
-        #expect(!calendarFocusRingVisible(after: .leftMouseDown))
-        #expect(!calendarFocusRingVisible(after: nil))
-    }
-
-    @Test func keyboardUseShowsTheRing() {
-        #expect(calendarFocusRingVisible(after: .keyDown))
-        #expect(calendarFocusRingVisible(after: .keyUp))
-    }
-}

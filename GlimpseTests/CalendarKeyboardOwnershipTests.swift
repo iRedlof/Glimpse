@@ -716,6 +716,114 @@ struct CalendarKeyboardOwnershipTests {
     }
 
     @Test(arguments: [false, true])
+    func footerQuitClickKeepsFocusWithoutRing(dark: Bool) async throws {
+        let calendar = try CalendarKeyboardRootFixture(maximumHeight: 300)
+        defer { calendar.close() }
+        let appearance = dark ? "dark" : "light"
+        try await calendar.openThroughShowOwner()
+        calendar.panel.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        // Keyboard use first, so the click alone must clear the ring.
+        try await calendar.focusOwner(.footerQuit)
+        #expect(calendar.inputModality.modality == .keyboard)
+        try calendar.loadOwnedAccessibilityTree()
+        let quit = try calendar.ownedControl("Quit Glimpse")
+        try calendar.clickOwned(at: NSPoint(x: quit.frame.midX, y: quit.frame.midY))
+        await calendar.settleRendering()
+        // Focus ownership is unchanged by modality: Cancel still owns Return/Escape.
+        #expect(calendar.lastPublishedOwner == .quitCancel)
+        #expect(calendar.inputModality.modality == .pointer)
+        #expect(calendar.terminationReceipts == 0)
+        try calendar.loadOwnedAccessibilityTree()
+        let footer = try calendar.ownedControl("Cancel quitting Glimpse").frame
+            .union(try calendar.ownedControl("Confirm quitting Glimpse").frame)
+        let clicked = try calendar.bitmap(footer)
+        try calendar.saveFocusedDateBitmap(footer, name: "focus-calendar-quit-click-\(appearance)")
+        // The same focused Cancel under keyboard modality draws its ring; pointer hides it again.
+        calendar.inputModality.note(.keyboard)
+        await calendar.settleRendering()
+        let keyboard = try calendar.bitmap(footer)
+        #expect(keyboard != clicked)
+        calendar.inputModality.note(.pointer)
+        await calendar.settleRendering()
+        #expect(try calendar.bitmap(footer) == clicked)
+        // Real keyboard use: Tab moves to Quit and its ring is drawn.
+        try calendar.send(.tab)
+        await calendar.settleRendering()
+        #expect(calendar.lastPublishedOwner == .quitConfirm)
+        #expect(calendar.inputModality.modality == .keyboard)
+        #expect(try calendar.bitmap(footer) != clicked)
+        try calendar.saveFocusedDateBitmap(footer, name: "focus-calendar-quit-tab-\(appearance)")
+        try calendar.send(.escape)
+        await calendar.settleRendering()
+        #expect(calendar.terminationReceipts == 0)
+        // Escape cancelled the confirmation: the footer's Quit button is back.
+        #expect(try calendar.ownedControl("Quit Glimpse").enabled)
+    }
+
+    @Test(arguments: ["pointer", "keyboard"], [false, true])
+    func settingsOpenFocusRingFollowsEntryModality(entry: String, dark: Bool) async throws {
+        let calendar = try CalendarKeyboardRootFixture(maximumHeight: 300)
+        let settings = SettingsWindowTestFixture(inputModality: calendar.inputModality)
+        let delegate = AppDelegate(
+            calendarStatusItem: calendar.showOwner, showCommand: CalendarShowCommand(),
+            settingsController: settings.controller
+        )
+        defer { settings.close(); calendar.close(); withExtendedLifetime(delegate) {} }
+        let appearance = dark ? "dark" : "light"
+        try await calendar.openThroughShowOwner()
+        calendar.panel.isPinned = true
+        calendar.store.send(.togglePin)
+        await calendar.settleRendering()
+        // Keyboard use first, so a gear click alone must clear the ring.
+        try await calendar.focusOwner(.footerSettings)
+        #expect(calendar.inputModality.modality == .keyboard)
+        if entry == "pointer" {
+            try calendar.loadOwnedAccessibilityTree()
+            let gear = try calendar.ownedControl("Open Glimpse Settings")
+            try calendar.clickOwned(at: NSPoint(x: gear.frame.midX, y: gear.frame.midY))
+        } else {
+            try calendar.send(.returnKey)
+        }
+        await settings.settle()
+        let owner = try #require(settings.controller.window)
+        try #require(owner.isVisible && owner.isKeyWindow && NSApp.keyWindow === owner)
+        owner.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        await settings.settle()
+        let expected: InputModality = entry == "pointer" ? .pointer : .keyboard
+        #expect(calendar.inputModality.modality == expected)
+        // Focus ownership is identical for both entries: a native control owns the keyboard.
+        let responder = try #require(owner.firstResponder as? NSView)
+        try #require(responder.window === owner)
+        let opened = try await settings.settledBitmap(around: responder)
+        try settings.saveBitmap(name: "focus-settings-\(entry)-open-\(appearance)")
+        if entry == "keyboard" {
+            // A later click (pointer) hides the ring the keyboard open drew, without moving focus.
+            #expect(try await settings.pointerBitmap(around: responder) != opened)
+            #expect(owner.firstResponder === responder)
+        }
+        // Tab is keyboard use: native traversal moves on and the next control shows its ring.
+        try calendar.send(.tab, toWindow: owner)
+        await settings.settle()
+        #expect(calendar.inputModality.modality == .keyboard)
+        let next = try #require(owner.firstResponder as? NSView)
+        #expect(next !== responder)
+        let tabbed = try await settings.settledBitmap(around: next)
+        try settings.saveBitmap(name: "focus-settings-\(entry)-after-tab-\(appearance)")
+        #expect(try await settings.pointerBitmap(around: next) != tabbed, "Tab must draw the native ring")
+        // Back-Tab returns focus to the opening control, now ringed: so the pointer open drew none.
+        try calendar.send(.backTab, toWindow: owner)
+        await settings.settle()
+        #expect(calendar.inputModality.modality == .keyboard)
+        try #require(owner.firstResponder === responder)
+        let returned = try await settings.settledBitmap(around: responder)
+        if entry == "pointer" {
+            #expect(returned != opened, "A pointer open must not draw the ring keyboard focus draws")
+        } else {
+            #expect(returned == opened)
+        }
+    }
+
+    @Test(arguments: [false, true])
     func settingsSectionsKeepWindowAndCalendarStable(constrained: Bool) async throws {
         let calendar = try CalendarKeyboardRootFixture(maximumHeight: 300)
         let settings = SettingsWindowTestFixture()
@@ -2522,10 +2630,13 @@ private final class SettingsWindowTestFixture {
     let store: StoreOf<PreferencesFeature>
     let model: HotkeyPreferencesModel
     let controller: SettingsWindowController
+    /// Driven by this fixture's real owned events, never by the app-wide shared tracker.
+    let inputModality: InputModalityTracker
     private var recordingObserver: NSObjectProtocol?
     private var accessibilityPrepared = false
 
-    init(updaterStartError: Error? = nil) {
+    init(updaterStartError: Error? = nil, inputModality: InputModalityTracker = InputModalityTracker()) {
+        self.inputModality = inputModality
         updates = UpdaterFixture(startError: updaterStartError)
         let saved = saved
         let login = login
@@ -2554,8 +2665,9 @@ private final class SettingsWindowTestFixture {
         model = HotkeyPreferencesModel(hotkey: hotkey.hotkey, defaults: hotkey.defaults, handler: {})
         controller = SettingsWindowController(
             store: store, hotkeyPreferences: model, notificationCenter: notifications,
-            updater: updates.updater, diagnostics: diagnostics.model
+            updater: updates.updater, diagnostics: diagnostics.model, inputModality: inputModality
         )
+        inputModality.startMonitoring()
         let changes = recordingChanges
         recordingObserver = NotificationCenter.default.addObserver(
             forName: .hotkeyRecordingDidChange, object: nil, queue: nil
@@ -2811,6 +2923,43 @@ private final class SettingsWindowTestFixture {
         try data.write(to: base.appendingPathComponent(name + ".png"), options: .atomic)
     }
 
+    /// The responder's native control and its ring margin, in window-content pixels.
+    func bitmap(around responder: NSView) throws -> Data {
+        let hosting = try #require(controller.window?.contentView)
+        try #require(responder.window === controller.window)
+        let rect = hosting.convert(responder.bounds, from: responder)
+            .insetBy(dx: -AppDesign.Spacing.sm, dy: -AppDesign.Spacing.sm)
+            .intersection(hosting.bounds)
+        try #require(!rect.isEmpty)
+        let bitmap = try #require(hosting.bitmapImageRepForCachingDisplay(in: rect))
+        hosting.cacheDisplay(in: rect, to: bitmap)
+        return try #require(bitmap.representation(using: .png, properties: [:]))
+    }
+
+    /// The responder once its native focus-ring animation has finished: three identical
+    /// consecutive renders, bounded so a never-settling render fails instead of hanging.
+    func settledBitmap(around responder: NSView) async throws -> Data {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        var previous = try bitmap(around: responder)
+        var stable = 0
+        while stable < 3 {
+            try #require(ContinuousClock.now < deadline, "Focus ring render never settled")
+            await settle()
+            let current = try bitmap(around: responder)
+            stable = current == previous ? stable + 1 : 0
+            previous = current
+        }
+        return previous
+    }
+
+    /// The unchanged responder after pointer use (as after a click elsewhere); restores the modality.
+    func pointerBitmap(around responder: NSView) async throws -> Data {
+        let original = inputModality.modality
+        defer { inputModality.note(original) }
+        inputModality.note(.pointer)
+        return try await settledBitmap(around: responder)
+    }
+
     func aiSwitchBitmap() throws -> Data {
         let owner = try #require(controller.window)
         let hosting = try #require(owner.contentView)
@@ -2874,6 +3023,7 @@ private final class SettingsWindowTestFixture {
         login.finish()
         if let recordingObserver { NotificationCenter.default.removeObserver(recordingObserver) }
         hotkey.cleanupDefaults()
+        inputModality.stopMonitoring()
     }
 }
 
@@ -3100,6 +3250,8 @@ final class CalendarKeyboardRootFixture {
     var heldCrossScreenShows: [@MainActor () -> Void] { effects.heldCrossScreenShows }
     var completions: Int { lifecycle.completions }
     var gridRenderingFocused: Bool { focus.gridRenderingFocused }
+    /// Driven by this fixture's real owned events, never by the app-wide shared tracker.
+    let inputModality = InputModalityTracker()
     var matchesCurrentDispatchedEvent: Bool {
         dispatch.expected != nil && NSApp.currentEvent === dispatch.expected
     }
@@ -3302,6 +3454,7 @@ final class CalendarKeyboardRootFixture {
                 quitApplication: { effects.terminations += 1 }
             )
             .environment(\.accessibilityEnabled, true)
+            .environment(\.inputModality, inputModality)
             .background(CalendarKeyboardTestOwnerObserver(receipt: focus))
             .onPreferenceChange(CalendarGridFocusPreference.self) {
                 rendering.setValue($0)
@@ -3316,6 +3469,7 @@ final class CalendarKeyboardRootFixture {
         completionObserver = NotificationCenter.default.addObserver(
             forName: .calendarPanelDidCompleteReopen, object: panel, queue: nil
         ) { _ in MainActor.assumeIsolated { lifecycle.completions += 1 } }
+        inputModality.startMonitoring()
     }
 
     func awaitAcceptedSubmissions() async throws {
@@ -3636,6 +3790,13 @@ final class CalendarKeyboardRootFixture {
         return nodes
     }
 
+    func bitmap(_ screenRect: NSRect) throws -> Data {
+        let rect = hosting.convert(panel.convertFromScreen(screenRect), from: nil)
+        let bitmap = try #require(hosting.bitmapImageRepForCachingDisplay(in: rect))
+        hosting.cacheDisplay(in: rect, to: bitmap)
+        return try #require(bitmap.representation(using: .png, properties: [:]))
+    }
+
     func saveFocusedDateBitmap(_ screenRect: NSRect, name: String) throws {
         let rect = hosting.convert(panel.convertFromScreen(screenRect), from: nil)
         let bitmap = try #require(hosting.bitmapImageRepForCachingDisplay(in: rect))
@@ -3821,6 +3982,7 @@ final class CalendarKeyboardRootFixture {
         panel.contentView = nil
         panel.close()
         hotkeyFixture.cleanupDefaults()
+        inputModality.stopMonitoring()
         #expect(hotkeyFixture.backend.operations.isEmpty)
         #expect(!panel.isVisible && !panel.isKeyWindow)
         #expect(panel.firstResponder == nil || panel.firstResponder === panel)

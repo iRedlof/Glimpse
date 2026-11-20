@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !isRunningTests else { return }
+        InputModalityTracker.shared.startMonitoring()
         calendarStatusItem.setup()
         showCommand.register { [weak calendarStatusItem] in
             guard let calendarStatusItem else { throw CalendarShowError.notReady }

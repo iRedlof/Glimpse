@@ -13,6 +13,7 @@ struct SettingsRootView: View {
     let calendarActions: SettingsCalendarActions
     let updater: SparkleUpdater
     let diagnostics: DiagnosticsExportModel
+    var inputModality: InputModalityTracker = .shared
 
     var body: some View {
         // The page has no window footer: updates and About are its last sections.
@@ -30,5 +31,9 @@ struct SettingsRootView: View {
         }
         .background(AppDesign.Colors.settingsSurface(in: environment))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Native controls keep focus, Tab order and Space/Return; only their rings are hidden
+        // until the keyboard is used, so a gear-click open or a mouse click leaves no ring.
+        .focusEffectDisabled(!inputModality.showsFocusRing)
+        .environment(\.inputModality, inputModality)
     }
 }

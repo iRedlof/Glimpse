@@ -22,6 +22,8 @@ struct HotkeyRecordingClient {
                 guard let window, window.isVisible, window.isKeyWindow,
                       NSApplication.shared.keyWindow === window else { return nil }
                 return NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak window] event in
+                    // Runs before the app-wide tracker and consumes recorded keys.
+                    InputModalityTracker.shared.note(.keyboard)
                     guard let window else { return event }
                     let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
                     var carbonModifiers: UInt32 = 0
@@ -90,6 +92,8 @@ final class HotkeyPreferencesModel {
     convenience init() {
         self.init(hotkey: .shared, defaults: .standard) {
             if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                // A Carbon hotkey never reaches the local monitors, but it is keyboard use.
+                InputModalityTracker.shared.note(.keyboard)
                 appDelegate.calendarStatusItem.statusItemClicked()
             }
         }
