@@ -3238,6 +3238,8 @@ final class CalendarKeyboardRootFixture {
     )
     let actionCurrentEvents = LockIsolated<[Bool]>([])
     let reopenActions = LockIsolated(0)
+    /// URLs the reducer handed to the injected Calendar app client (never the live one).
+    let calendarAppOpens = LockIsolated<[URL]>([])
     private let dispatch = CalendarKeyboardDispatchReceipt()
     private let focus = CalendarKeyboardFocusReceipt()
     private let callbacks = CalendarKeyboardCallbackReceipt()
@@ -3310,6 +3312,7 @@ final class CalendarKeyboardRootFixture {
         let events = actionCurrentEvents
         let dispatch = dispatch
         let reopenActions = reopenActions
+        let calendarAppOpens = calendarAppOpens
         store = Store(initialState: CalendarFeature.State(displayedMonth: today)) {
             Reduce<CalendarFeature.State, CalendarFeature.Action> { state, action in
                 let name: String?
@@ -3325,6 +3328,7 @@ final class CalendarKeyboardRootFixture {
                 case .aiIntent(.navigate): name = "aiDate"
                 case let .dateTapped(date):
                     name = "date:\(state.calendar.component(.day, from: date))"
+                case let .openEventInCalendar(event): name = "openEvent:\(event.title)"
                 default: name = nil
                 }
                 if let name {
@@ -3353,6 +3357,7 @@ final class CalendarKeyboardRootFixture {
             $0.continuousClock = TestClock<Duration>()
             // The real save signal: it closes the editor through the view's observer.
             $0.scheduleEvents = .liveValue
+            $0.calendarApp.open = { url in calendarAppOpens.withValue { $0.append(url) } }
             $0.eventKitClient = eventKitClient ?? EventKitClient(
                 requestAccess: {
                     Issue.record("Keyboard fixture must not request calendar access")

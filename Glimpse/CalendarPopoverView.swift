@@ -177,6 +177,8 @@ struct CalendarPopoverView: View {
                     case .footerQuit, .footerPin, .footerCalendar, .footerSettings,
                          .quitCancel, .quitConfirm:
                         reader.scrollTo("panel-footer", anchor: .bottom)
+                    case let owner? where owner.isAgendaEvent:
+                        reader.scrollTo("panel-agenda", anchor: .center)
                     default: break
                     }
                 }
@@ -903,38 +905,48 @@ struct CalendarPopoverView: View {
                     .foregroundStyle(.primary)
             }
         } else {
-            VStack(alignment: .leading, spacing: AppDesign.Spacing.xs) {
-                ForEach(store.events.prefix(5)) { event in
-                    HStack(spacing: AppDesign.Spacing.sm) {
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(Color.accentColor)
-                            .frame(width: 3, height: 28)
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(event.title)
-                                .font(.subheadline)
-                                .lineLimit(1)
-                            Text(event.timeString)
-                                .font(.caption)
-                                .foregroundStyle(AppDesign.Colors.calendarContextText)
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(event.title), \(event.timeString)")
+            VStack(alignment: .leading, spacing: AppDesign.Agenda.rowSpacing) {
+                let owners = CalendarKeyboardOwner.agendaEvents
+                ForEach(Array(zip(store.events.prefix(owners.count), owners)), id: \.0.id) { event, owner in
+                    CalendarAgendaEventRow(
+                        event: event, owner: owner, open: { openEventInCalendar(event) },
+                        keyboardContext: keyboardContext, keyboardObservation: keyboardObservation,
+                        controlFocus: $controlFocus
+                    )
                 }
 
-                if store.events.count > 5 {
-                    Text("+\(store.events.count - 5) more")
+                if store.events.count > owners.count {
+                    Text("+\(store.events.count - owners.count) more")
                         .font(.caption)
                         .foregroundStyle(AppDesign.Colors.calendarContextText)
+                        .padding(.horizontal, AppDesign.Agenda.rowHorizontalInset)
+                }
+                if let error = store.eventOpenError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, AppDesign.Agenda.rowHorizontalInset)
+                        .announcing(error)
                 }
             }
-            .padding(AppDesign.Spacing.sm)
+            .padding(.horizontal, AppDesign.Agenda.listHorizontalPadding)
+            .padding(.vertical, AppDesign.Agenda.listVerticalPadding)
             .overlay(
                 RoundedRectangle(cornerRadius: AppDesign.CornerRadius.md)
                     .strokeBorder(Color.secondary.opacity(AppDesign.Grid.borderOpacity), lineWidth: 1)
             )
+            .id("panel-agenda")
         }
+    }
+
+    /// Clicking or Return/Space on a row: the reducer opens Calendar through its client.
+    /// Going to Calendar is a deliberate handoff, so the external-app restoration lease is
+    /// abandoned (Glimpse must not re-front the previous app over Calendar) and any deferred
+    /// editor focus is cancelled. A pinned panel stays; an unpinned one hides.
+    private func openEventInCalendar(_ event: GlimpseCore.CalendarEvent) {
+        editorFocusGeneration += 1
+        store.send(.openEventInCalendar(event))
+        panel?.prepareForExternalAppHandoff()
     }
 
     // MARK: - Footer

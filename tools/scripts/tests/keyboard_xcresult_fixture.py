@@ -145,6 +145,12 @@ def settings_suite():
         ("focusedUpdateActionKeepsNativeKeyboardActivation(dark:)", 2),
         ("footerQuitClickKeepsFocusWithoutRing(dark:)", 2),
         ("settingsOpenFocusRingFollowsEntryModality(entry:dark:)", 4),
+        ("agendaRowsJoinTabOrderAndOpenTheFocusedEvent(key:)", 2),
+        ("heldAgendaReturnOpensOnceAndArrowsNeverBrowseUnderARow()", 1),
+        ("agendaRowEscapeStillClosesThePanelWithoutOpeningCalendar()", 1),
+        ("agendaRowClickOpensEventAndAbandonsTheRestorationLease(pinned:)", 2),
+        ("agendaRowAccessibilityPressOpensTheEvent()", 1),
+        ("agendaRowFocusRingFollowsInputModality(dark:)", 2),
     ]
     for method, count in additions:
         identifier = "CalendarKeyboardOwnershipTests/" + method
@@ -164,6 +170,6 @@ def settings_suite():
                 for index in range(1, count + 1)
             ]
         cases(tests).append(case)
-    result.update(totalTestCount=47, passedTests=47)
-    result["devicesAndConfigurations"][0]["passedTests"] = 117
+    result.update(totalTestCount=53, passedTests=53)
+    result["devicesAndConfigurations"][0]["passedTests"] = 126
     return expected, result, tests

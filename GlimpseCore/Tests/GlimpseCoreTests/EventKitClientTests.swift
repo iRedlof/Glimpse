@@ -109,6 +109,23 @@ struct EventKitClientTests {
         event.isAllDay = true
         #expect(try #require(EventKitClient.calendarEvent(from: event)).isAllDay)
     }
+
+    @Test
+    func eventConversionKeepsCalendarItemIdentifierAndRecurrenceForCalendarLinks() throws {
+        let event = EKEvent(eventStore: EKEventStore())
+        event.title = "Standup"
+        event.startDate = Date(timeIntervalSince1970: 1_000_000)
+        event.endDate = Date(timeIntervalSince1970: 1_003_600)
+        let oneOff = try #require(EventKitClient.calendarEvent(from: event))
+        #expect(oneOff.itemIdentifier == event.calendarItemIdentifier)
+        #expect(oneOff.itemIdentifier?.isEmpty == false)
+        #expect(!oneOff.isRecurring)
+
+        event.addRecurrenceRule(EKRecurrenceRule(recurrenceWith: .weekly, interval: 1, end: nil))
+        let series = try #require(EventKitClient.calendarEvent(from: event))
+        #expect(series.isRecurring)
+        #expect(series.itemIdentifier == oneOff.itemIdentifier)
+    }
 }
 
 // TestStore redirects global async resumptions to main, including suspended

@@ -276,6 +276,14 @@ final class CalendarPanel: NSPanel {
         if !isPinned { orderOut(nil) }
     }
 
+    /// The user is going to another app (an agenda event opens in Calendar). Restoring the
+    /// app that was in front before text editing would cover it, so that lease is abandoned.
+    /// A pinned calendar keeps its frame and state; an unpinned one hides as on dismissal.
+    func prepareForExternalAppHandoff() {
+        previousApp = nil
+        if !isPinned { orderOut(nil) }
+    }
+
     /// Activate the app so TextField can receive focus
     func activateForTextInput() {
         guard settingsCalendarPriority?.calendarMayBecomeFront(self) != false else { return }

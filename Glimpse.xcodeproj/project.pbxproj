@@ -20,6 +20,7 @@
 		DD0000000000000000000097 /* AIDateQueryModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000098 /* AIDateQueryModelTests.swift */; };
 		DD00000000000000000000C0 /* TypeToScheduleViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000C1 /* TypeToScheduleViewTests.swift */; };
 		DD00000000000000000000CE /* InputModalityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000CF /* InputModalityTests.swift */; };
+		DD00000000000000000000D2 /* CalendarAgendaEventKeyboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000D3 /* CalendarAgendaEventKeyboardTests.swift */; };
 		DD00000000000000000000BE /* AIIntentPromptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000BF /* AIIntentPromptTests.swift */; };
 		DD0000000000000000000091 /* AIDateQueryClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000092 /* AIDateQueryClient.swift */; };
 		DD0000000000000000000093 /* AIDateQueryClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000094 /* AIDateQueryClientTests.swift */; };
@@ -28,6 +29,7 @@
 		E10000000000000000000001 /* FixtureHostingCleanupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000002 /* FixtureHostingCleanupTests.swift */; };
 		DF00000000000000000007 /* CalendarKeyboardFocus.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF00000000000000000008 /* CalendarKeyboardFocus.swift */; };
 		DD00000000000000000000CC /* InputModality.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000CD /* InputModality.swift */; };
+		DD00000000000000000000D0 /* CalendarAgendaEventRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000000D1 /* CalendarAgendaEventRow.swift */; };
 		DF00000000000000000005 /* CalendarKeyboardRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF00000000000000000006 /* CalendarKeyboardRouter.swift */; };
 		DF00000000000000000003 /* CalendarKeyboardRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF00000000000000000004 /* CalendarKeyboardRouterTests.swift */; };
 		DF00000000000000000001 /* CalendarKeyboardOwnershipTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF00000000000000000002 /* CalendarKeyboardOwnershipTests.swift */; };
@@ -110,6 +112,7 @@
 		DD0000000000000000000098 /* AIDateQueryModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryModelTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000000C1 /* TypeToScheduleViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeToScheduleViewTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000000CF /* InputModalityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputModalityTests.swift; sourceTree = "<group>"; };
+		DD00000000000000000000D3 /* CalendarAgendaEventKeyboardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAgendaEventKeyboardTests.swift; sourceTree = "<group>"; };
 		DD00000000000000000000BF /* AIIntentPromptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIIntentPromptTests.swift; sourceTree = "<group>"; };
 		DD0000000000000000000092 /* AIDateQueryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryClient.swift; sourceTree = "<group>"; };
 		DD0000000000000000000094 /* AIDateQueryClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDateQueryClientTests.swift; sourceTree = "<group>"; };
@@ -118,6 +121,7 @@
 		E10000000000000000000002 /* FixtureHostingCleanupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixtureHostingCleanupTests.swift; sourceTree = "<group>"; };
 		DF00000000000000000008 /* CalendarKeyboardFocus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarKeyboardFocus.swift; sourceTree = "<group>"; };
 		DD00000000000000000000CD /* InputModality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputModality.swift; sourceTree = "<group>"; };
+		DD00000000000000000000D1 /* CalendarAgendaEventRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAgendaEventRow.swift; sourceTree = "<group>"; };
 		DF00000000000000000006 /* CalendarKeyboardRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarKeyboardRouter.swift; sourceTree = "<group>"; };
 		DF00000000000000000004 /* CalendarKeyboardRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarKeyboardRouterTests.swift; sourceTree = "<group>"; };
 		DF00000000000000000002 /* CalendarKeyboardOwnershipTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarKeyboardOwnershipTests.swift; sourceTree = "<group>"; };
@@ -220,6 +224,7 @@
 				DF00000000000000000006 /* CalendarKeyboardRouter.swift */,
 				DF00000000000000000008 /* CalendarKeyboardFocus.swift */,
 				DD00000000000000000000CD /* InputModality.swift */,
+				DD00000000000000000000D1 /* CalendarAgendaEventRow.swift */,
 				AA00000000000000000016 /* DateIconRenderer.swift */,
 				AA00000000000000000018 /* PreferencesView.swift */,
 				AA0000000000000000001A /* CalendarPanel.swift */,
@@ -296,6 +301,7 @@
 				DD0000000000000000000098 /* AIDateQueryModelTests.swift */,
 				DD00000000000000000000C1 /* TypeToScheduleViewTests.swift */,
 				DD00000000000000000000CF /* InputModalityTests.swift */,
+				DD00000000000000000000D3 /* CalendarAgendaEventKeyboardTests.swift */,
 				DD00000000000000000000BF /* AIIntentPromptTests.swift */,
 				BB00000000000000000017 /* HotkeyComboTests.swift */,
 				DD00000000000000000051 /* DiagnosticsExportTests.swift */,
@@ -416,6 +422,7 @@
 				DF00000000000000000005 /* CalendarKeyboardRouter.swift in Sources */,
 				DF00000000000000000007 /* CalendarKeyboardFocus.swift in Sources */,
 				DD00000000000000000000CC /* InputModality.swift in Sources */,
+				DD00000000000000000000D0 /* CalendarAgendaEventRow.swift in Sources */,
 				AA00000000000000000004 /* DateIconRenderer.swift in Sources */,
 				AA00000000000000000006 /* PreferencesView.swift in Sources */,
 				AA00000000000000000008 /* CalendarPanel.swift in Sources */,
@@ -479,6 +486,7 @@
 				DD0000000000000000000097 /* AIDateQueryModelTests.swift in Sources */,
 				DD00000000000000000000C0 /* TypeToScheduleViewTests.swift in Sources */,
 				DD00000000000000000000CE /* InputModalityTests.swift in Sources */,
+				DD00000000000000000000D2 /* CalendarAgendaEventKeyboardTests.swift in Sources */,
 				DD00000000000000000000BE /* AIIntentPromptTests.swift in Sources */,
 				BB00000000000000000027 /* HotkeyComboTests.swift in Sources */,
 				DD00000000000000000050 /* DiagnosticsExportTests.swift in Sources */,

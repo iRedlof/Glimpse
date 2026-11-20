@@ -83,6 +83,20 @@ enum AppDesign {
         static let downloadProgressWidth: CGFloat = 120
     }
 
+    /// Agenda event rows: an inset hover/focus cell around the existing accent bar and text.
+    enum Agenda {
+        static let accentWidth: CGFloat = 3
+        static let accentHeight: CGFloat = 28
+        static let accentCornerRadius: CGFloat = 1.5
+        static let rowHorizontalInset: CGFloat = 6
+        static let rowVerticalInset: CGFloat = Spacing.xs
+        /// List padding minus the row inset, so text stays where it was before rows had cells.
+        static let listHorizontalPadding: CGFloat = Spacing.sm - rowHorizontalInset
+        static let listVerticalPadding: CGFloat = Spacing.sm - rowVerticalInset
+        /// Rows sit flush: their insets clear the inset focus ring and space the cells.
+        static let rowSpacing: CGFloat = 0
+    }
+
     enum Footer {
         static let height: CGFloat = 30
         static let iconSize: CGFloat = 13

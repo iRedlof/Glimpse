@@ -8,6 +8,11 @@ public struct CalendarEvent: Equatable, Identifiable, Sendable {
     public let isAllDay: Bool
     /// False for all-day and "free" events, which never make a time busy.
     public let blocksTime: Bool
+    /// EventKit's `calendarItemIdentifier`: the handle Calendar's `ical://ekevent/` link accepts.
+    /// Nil when EventKit gave none; then Calendar can only be brought forward.
+    public let itemIdentifier: String?
+    /// A repeating series shares one item identifier, so its link also names the occurrence.
+    public let isRecurring: Bool
 
     public init(
         id: String,
@@ -15,7 +20,9 @@ public struct CalendarEvent: Equatable, Identifiable, Sendable {
         startDate: Date,
         endDate: Date,
         isAllDay: Bool,
-        blocksTime: Bool = true
+        blocksTime: Bool = true,
+        itemIdentifier: String? = nil,
+        isRecurring: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -23,6 +30,8 @@ public struct CalendarEvent: Equatable, Identifiable, Sendable {
         self.endDate = endDate
         self.isAllDay = isAllDay
         self.blocksTime = blocksTime
+        self.itemIdentifier = itemIdentifier.flatMap { $0.isEmpty ? nil : $0 }
+        self.isRecurring = isRecurring
     }
 
     public var timeString: String {

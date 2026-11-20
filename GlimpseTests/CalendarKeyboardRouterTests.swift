@@ -31,7 +31,8 @@ struct CalendarKeyboardRouterTests {
 
     @Test(arguments: [
         CalendarKeyboardOwner.previousMonth, .today, .nextMonth, .searchPrompt, .searchDismiss,
-        .footerQuit, .footerPin, .footerCalendar, .footerSettings, .quitCancel, .quitConfirm
+        .footerQuit, .footerPin, .footerCalendar, .footerSettings, .quitCancel, .quitConfirm,
+        .agendaEvent0, .agendaEvent1, .agendaEvent2, .agendaEvent3, .agendaEvent4
     ])
     func fixedControlReturnAndSpaceActivateOnceWithRepeatConsumed(owner: CalendarKeyboardOwner) {
         #expect(CalendarKeyboardRouter.local(
@@ -151,6 +152,23 @@ struct CalendarKeyboardRouterTests {
     }
 
     @Test
+    func agendaRowOwnersAreDistinctOrderedAndOnlyAgendaRows() {
+        let owners = CalendarKeyboardOwner.agendaEvents
+        #expect(owners.map(\.rawValue) == (0..<5).map { "agendaEvent\($0)" })
+        #expect(Set(owners).count == owners.count)
+        #expect(CalendarKeyboardOwner.allCases.filter(\.isAgendaEvent) == owners)
+        // A focused row designates ownership, so arrows and Return never browse months under it.
+        for owner in owners {
+            #expect(CalendarKeyboardRouter.ownership(
+                published: owner, observed: true, responderIsWindowDefault: false, snapshotMatchesResponder: true
+            ) == .designated(owner))
+            #expect(CalendarKeyboardRouter.browse(
+                .left, phase: .down, ownership: .designated(owner), context: .eligible
+            ) == .yield)
+        }
+    }
+
+    @Test
     func tabAlwaysPassesThroughEveryOwner() {
         for owner in CalendarKeyboardOwner.allCases {
             #expect(CalendarKeyboardRouter.local(
@@ -222,7 +240,7 @@ struct CalendarKeyboardRouterTests {
 
     @Test(arguments: [
         CalendarKeyboardOwner.footerQuit, .footerPin, .footerCalendar,
-        .footerSettings, .quitCancel, .quitConfirm
+        .footerSettings, .quitCancel, .quitConfirm, .agendaEvent0, .agendaEvent4
     ], [CalendarKeyboardKey.returnKey, .keypadEnter, .space])
     func footerAndConfirmationRequireCurrentContext(
         owner: CalendarKeyboardOwner, key: CalendarKeyboardKey
