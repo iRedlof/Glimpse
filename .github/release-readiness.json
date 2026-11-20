@@ -1,23 +1,23 @@
 {
-  "version": "1.5.7",
-  "build": "44",
-  "scope": "Open an agenda event in Calendar (click, Return or Space); stuck agenda after rapid refreshes fixed.",
+  "version": "1.5.8",
+  "build": "45",
+  "scope": "Opt-in next-meeting countdown in the menu bar; Join button and Cmd-J for meeting links.",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-20-open-event-in-calendar.md"
+      "evidence": "docs/superpowers/reviews/2026-11-20-next-meeting-menu-bar.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-20-open-event-in-calendar.md"
+      "evidence": "docs/superpowers/reviews/2026-11-20-next-meeting-menu-bar.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-20-open-event-in-calendar.md"
+      "evidence": "docs/superpowers/reviews/2026-11-20-next-meeting-menu-bar.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-20-open-event-in-calendar.md"
+      "evidence": "docs/superpowers/reviews/2026-11-20-next-meeting-menu-bar.md"
     }
   }
 }

@@ -14,6 +14,7 @@ struct PreferencesView: View {
     private let calendarActions: SettingsCalendarActions?
     private let updater: SparkleUpdater
     private let diagnostics: DiagnosticsExportModel
+    private let nextMeeting: NextMeetingMenuBarController
 
     init(
         store: StoreOf<PreferencesFeature>,
@@ -24,8 +25,10 @@ struct PreferencesView: View {
         updater: SparkleUpdater,
         diagnostics: DiagnosticsExportModel,
         section: SettingsSection? = nil,
+        nextMeeting: NextMeetingMenuBarController = .shared,
         recordingWindow: @escaping @MainActor () -> NSWindow? = { nil }
     ) {
+        self.nextMeeting = nextMeeting
         self.store = store
         _hotkeyPreferences = State(initialValue: hotkeyPreferences ?? HotkeyPreferencesModel())
         self.notificationCenter = notificationCenter
@@ -41,6 +44,12 @@ struct PreferencesView: View {
 
     private var previewDateString: String {
         CalendarClient.liveValue.menuBarDateString(Date(), store.displayOptions)
+    }
+
+    /// What the menu bar appends when the toggle is on: the live meeting, else a sample.
+    private var previewMeeting: MenuBarMeetingSegment? {
+        guard store.displayOptions.showNextMeeting else { return nil }
+        return nextMeeting.segment ?? .previewSample
     }
 
     private func notifyMenuBarChanged() {
@@ -123,20 +132,44 @@ struct PreferencesView: View {
         Group {
             classicRow("Menu bar shows") { displayToggleRow }
             classicRow("Style") {
-                HStack(alignment: .firstTextBaseline, spacing: AppDesign.Settings.rowSpacing) {
-                    Toggle("Filled background", isOn: displayBinding(
-                        keyPath: \.showFilledBackground,
-                        action: { .setShowFilledBackground($0) }
-                    ))
-                    .toggleStyle(.checkbox)
-                    menuBarPreview
-                        // The image has no text baseline; center it on the checkbox label.
-                        .alignmentGuide(.firstTextBaseline) { dimensions in
-                            dimensions[VerticalAlignment.center] + AppDesign.Settings.previewBaselineOffset
-                        }
+                // The wider next-meeting preview gets its own line so it never clips at 440pt.
+                if store.displayOptions.showNextMeeting {
+                    VStack(alignment: .leading, spacing: AppDesign.Settings.statusSpacing) {
+                        filledBackgroundToggle
+                        menuBarPreview
+                    }
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: AppDesign.Settings.rowSpacing) {
+                        filledBackgroundToggle
+                        menuBarPreview
+                            // The image has no text baseline; center it on the checkbox label.
+                            .alignmentGuide(.firstTextBaseline) { dimensions in
+                                dimensions[VerticalAlignment.center] + AppDesign.Settings.previewBaselineOffset
+                            }
+                    }
                 }
             }
+            classicRow("Meetings") {
+                Toggle("Show next meeting in the menu bar", isOn: displayBinding(
+                    keyPath: \.showNextMeeting,
+                    action: { .setShowNextMeeting($0) }
+                ))
+                .toggleStyle(.checkbox)
+                .accessibilityLabel("Show next meeting in menu bar")
+                .help(Self.nextMeetingHelp)
+            }
         }
+    }
+
+    static let nextMeetingHelp =
+        "Shows today’s next event with a countdown, amber 5 minutes before. Needs calendar access."
+
+    private var filledBackgroundToggle: some View {
+        Toggle("Filled background", isOn: displayBinding(
+            keyPath: \.showFilledBackground,
+            action: { .setShowFilledBackground($0) }
+        ))
+        .toggleStyle(.checkbox)
     }
 
     private var menuBarPreview: some View {
@@ -144,7 +177,8 @@ struct PreferencesView: View {
         // MenuBarItemRenderer, so no SwiftUI background/overlay is needed here.
         StatusItemPreview(
             displayOptions: store.displayOptions,
-            dateString: previewDateString
+            dateString: previewDateString,
+            meeting: previewMeeting
         )
         .fixedSize()
         .accessibilityElement(children: .ignore)
@@ -160,6 +194,7 @@ struct PreferencesView: View {
         let content = [
             hasIcon ? "Calendar icon" : nil,
             hasDateText ? dateString : nil,
+            previewMeeting.map(\.text),
         ].compactMap { $0 }.joined(separator: ", ")
         return content + (store.displayOptions.showFilledBackground
             ? ", filled background" : ", bordered background")

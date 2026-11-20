@@ -177,7 +177,7 @@ struct CalendarPopoverView: View {
                     case .footerQuit, .footerPin, .footerCalendar, .footerSettings,
                          .quitCancel, .quitConfirm:
                         reader.scrollTo("panel-footer", anchor: .bottom)
-                    case let owner? where owner.isAgendaEvent:
+                    case let owner? where owner.isAgendaEvent || owner == .agendaJoin:
                         reader.scrollTo("panel-agenda", anchor: .center)
                     default: break
                     }
@@ -308,6 +308,13 @@ struct CalendarPopoverView: View {
             // Cmd+G — activate inline AI input (if enabled)
             if event.keyCode == 5 && modifiers == .command && store.showAISearch {
                 aiQueryModel.setEditorOpen(true)
+                return nil
+            }
+            if CalendarKeyboardRouter.joinsMeeting(
+                keyCode: event.keyCode, commandOnly: modifiers == .command,
+                isRepeat: event.isARepeat, canJoin: store.joinableEvent != nil
+            ) {
+                if let joinable = store.joinableEvent { joinMeeting(joinable) }
                 return nil
             }
             if CalendarKeyboardRouter.undoesAddedEvent(
@@ -910,6 +917,7 @@ struct CalendarPopoverView: View {
                 ForEach(Array(zip(store.events.prefix(owners.count), owners)), id: \.0.id) { event, owner in
                     CalendarAgendaEventRow(
                         event: event, owner: owner, open: { openEventInCalendar(event) },
+                        join: event.id == store.joinableEventID ? { joinMeeting(event) } : nil,
                         keyboardContext: keyboardContext, keyboardObservation: keyboardObservation,
                         controlFocus: $controlFocus
                     )
@@ -946,6 +954,15 @@ struct CalendarPopoverView: View {
     private func openEventInCalendar(_ event: GlimpseCore.CalendarEvent) {
         editorFocusGeneration += 1
         store.send(.openEventInCalendar(event))
+        panel?.prepareForExternalAppHandoff()
+    }
+
+    /// Join (button, Return on it, or ⌘J): the reducer opens the validated link through its
+    /// client. Like opening Calendar, this hands off to another app, so the restoration lease
+    /// is abandoned and deferred editor focus cancelled.
+    private func joinMeeting(_ event: GlimpseCore.CalendarEvent) {
+        editorFocusGeneration += 1
+        store.send(.joinMeeting(event))
         panel?.prepareForExternalAppHandoff()
     }
 

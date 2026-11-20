@@ -55,6 +55,7 @@ open Glimpse.xcodeproj
 | `CalendarStatusItem.swift` | NSStatusItem, panel positioning, midnight refresh, NotificationCenter observer |
 | `MenuBarItemRenderer.swift` | Composites the whole menu bar item (border/filled, icon + separator + text) into one `NSImage` set as `button.image`. No subview — a child view in the status button pegs CPU on macOS 26 (see gotchas.md) |
 | `StatusItemPreview.swift` | NSViewRepresentable rendering the same MenuBarItemRenderer image for the SwiftUI preferences preview |
+| `NextMeetingMenuBar.swift` | Opt-in next-meeting segment: bridges `NextMeetingFeature` to the status item (publishes the segment, debounces `EKEventStoreChanged`); never touches the button itself |
 | `CalendarPopoverView.swift` | Main calendar UI, date selection, AI field, events, footer with quit confirm |
 | `CalendarAgendaEventRow.swift` | Agenda event row: Button that opens the event in Calendar (hover fill, pointing hand, Tab focus, Return/Space) |
 | `SettingsWindow.swift` | Retained native Settings controller, exact shortcut owner, refresh and bounded placement |
@@ -85,9 +86,9 @@ open Glimpse.xcodeproj
 ### Core Package (GlimpseCore/)
 | Directory | Contents |
 |---|---|
-| `Features/` | CalendarFeature, ScheduleFeature, PreferencesFeature |
-| `Dependencies/` | PreferencesClient, CalendarClient, EventKitClient (read + free-time fetch/save/remove), ScheduleEventsClient (save signal → app closes the AI editor), CalendarAppClient (opens `ical://` links via LaunchServices), LaunchAtLoginClient, KeychainClient |
-| `Models/` | CalendarDay, CalendarEvent, CalendarEventLink, GridInfo, MenuBarDisplayOptions, AIProvider, CivilDate, AIIntent, AIIntentWire, AIIntentDecoder, DayPhraseParser, DateAnswerer, FreeSlotFinder, ScheduleModels |
+| `Features/` | CalendarFeature (incl. agenda Join), ScheduleFeature, PreferencesFeature, NextMeetingFeature (today's events fetched only on refresh; minute ticks recompute from cache and stop after the last meeting) |
+| `Dependencies/` | PreferencesClient, CalendarClient, EventKitClient (read + free-time fetch/save/remove), ScheduleEventsClient (save signal → app closes the AI editor), CalendarAppClient (opens `ical://` links via LaunchServices), MeetingLinkClient (opens validated meeting links via LaunchServices, user action only), LaunchAtLoginClient, KeychainClient |
+| `Models/` | CalendarDay, CalendarEvent, CalendarEventLink, GridInfo, MenuBarDisplayOptions, AIProvider, CivilDate, AIIntent, AIIntentWire, AIIntentDecoder, DayPhraseParser, DateAnswerer, FreeSlotFinder, ScheduleModels, MeetingLink (strict https Zoom/Meet/Teams/Webex extraction), NextMeeting (selector + menu bar wording) |
 
 ## Important Implementation Details
 
@@ -119,7 +120,7 @@ Providers return one JSON intent (navigate, range, question, create, clarify) va
 
 | What | Where | Format |
 |---|---|---|
-| Display options | UserDefaults | Bool per key (showIcon, showDayOfWeek, etc.) |
+| Display options | UserDefaults | Bool per key (showIcon, showDayOfWeek, …, showNextMeeting — default off) |
 | Workdays | UserDefaults | `[Int]` array |
 | Start of weekday | UserDefaults | `Int` |
 | AI settings | UserDefaults | Bool (showAISearch), String (aiProvider) |
@@ -216,7 +217,7 @@ grep 'CURRENT_PROJECT_VERSION' Glimpse.xcodeproj/project.pbxproj | head -1 | sed
 
 ## File Counts
 
-- App source files: ~40
-- GlimpseCore source files: ~21
-- Test files: ~45
-- Total tests: 214 GlimpseCore + 400 app default run (+ 44 keyboard, 11 AI and 13 agenda key-panel tests in the quality gate; 4 opt-in live AI checks)
+- App source files: ~41
+- GlimpseCore source files: ~26
+- Test files: ~51
+- Total tests: 275 GlimpseCore + 464 app default run (+ 55 keyboard, 11 AI and 13 agenda key-panel tests in the quality gate; 4 opt-in live AI checks)

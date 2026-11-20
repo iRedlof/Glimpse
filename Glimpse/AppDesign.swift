@@ -54,11 +54,12 @@ enum AppDesign {
     }
 
     enum Settings {
-        static let contentSize = CGSize(width: 480, height: 600)
+        static let contentSize = CGSize(width: 480, height: 630)
         /// The page is never shorter than its content (fit() still clamps to tiny screens),
         /// because SwiftUI Tab routing skips rows fully clipped by the scroll view.
-        /// 600pt holds every row at 440pt wide, including the Updates status and its errors.
-        static let minimumContentSize = CGSize(width: 440, height: 600)
+        /// 630pt holds every row at 440pt wide, including the Updates status and its errors
+        /// and the next-meeting preview on its own line.
+        static let minimumContentSize = CGSize(width: 440, height: 630)
         static let contentInset: CGFloat = 20
         static let labelFontSize: CGFloat = 13
         static let supportingFontSize: CGFloat = 11.5
@@ -95,6 +96,9 @@ enum AppDesign {
         static let listVerticalPadding: CGFloat = Spacing.sm - rowVerticalInset
         /// Rows sit flush: their insets clear the inset focus ring and space the cells.
         static let rowSpacing: CGFloat = 0
+        static let joinHorizontalPadding: CGFloat = 8
+        static let joinVerticalPadding: CGFloat = 3
+        static let joinPressedOpacity: Double = 0.8
     }
 
     enum Footer {
@@ -195,6 +199,8 @@ enum AppDesign {
         static let calendarContextText = Color.primary.opacity(0.80)
         static let accentRed = Color(nsColor: NSColor(red: 0.91, green: 0.25, blue: 0.25, alpha: 1.0))
         static let accentRedNS = NSColor(red: 0.91, green: 0.25, blue: 0.25, alpha: 1.0)
+        /// Next meeting within five minutes: the whole menu bar pill turns amber.
+        static let accentAmberNS = NSColor(red: 1.0, green: 0.698, blue: 0.141, alpha: 1.0)
 
         /// Bounds opaque calendar fills for white labels using the current resolved hue.
         static func calendarSolidFill(_ color: Color, in environment: EnvironmentValues) -> Color {

@@ -50,6 +50,8 @@
     "CalendarKeyboardOwnershipTests/settingsOpenFocusRingFollowsEntryModality(entry:dark:)": 4,
     "CalendarKeyboardOwnershipTests/agendaRowsJoinTabOrderAndOpenTheFocusedEvent(key:)": 2,
     "CalendarKeyboardOwnershipTests/heldAgendaReturnOpensOnceAndArrowsNeverBrowseUnderARow()": 1,
+    "CalendarKeyboardOwnershipTests/joinButtonFollowsItsRowInTabOrderAndOpensTheMeetingLink(key:)": 2,
+    "CalendarKeyboardOwnershipTests/commandJJoinsFromAnywhereInThePanelOnlyWhenAMeetingIsJoinable()": 1,
     "CalendarKeyboardOwnershipTests/agendaRowEscapeStillClosesThePanelWithoutOpeningCalendar()": 1,
     "CalendarKeyboardOwnershipTests/agendaRowClickOpensEventAndAbandonsTheRestorationLease(pinned:)": 2,
     "CalendarKeyboardOwnershipTests/agendaRowAccessibilityPressOpensTheEvent()": 1,

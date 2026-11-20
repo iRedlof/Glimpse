@@ -13,6 +13,10 @@ public struct CalendarEvent: Equatable, Identifiable, Sendable {
     public let itemIdentifier: String?
     /// A repeating series shares one item identifier, so its link also names the occurrence.
     public let isRecurring: Bool
+    /// The current user declined this invitation; it never counts as the next meeting.
+    public let isDeclined: Bool
+    /// A strict video-call link found on the event (URL, location or notes), if any.
+    public let meetingLink: MeetingLink?
 
     public init(
         id: String,
@@ -22,7 +26,9 @@ public struct CalendarEvent: Equatable, Identifiable, Sendable {
         isAllDay: Bool,
         blocksTime: Bool = true,
         itemIdentifier: String? = nil,
-        isRecurring: Bool = false
+        isRecurring: Bool = false,
+        isDeclined: Bool = false,
+        meetingLink: MeetingLink? = nil
     ) {
         self.id = id
         self.title = title
@@ -32,6 +38,8 @@ public struct CalendarEvent: Equatable, Identifiable, Sendable {
         self.blocksTime = blocksTime
         self.itemIdentifier = itemIdentifier.flatMap { $0.isEmpty ? nil : $0 }
         self.isRecurring = isRecurring
+        self.isDeclined = isDeclined
+        self.meetingLink = meetingLink
     }
 
     public var timeString: String {

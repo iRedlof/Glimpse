@@ -147,6 +147,8 @@ def settings_suite():
         ("settingsOpenFocusRingFollowsEntryModality(entry:dark:)", 4),
         ("agendaRowsJoinTabOrderAndOpenTheFocusedEvent(key:)", 2),
         ("heldAgendaReturnOpensOnceAndArrowsNeverBrowseUnderARow()", 1),
+        ("joinButtonFollowsItsRowInTabOrderAndOpensTheMeetingLink(key:)", 2),
+        ("commandJJoinsFromAnywhereInThePanelOnlyWhenAMeetingIsJoinable()", 1),
         ("agendaRowEscapeStillClosesThePanelWithoutOpeningCalendar()", 1),
         ("agendaRowClickOpensEventAndAbandonsTheRestorationLease(pinned:)", 2),
         ("agendaRowAccessibilityPressOpensTheEvent()", 1),
@@ -170,6 +172,6 @@ def settings_suite():
                 for index in range(1, count + 1)
             ]
         cases(tests).append(case)
-    result.update(totalTestCount=53, passedTests=53)
-    result["devicesAndConfigurations"][0]["passedTests"] = 126
+    result.update(totalTestCount=55, passedTests=55)
+    result["devicesAndConfigurations"][0]["passedTests"] = 129
     return expected, result, tests

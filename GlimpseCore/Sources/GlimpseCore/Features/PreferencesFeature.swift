@@ -46,6 +46,7 @@ public struct PreferencesFeature: Sendable {
         case setShowDate(Bool)
         case setShowYear(Bool)
         case setShowFilledBackground(Bool)
+        case setShowNextMeeting(Bool)
         case setLaunchAtLogin(Bool)
         case refreshLaunchAtLogin
         case launchAtLoginSucceeded(LaunchAtLoginClient.Status)
@@ -133,6 +134,11 @@ public struct PreferencesFeature: Sendable {
 
             case let .setShowFilledBackground(value):
                 state.displayOptions.showFilledBackground = value
+                preferencesClient.saveDisplayOptions(state.displayOptions)
+                return .send(.delegate(.displayOptionsChanged(state.displayOptions)))
+
+            case let .setShowNextMeeting(value):
+                state.displayOptions.showNextMeeting = value
                 preferencesClient.saveDisplayOptions(state.displayOptions)
                 return .send(.delegate(.displayOptionsChanged(state.displayOptions)))
 
