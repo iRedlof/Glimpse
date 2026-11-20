@@ -169,6 +169,8 @@ final class CalendarStatusItem {
 
         let combo = HotkeyCombo.load()
         GlobalHotkey.shared.register(combo: combo) { [weak self] in
+            // A Carbon hotkey never reaches the local monitors, but it is keyboard use.
+            InputModalityTracker.shared.note(.keyboard)
             self?.statusItemClicked()
         }
     }

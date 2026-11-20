@@ -11,6 +11,7 @@ struct CalendarPresentationSnapshot: Equatable, Sendable {
 struct CalendarPopoverView: View {
     @Bindable var store: StoreOf<CalendarFeature>
     @Environment(\.self) private var environment
+    @Environment(\.inputModality) private var inputModality
     weak var panel: CalendarPanel?
 
     let layout: PanelLayoutState
@@ -37,8 +38,6 @@ struct CalendarPopoverView: View {
     @State private var keyboardSession = 0
     @State private var keyboardOwnerRelay = CalendarKeyboardOwnerRelay()
     @State private var showQuitConfirm: Bool = false
-    /// The Cancel/Quit focus ring: only after keyboard use, never left behind by a mouse click.
-    @State private var quitFocusRingVisible = false
     @State private var pendingFooterFocus: CalendarKeyboardOwner?
     @State private var consumesQuitEscapeRepeats = false
     private let caretHeight = CalendarPanel.caretHeight
@@ -295,7 +294,10 @@ struct CalendarPopoverView: View {
 
     private func setupKeyMonitor() {
         guard keyMonitor == nil else { return }
+        let inputModality = inputModality
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // This newer monitor runs before the app-wide tracker and may consume the key.
+            inputModality.note(.keyboard)
             guard let panel, panel.isVisible, NSApp.keyWindow === panel, event.window === panel,
                   !isRecordingHotkey else { return event }
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
@@ -424,7 +426,10 @@ struct CalendarPopoverView: View {
 
     private func setupScrollMonitor() {
         guard scrollMonitor == nil else { return }
+        let inputModality = inputModality
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+            // This newer monitor runs before the app-wide tracker and may consume the scroll.
+            inputModality.note(.pointer)
             let result = scrollRouter.route(
                 delta: event.scrollingDeltaY,
                 panelVisible: panel?.isVisible == true,
@@ -719,7 +724,7 @@ struct CalendarPopoverView: View {
                 .foregroundStyle(isToday ? .white : foregroundColor(for: day, isToday: false, isSelected: isSelected))
                 .contentShape(Rectangle())
                 .overlay {
-                    if keyboardFocused, logicalDate.map({
+                    if keyboardFocused, inputModality.showsFocusRing, logicalDate.map({
                         cal.isDate($0, inSameDayAs: day.date)
                     }) == true {
                         RoundedRectangle(cornerRadius: AppDesign.Control.focusCornerRadius)
@@ -970,7 +975,7 @@ struct CalendarPopoverView: View {
                     .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .overlay { CalendarKeyboardFocusOutline(visible: quitFocusRingVisible) }
+                    .overlay { CalendarKeyboardFocusOutline() }
             }
             .buttonStyle(CalendarQuitHalfButtonStyle(role: .cancel))
             .modifier(CalendarControlReturn(
@@ -987,7 +992,7 @@ struct CalendarPopoverView: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .overlay { CalendarKeyboardFocusOutline(color: .white, visible: quitFocusRingVisible) }
+                    .overlay { CalendarKeyboardFocusOutline(color: .white) }
             }
             .buttonStyle(CalendarQuitHalfButtonStyle(role: .destructive))
             .modifier(CalendarControlReturn(
@@ -1004,10 +1009,6 @@ struct CalendarPopoverView: View {
         .frame(height: AppDesign.Footer.height)
         .padding(.trailing, layout.isOverflowing ? AppDesign.Footer.scrollbarClearance : 0)
         .onAppear { applyPendingFooterFocus(.quitCancel) }
-        // Tab between the halves is keyboard use: show the ring from then on
-        .onChange(of: controlFocus) { _, _ in
-            if calendarFocusRingVisible(after: NSApp.currentEvent?.type) { quitFocusRingVisible = true }
-        }
         .transition(.identity)
     }
 
@@ -1016,7 +1017,6 @@ struct CalendarPopoverView: View {
         editorFocusGeneration += 1
         pendingFooterFocus = .quitCancel
         controlFocus = nil
-        quitFocusRingVisible = calendarFocusRingVisible(after: NSApp.currentEvent?.type)
         showQuitConfirm = true
     }
 

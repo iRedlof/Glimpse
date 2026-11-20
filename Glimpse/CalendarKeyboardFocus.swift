@@ -179,12 +179,12 @@ struct CalendarKeyboardInvocation: Sendable {
 struct CalendarKeyboardFocusOutline: View {
     @Environment(\.isFocused) private var isFocused
     @Environment(\.self) private var environment
+    @Environment(\.inputModality) private var inputModality
     var color: Color? = nil
-    /// False hides the ring while keeping focus (a mouse-opened confirmation still owns Return/Escape).
-    var visible: Bool = true
 
     var body: some View {
-        if isFocused && visible {
+        // Focus (and Return/Space/Escape ownership) is unchanged; only the ring follows modality.
+        if isFocused && inputModality.showsFocusRing {
             RoundedRectangle(cornerRadius: AppDesign.Control.focusCornerRadius)
                 .strokeBorder(color ?? AppDesign.Colors.calendarEssentialAccent(in: environment),
                               lineWidth: AppDesign.Control.focusLineWidth)
@@ -223,10 +223,4 @@ private extension CalendarKeyboardPhase {
         self = press.phase == .down ? .down :
             press.phase == .repeat ? .repeatPress : .up
     }
-}
-
-/// Whether a focus ring belongs on a control that took focus from [eventType]: only a keyboard action shows it,
-/// so a mouse click never leaves a ring behind (the control still owns the keyboard either way).
-func calendarFocusRingVisible(after eventType: NSEvent.EventType?) -> Bool {
-    eventType == .keyDown || eventType == .keyUp
 }

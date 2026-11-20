@@ -45,6 +45,22 @@
   0.5pt tolerance, return without calling `setFrame`. Any future observe→mutate
   cycle needs the same guard to converge.
 
+- **Focus rings follow input modality (`:focus-visible`)**: `InputModalityTracker`
+  (`InputModality.swift`) is the only rule. keyDown → keyboard; mouse-down/scroll →
+  pointer. Custom outlines and the Settings root's `focusEffectDisabled` read it; focus
+  itself never changes. Local `NSEvent` monitors run NEWEST-FIRST, so the app-wide
+  monitor (installed at launch) runs last: any monitor that may consume events (calendar
+  key/scroll monitors, the shortcut recorder) must call `note(_:)` itself. Carbon hotkeys
+  bypass monitors and note keyboard explicitly.
+
+- **Native focus rings animate in**: a SwiftUI Settings control (focused via a
+  `SwiftUI.KeyViewProxy`) fades its ring in after Tab. Render tests must wait for a stable
+  bitmap (`settledBitmap(around:)`), or a slow first run captures "no ring" and flakes.
+
+- **Never point artifact dirs at /Volumes in native tests**: the sandboxed test host writing
+  there raises a "access files on a removable volume" TCC prompt and the test hangs on
+  `Data.write`. Write under /tmp, then copy the PNGs out from the shell.
+
 ## Build & Project
 
 - **Sparkle Team ID mismatch**: Pre-built Sparkle.framework has a different Team ID.

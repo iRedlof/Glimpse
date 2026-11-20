@@ -304,6 +304,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     let calendarActions = SettingsCalendarActions()
     let updater: SparkleUpdater
     let diagnostics: DiagnosticsExportModel
+    let inputModality: InputModalityTracker
     private(set) var window: NSWindow?
     private let notificationCenter: NotificationCenter
     private let onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)?
@@ -318,7 +319,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         notificationCenter: NotificationCenter = .default,
         onAISettingsChange: (@MainActor (Bool, AIProvider) -> Void)? = nil,
         updater: SparkleUpdater,
-        diagnostics: DiagnosticsExportModel = DiagnosticsExportModel()
+        diagnostics: DiagnosticsExportModel = DiagnosticsExportModel(),
+        inputModality: InputModalityTracker = .shared
     ) {
         self.store = store ?? Store(initialState: PreferencesFeature.State.live()) {
             PreferencesFeature()
@@ -328,6 +330,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         self.onAISettingsChange = onAISettingsChange
         self.updater = updater
         self.diagnostics = diagnostics
+        self.inputModality = inputModality
         super.init()
         applicationObservers = [
             notificationCenter.addObserver(
@@ -367,7 +370,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 notificationCenter: notificationCenter, onAISettingsChange: onAISettingsChange,
                 recordingWindow: { [weak self] in self?.window },
                 calendarActions: calendarActions,
-                updater: updater, diagnostics: diagnostics
+                updater: updater, diagnostics: diagnostics,
+                inputModality: inputModality
             ))
             hosting.sizingOptions = []
             owner.contentView = hosting

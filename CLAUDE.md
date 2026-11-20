@@ -77,6 +77,7 @@ open Glimpse.xcodeproj
 | `SettingsUpdatesSection.swift` | Settings "Updates:" row: automatic checks, Check Now, inline status for every `UpdateStatus` |
 | `SettingsAboutSection.swift` | Settings "About:" row: version, Diagnostics…/Website/Support links, `AppVersionText`, `GlimpseLinks` |
 | `DiagnosticsExportModel.swift` | Diagnostics… flow: save panel, export, Show in Finder (injectable seams) |
+| `InputModality.swift` | App-wide keyboard-vs-pointer tracker (one local monitor); focus rings show only after keyboard use |
 | `AppDesign.swift` | Design tokens (spacing, colors, corner radius, animation) |
 | `AppLogger.swift` | os.Logger categories |
 

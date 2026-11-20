@@ -530,7 +530,7 @@ if '-resultBundlePath' in sys.argv:
         self.assertTrue(receipt["owned_host_absence_confirmed"])
         self.assert_workspace_cleanup(root, runner_temp, workspace, observed)
 
-    def test_checked_in_manifest_requires_forty_five_methods_and_one_hundred_eleven_cases(self):
+    def test_checked_in_manifest_requires_forty_seven_methods_and_one_hundred_seventeen_cases(self):
         required, result_summary, result_tests = settings_suite()
         expected = json.loads((SCRIPTS / "keyboard-ownership-methods.json").read_text())
         self.assertEqual(expected, required)
@@ -540,8 +540,8 @@ if '-resultBundlePath' in sys.argv:
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         receipt = json.loads((results / "keyboard-ownership-acceptance.json").read_text())
-        self.assertEqual(len(receipt["methods"]), 45)
-        self.assertEqual(receipt["executed_cases"], 111)
+        self.assertEqual(len(receipt["methods"]), 47)
+        self.assertEqual(receipt["executed_cases"], 117)
         for method in ("heldHeaderSpaceActivatesOnceAndConsumesRepeat()",
                        "todayBecomingDisabledHasNoExtraTodayAction()"):
             self.assertEqual(receipt["methods"]["CalendarKeyboardOwnershipTests/" + method], 1)

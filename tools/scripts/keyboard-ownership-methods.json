@@ -45,6 +45,8 @@
     "CalendarKeyboardOwnershipTests/settingsUpdateStatesRenderInPlace(state:dark:)": 22,
     "CalendarKeyboardOwnershipTests/quitConfirmationOwnsHeldActivationAndRecordsOnlyDeliberateTermination(key:)": 3,
     "CalendarKeyboardOwnershipTests/olderAIRequestCannotReclaimCancelOrReturnedQuit(cancelFirst:)": 2,
-    "CalendarKeyboardOwnershipTests/focusedUpdateActionKeepsNativeKeyboardActivation(dark:)": 2
+    "CalendarKeyboardOwnershipTests/focusedUpdateActionKeepsNativeKeyboardActivation(dark:)": 2,
+    "CalendarKeyboardOwnershipTests/footerQuitClickKeepsFocusWithoutRing(dark:)": 2,
+    "CalendarKeyboardOwnershipTests/settingsOpenFocusRingFollowsEntryModality(entry:dark:)": 4
   }
 }
