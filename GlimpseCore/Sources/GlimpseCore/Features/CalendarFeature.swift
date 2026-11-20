@@ -21,6 +21,8 @@ public struct CalendarFeature: Sendable {
         public var eventsRequestID: UUID?
         public var isLoadingEvents = false
         public var eventsError: String?
+        /// Set when Calendar couldn't be opened for an agenda event; cleared on the next try.
+        public var eventOpenError: String?
         public var calendarAuthorizationStatus: EKAuthorizationStatus = .notDetermined
         public var isRequestingCalendarAccess = false
         public var calendarAccessError: String?
@@ -91,6 +93,9 @@ public struct CalendarFeature: Sendable {
         case aiResultsCleared
         case schedule(ScheduleFeature.Action)
         case reloadPreferences
+        /// An agenda event row was activated: reveal it in Apple's Calendar app.
+        case openEventInCalendar(CalendarEvent)
+        case openEventInCalendarFailed(String)
     }
 
     @Dependency(\.date) var date
@@ -99,6 +104,7 @@ public struct CalendarFeature: Sendable {
     @Dependency(\.eventKitClient) var eventKitClient
     @Dependency(\.uuid) var uuid
     @Dependency(\.scheduleEvents) var scheduleEvents
+    @Dependency(\.calendarApp) var calendarApp
 
     private enum CancelID { case events, calendarAccess }
 
@@ -176,6 +182,25 @@ public struct CalendarFeature: Sendable {
                 state.isPinned.toggle()
                 return .none
 
+            case let .openEventInCalendar(event):
+                state.eventOpenError = nil
+                let url = CalendarEventLink.url(for: event)
+                return .run { [calendarApp] send in
+                    do {
+                        guard let url else { throw CalendarAppClient.OpenError.invalidURL }
+                        try await calendarApp.open(url)
+                    } catch {
+                        AppLogger.calendar.error(
+                            "Opening event in Calendar failed: \(error.localizedDescription, privacy: .public)"
+                        )
+                        await send(.openEventInCalendarFailed("Couldn’t open Calendar."))
+                    }
+                }
+
+            case let .openEventInCalendarFailed(message):
+                state.eventOpenError = message
+                return .none
+
             case .togglePreferences:
                 state.showingPreferences.toggle()
                 return .none
@@ -236,6 +261,7 @@ public struct CalendarFeature: Sendable {
                 }
                 state.isLoadingEvents = false
                 state.eventsRequestID = nil
+                if state.events != events { state.eventOpenError = nil }
                 state.events = events
                 state.eventsError = nil
                 return .none
@@ -287,6 +313,7 @@ public struct CalendarFeature: Sendable {
                 recomputeDays(&state)
                 state.isLoadingEvents = false
                 state.eventsRequestID = nil
+                state.eventOpenError = nil
                 clearAIResults(&state)
                 return .merge(.cancel(id: CancelID.events), dismissSchedule(&state))
 
@@ -308,6 +335,7 @@ public struct CalendarFeature: Sendable {
                 state.startOfWeekday = preferencesClient.loadStartOfWeekday()
                 state.workdays = preferencesClient.loadWorkdays()
                 state.showAISearch = preferencesClient.loadShowAISearch()
+                state.eventOpenError = nil
                 recomputeDays(&state)
                 clearAIResults(&state)
                 return .merge(loadEvents(&state), dismissSchedule(&state))

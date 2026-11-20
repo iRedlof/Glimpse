@@ -56,6 +56,7 @@ open Glimpse.xcodeproj
 | `MenuBarItemRenderer.swift` | Composites the whole menu bar item (border/filled, icon + separator + text) into one `NSImage` set as `button.image`. No subview — a child view in the status button pegs CPU on macOS 26 (see gotchas.md) |
 | `StatusItemPreview.swift` | NSViewRepresentable rendering the same MenuBarItemRenderer image for the SwiftUI preferences preview |
 | `CalendarPopoverView.swift` | Main calendar UI, date selection, AI field, events, footer with quit confirm |
+| `CalendarAgendaEventRow.swift` | Agenda event row: Button that opens the event in Calendar (hover fill, pointing hand, Tab focus, Return/Space) |
 | `SettingsWindow.swift` | Retained native Settings controller, exact shortcut owner, refresh and bounded placement |
 | `SettingsRootView.swift` | One full-width Settings scroll viewport with native control focus |
 | `PreferencesView.swift` | One categorized Settings page, shared lifecycle and existing preference setters |
@@ -85,8 +86,8 @@ open Glimpse.xcodeproj
 | Directory | Contents |
 |---|---|
 | `Features/` | CalendarFeature, ScheduleFeature, PreferencesFeature |
-| `Dependencies/` | PreferencesClient, CalendarClient, EventKitClient (read + free-time fetch/save/remove), ScheduleEventsClient (save signal → app closes the AI editor), LaunchAtLoginClient, KeychainClient |
-| `Models/` | CalendarDay, CalendarEvent, GridInfo, MenuBarDisplayOptions, AIProvider, CivilDate, AIIntent, AIIntentWire, AIIntentDecoder, DayPhraseParser, DateAnswerer, FreeSlotFinder, ScheduleModels |
+| `Dependencies/` | PreferencesClient, CalendarClient, EventKitClient (read + free-time fetch/save/remove), ScheduleEventsClient (save signal → app closes the AI editor), CalendarAppClient (opens `ical://` links via LaunchServices), LaunchAtLoginClient, KeychainClient |
+| `Models/` | CalendarDay, CalendarEvent, CalendarEventLink, GridInfo, MenuBarDisplayOptions, AIProvider, CivilDate, AIIntent, AIIntentWire, AIIntentDecoder, DayPhraseParser, DateAnswerer, FreeSlotFinder, ScheduleModels |
 
 ## Important Implementation Details
 
@@ -108,7 +109,10 @@ open Glimpse.xcodeproj
 ### 6. AI Proxy
 Uses shared Auris proxy at `proxy.auris.workers.dev/refine` with the `{tier, prompt}` body. App secret is XOR-obfuscated in `ProxyConfig`. Device ID for rate limiting. No API keys needed. The live service answers HTTP 200 with `text: null` on upstream errors; that maps to the generic failure copy.
 
-### 7. Type to Schedule (⌘G intents)
+### 7. Open Event in Calendar
+Agenda rows (`CalendarAgendaEventRow`, owners `agendaEvent0…4`, one per visible row) send `.openEventInCalendar(event)`; the reducer builds the URL with `CalendarEventLink` and opens it through `CalendarAppClient` (`LSOpenCFURLRef`, CoreServices: allowed in the App Sandbox with no entitlement). URL: `ical://ekevent/<calendarItemIdentifier>?method=show&options=more` (the form Calendar's own binary emits); repeating events insert the occurrence start, `ical://ekevent/<yyyyMMddTHHmmssZ>/<id>?…` (UTC for timed, local wall time for all-day). No identifier → `ical://` (Calendar only). AppleScript needs an Apple Events exception, `EKEventViewController` is iOS-only, and no `ical://` date form (epoch, `date/…`) navigates Calendar — verified from a sandboxed probe on macOS 27. The view calls `CalendarPanel.prepareForExternalAppHandoff()`: the previous-app restoration lease is dropped (never re-front it over Calendar); pinned stays, unpinned hides.
+
+### 8. Type to Schedule (⌘G intents)
 Providers return one JSON intent (navigate, range, question, create, clarify) validated by `AIIntentDecoder`; a bare `yyyy-MM-dd` still navigates. The AI never counts and never sees calendar data: `DateAnswerer` and `FreeSlotFinder` are pure GlimpseCore code. Days the query names ("next Friday", "Mar 1", "next 3 Fridays") are resolved in Swift by `DayPhraseParser` and win over the model's dates; both prompts also carry a 28-day date table. On-device uses a per-intent `@Generable` enum (`GeneratedRequest`). `ScheduleFeature` never preselects a time (Return without a pick is a no-op), never cancels a started save, requests calendar access only from its explicit "Allow calendar access" button (Return in the field never does), keeps the times after a retryable save failure, and offers Undo for 10 s (also ⌘Z outside text editing). A confirmed save sends `.delegate(.eventSaved)`; CalendarFeature calls `ScheduleEventsClient`, whose `.scheduleEventSaved` notification closes the editor (no `onChange`). ↑/↓ (and Return with focus out of the field) pick times through `CalendarKeyboardRouter.slotPicker`, before browse routing. Live provider check: `TEST_RUNNER_GLIMPSE_LIVE_AI=foundationModels[,proxy] xcodebuild … -only-testing:GlimpseTests/AILiveProviderGoldenTests`.
 
 ## Storage

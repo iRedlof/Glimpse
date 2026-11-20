@@ -273,6 +273,7 @@ struct CalendarFeatureTests {
         var state = CalendarFeature.State(displayedMonth: oldMonth)
         state.selectedDate = oldMonth
         state.showingPreferences = true
+        state.eventOpenError = "Couldn’t open Calendar."
 
         let store = TestStore(initialState: state) {
             CalendarFeature()
@@ -288,6 +289,7 @@ struct CalendarFeatureTests {
 
         await store.send(.prepareForReopen) {
             $0.showingPreferences = false
+            $0.eventOpenError = nil
             $0.displayedMonth = now
             $0.selectedDate = now
             $0.startOfWeekday = 2
@@ -873,5 +875,83 @@ struct CalendarFeatureTests {
             $0.isRequestingCalendarAccess = false
             $0.calendarAccessError = "access failed"
         }
+    }
+
+    // MARK: - Open in Calendar
+
+    private static let agendaEvent = CalendarEvent(
+        id: "event-id", title: "Haircut", startDate: Date(timeIntervalSince1970: 1_800_000_000),
+        endDate: Date(timeIntervalSince1970: 1_800_003_600), isAllDay: false,
+        itemIdentifier: "ITEM-1"
+    )
+
+    @Test
+    func openEventInCalendar_opensTheEventLinkThroughTheClient() async {
+        let opened = LockIsolated<[URL]>([])
+        let store = TestStore(initialState: CalendarFeature.State(displayedMonth: Self.agendaEvent.startDate)) {
+            CalendarFeature()
+        } withDependencies: {
+            $0.calendarApp.open = { url in opened.withValue { $0.append(url) } }
+        }
+
+        await store.send(.openEventInCalendar(Self.agendaEvent))
+        await store.finish()
+        #expect(opened.value.map(\.absoluteString) == ["ical://ekevent/ITEM-1?method=show&options=more"])
+    }
+
+    @Test
+    func openEventInCalendar_failureShowsMessageAndNextTryClearsIt() async {
+        let attempts = LockIsolated(0)
+        let store = TestStore(initialState: CalendarFeature.State(displayedMonth: Self.agendaEvent.startDate)) {
+            CalendarFeature()
+        } withDependencies: {
+            $0.calendarApp.open = { _ in
+                attempts.withValue { $0 += 1 }
+                if attempts.value == 1 { throw CalendarAppClient.OpenError.launchServices(-10814) }
+            }
+        }
+
+        await store.send(.openEventInCalendar(Self.agendaEvent))
+        await store.receive(\.openEventInCalendarFailed) {
+            $0.eventOpenError = "Couldn’t open Calendar."
+        }
+        await store.send(.openEventInCalendar(Self.agendaEvent)) {
+            $0.eventOpenError = nil
+        }
+        await store.finish()
+        #expect(attempts.value == 2)
+    }
+
+    @Test
+    func openEventInCalendar_errorClearsWhenThePanelHides() async {
+        var state = CalendarFeature.State(displayedMonth: Self.agendaEvent.startDate)
+        state.eventOpenError = "Couldn’t open Calendar."
+        let store = TestStore(initialState: state) {
+            CalendarFeature()
+        } withDependencies: {
+            $0.date = .constant(Self.agendaEvent.startDate)
+            $0.calendarClient.calendarDays = { _, _ in [] }
+            $0.calendarClient.gridInfo = { _ in GridInfo(startCol: 0, endCol: 6, endRow: 5) }
+        }
+
+        await store.send(.onDisappear) {
+            $0.eventOpenError = nil
+        }
+    }
+
+    @Test
+    func openEventInCalendar_seriesWithoutIdentifierStillOpensCalendar() async {
+        let opened = LockIsolated<[URL]>([])
+        let event = CalendarEvent(id: "x", title: "Untitled", startDate: Self.agendaEvent.startDate,
+                                  endDate: Self.agendaEvent.endDate, isAllDay: true, isRecurring: true)
+        let store = TestStore(initialState: CalendarFeature.State(displayedMonth: event.startDate)) {
+            CalendarFeature()
+        } withDependencies: {
+            $0.calendarApp.open = { url in opened.withValue { $0.append(url) } }
+        }
+
+        await store.send(.openEventInCalendar(event))
+        await store.finish()
+        #expect(opened.value.map(\.absoluteString) == ["ical://"])
     }
 }

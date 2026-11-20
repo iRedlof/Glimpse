@@ -47,6 +47,12 @@
     "CalendarKeyboardOwnershipTests/olderAIRequestCannotReclaimCancelOrReturnedQuit(cancelFirst:)": 2,
     "CalendarKeyboardOwnershipTests/focusedUpdateActionKeepsNativeKeyboardActivation(dark:)": 2,
     "CalendarKeyboardOwnershipTests/footerQuitClickKeepsFocusWithoutRing(dark:)": 2,
-    "CalendarKeyboardOwnershipTests/settingsOpenFocusRingFollowsEntryModality(entry:dark:)": 4
+    "CalendarKeyboardOwnershipTests/settingsOpenFocusRingFollowsEntryModality(entry:dark:)": 4,
+    "CalendarKeyboardOwnershipTests/agendaRowsJoinTabOrderAndOpenTheFocusedEvent(key:)": 2,
+    "CalendarKeyboardOwnershipTests/heldAgendaReturnOpensOnceAndArrowsNeverBrowseUnderARow()": 1,
+    "CalendarKeyboardOwnershipTests/agendaRowEscapeStillClosesThePanelWithoutOpeningCalendar()": 1,
+    "CalendarKeyboardOwnershipTests/agendaRowClickOpensEventAndAbandonsTheRestorationLease(pinned:)": 2,
+    "CalendarKeyboardOwnershipTests/agendaRowAccessibilityPressOpensTheEvent()": 1,
+    "CalendarKeyboardOwnershipTests/agendaRowFocusRingFollowsInputModality(dark:)": 2
   }
 }

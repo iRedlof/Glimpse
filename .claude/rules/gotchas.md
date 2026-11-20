@@ -114,6 +114,19 @@
   `Date.FormatStyle` (macOS 12+) is thread-safe and preferred in all new code.
   Never create `DateFormatter` in computed properties or hot paths.
 
+## Calendar Links & Hover
+
+- **`ical://ekevent/` takes `calendarItemIdentifier`, not `eventIdentifier`**: a repeating
+  series shares one item identifier, so recurring links also need the occurrence start
+  (`ical://ekevent/20261120T173000Z/<id>?method=show&options=more`). There is no working
+  `ical://` URL for a bare date (epoch and `date/…` forms are ignored), and AppleScript is
+  blocked by the sandbox. Open via LaunchServices, which needs no entitlement.
+
+- **SwiftUI `onHover` cannot be driven by synthetic events**: owned `mouseMoved` events (even
+  handed to tracking-area owners) don't change hover; it follows the real cursor. Render the
+  hovered state through a render-only override (`CalendarAgendaEventRow.hoverOverride`) rather
+  than moving the owner's pointer.
+
 ## Menu Bar
 
 - **StatusItemView rendering**: StatusItemView is a subview of NSStatusBarButton.

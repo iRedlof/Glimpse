@@ -50,7 +50,9 @@ public struct EventKitClient: Sendable {
             startDate: startDate,
             endDate: endDate,
             isAllDay: event.isAllDay,
-            blocksTime: blocksTime(isAllDay: event.isAllDay, availability: event.availability)
+            blocksTime: blocksTime(isAllDay: event.isAllDay, availability: event.availability),
+            itemIdentifier: event.calendarItemIdentifier,
+            isRecurring: event.hasRecurrenceRules
         )
     }
 

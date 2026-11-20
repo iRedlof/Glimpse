@@ -5,6 +5,13 @@ enum CalendarKeyboardOwner: String, CaseIterable, Hashable, Sendable {
     case footerQuit, footerPin, footerCalendar, footerSettings
     case quitCancel, quitConfirm
     case scheduleAllowAccess, scheduleOpenPrivacySettings
+    /// One owner per visible agenda row (rows open the event in Calendar).
+    case agendaEvent0, agendaEvent1, agendaEvent2, agendaEvent3, agendaEvent4
+
+    /// Row owners in list order; their count is the number of rows the agenda shows.
+    static let agendaEvents: [Self] = [.agendaEvent0, .agendaEvent1, .agendaEvent2, .agendaEvent3, .agendaEvent4]
+
+    var isAgendaEvent: Bool { Self.agendaEvents.contains(self) }
 }
 
 enum CalendarKeyboardKey: Sendable {
