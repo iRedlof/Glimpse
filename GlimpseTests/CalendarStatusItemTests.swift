@@ -442,6 +442,7 @@ private final class ShowFixture {
                 loads.withValue { $0 += 1 }; return [2, 3, 4, 5, 6]
             }
             $0.preferencesClient.loadShowAISearch = { loads.withValue { $0 += 1 }; return true }
+            $0.preferencesClient.loadDisplayOptions = { .default }
             $0.eventKitClient = EventKitClient(
                 requestAccess: {
                     Issue.record("Owned Show must not request calendar access")

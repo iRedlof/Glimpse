@@ -1,23 +1,23 @@
 {
-  "version": "1.5.9",
-  "build": "46",
-  "scope": "Performance: no agenda reload flash, lighter grid hover, fewer menu bar renders, locale-aware event times, faster first on-device AI answer.",
+  "version": "1.5.10",
+  "build": "47",
+  "scope": "Leave-by: opt-in \"Dentist · leave by 8:40\" in the menu bar (start minus a 10-60 min buffer, amber 5 minutes before), Leave by and Away N days agenda chips for located events and trips, Settings toggle, buffer picker and Hearth footnote. Local only, no network.",
   "checks": {
     "product": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-20-perf-batch.md"
+      "evidence": "docs/superpowers/reviews/2026-11-21-leave-by.md"
     },
     "ux": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-20-perf-batch.md"
+      "evidence": "docs/superpowers/reviews/2026-11-21-leave-by.md"
     },
     "code": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-20-perf-batch.md"
+      "evidence": "docs/superpowers/reviews/2026-11-21-leave-by.md"
     },
     "qa": {
       "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-20-perf-batch.md"
+      "evidence": "docs/superpowers/reviews/2026-11-21-leave-by.md"
     }
   }
 }

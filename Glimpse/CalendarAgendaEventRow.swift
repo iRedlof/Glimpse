@@ -9,6 +9,9 @@ import SwiftUI
 ///
 /// Today's next/current meeting with a strict meeting link also gets a trailing Join
 /// button (its own keyboard owner, after the row in Tab order; ⌘J anywhere in the panel).
+///
+/// A located event can carry a trailing chip: "Leave by 8:40" (leave-by on, not started)
+/// or "Away 5 days" (a trip). The chip is part of the row Button, not a separate control.
 @MainActor
 struct CalendarAgendaEventRow: View {
     static let openHint = "Open in Calendar"
@@ -18,6 +21,8 @@ struct CalendarAgendaEventRow: View {
     let open: () -> Void
     /// Non-nil only for the joinable meeting; opens its link.
     var join: (() -> Void)? = nil
+    /// "Leave by 8:40" / "Away 5 days", from `CalendarFeature.State.agendaBadge(for:)`.
+    var badge: AgendaBadge? = nil
     var keyboardContext: () -> CalendarKeyboardContext = { .init(visible: false) }
     var keyboardObservation: ((CalendarKeyboardInvocation) -> Void)? = nil
     var controlFocus: FocusState<CalendarKeyboardOwner?>.Binding? = nil
@@ -50,11 +55,15 @@ struct CalendarAgendaEventRow: View {
                         .font(.subheadline)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
-                    Text(event.timeString)
+                    Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(AppDesign.Colors.calendarContextText)
+                        .lineLimit(1)
                 }
                 Spacer(minLength: AppDesign.Spacing.xs)
+                if let badge {
+                    CalendarAgendaBadgeChip(badge: badge)
+                }
                 CalendarAgendaOpenGlyph()
             }
             .padding(.horizontal, AppDesign.Agenda.rowHorizontalInset)
@@ -70,10 +79,59 @@ struct CalendarAgendaEventRow: View {
         ))
         .modifier(PointingHandCursor())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(event.title), \(event.timeString)")
+        .accessibilityLabel(accessibilityText)
         // .help is AXHelp on macOS, as is .accessibilityHint: one string carries the hint.
         .help(Self.openHint)
         .accessibilityInputLabels([event.title, "\(Self.openHint) \(event.title)"])
+    }
+}
+
+extension CalendarAgendaEventRow {
+    /// Thread-safe, auto-updating start time style ("9:00 AM"), shared by every row.
+    static let startTimeStyle = Date.FormatStyle(date: .omitted, time: .shortened)
+
+    /// "9:00 AM · 412 Oak St" for a located event, "5 days · South Lake Tahoe" for a trip,
+    /// else the event's time range. The place keeps the line short enough to stay readable.
+    var subtitle: String {
+        guard let location = event.location else { return event.timeString }
+        if case let .away(days) = badge { return "\(days) days · \(location)" }
+        let time = event.isAllDay ? event.timeString : event.startDate.formatted(Self.startTimeStyle)
+        return "\(time) · \(location)"
+    }
+
+    /// "Dentist, 9:00 AM – 10:00 AM, 412 Oak St, Leave by 8:40 AM".
+    var accessibilityText: String {
+        ([event.title, event.timeString, event.location]
+            + [badge?.accessibilityText(calendar: .autoupdatingCurrent, locale: .autoupdatingCurrent)])
+            .compactMap { $0 }.joined(separator: ", ")
+    }
+}
+
+/// The trailing agenda chip: amber "Leave by 8:40" (like the amber menu bar pill), or a quiet
+/// neutral "Away 5 days". Tabular digits so times line up across rows.
+struct CalendarAgendaBadgeChip: View {
+    let badge: AgendaBadge
+
+    var body: some View {
+        Text(badge.text(calendar: .autoupdatingCurrent, locale: .autoupdatingCurrent))
+            .font(.caption.weight(.semibold))
+            .monospacedDigit()
+            .lineLimit(1)
+            .foregroundStyle(isLeaveBy ? AppDesign.Colors.onAmberText : Color.primary)
+            .padding(.horizontal, AppDesign.Agenda.chipHorizontalPadding)
+            .padding(.vertical, AppDesign.Agenda.chipVerticalPadding)
+            .background(
+                RoundedRectangle(cornerRadius: AppDesign.CornerRadius.sm)
+                    .fill(isLeaveBy ? AppDesign.Colors.accentAmber
+                        : Color.primary.opacity(AppDesign.Agenda.tripChipFillOpacity))
+            )
+            .fixedSize()
+            .accessibilityLabel(badge.accessibilityText(calendar: .autoupdatingCurrent, locale: .autoupdatingCurrent))
+    }
+
+    private var isLeaveBy: Bool {
+        if case .leaveBy = badge { return true }
+        return false
     }
 }
 

@@ -61,7 +61,12 @@ extension PreferencesClient: DependencyKey {
                     showDate: loadBool("showDate", defaultValue: true),
                     showYear: loadBool("showYear", defaultValue: false),
                     showFilledBackground: loadBool("showFilledBackground", defaultValue: false),
-                    showNextMeeting: loadBool("showNextMeeting", defaultValue: false)
+                    showNextMeeting: loadBool("showNextMeeting", defaultValue: false),
+                    showLeaveBy: loadBool("showLeaveBy", defaultValue: false),
+                    // Out-of-range or missing values fall back to the default (validated in init).
+                    leaveByMinutes: defaults.object(forKey: "leaveByMinutes") != nil
+                        ? defaults.integer(forKey: "leaveByMinutes")
+                        : LeaveBy.defaultBufferMinutes
                 )
             },
             saveDisplayOptions: { options in
@@ -72,6 +77,8 @@ extension PreferencesClient: DependencyKey {
                 defaults.set(options.showYear, forKey: "showYear")
                 defaults.set(options.showFilledBackground, forKey: "showFilledBackground")
                 defaults.set(options.showNextMeeting, forKey: "showNextMeeting")
+                defaults.set(options.showLeaveBy, forKey: "showLeaveBy")
+                defaults.set(options.leaveByMinutes, forKey: "leaveByMinutes")
             },
             loadShowAISearch: {
                 defaults.object(forKey: "showAISearch") != nil

@@ -201,6 +201,7 @@ struct PanelLayoutTests {
             $0.preferencesClient.loadStartOfWeekday = { 1 }
             $0.preferencesClient.loadWorkdays = { [2, 3, 4, 5, 6] }
             $0.preferencesClient.loadShowAISearch = { true }
+            $0.preferencesClient.loadDisplayOptions = { .default }
             $0.eventKitClient.authorizationStatus = { .notDetermined }
         }
         let content = HeightFixtureModel()

@@ -900,6 +900,7 @@ private final class CalendarViewportFixture {
             $0.preferencesClient.loadStartOfWeekday = { 1 }
             $0.preferencesClient.loadWorkdays = { [2, 3, 4, 5, 6] }
             $0.preferencesClient.loadShowAISearch = { false }
+            $0.preferencesClient.loadDisplayOptions = { .default }
             $0.eventKitClient = EventKitClient(
                 requestAccess: {
                     effects.withValue { $0 += 1 }
@@ -1016,6 +1017,7 @@ private final class CalendarViewportFixture {
             $0.preferencesClient.loadStartOfWeekday = { 1 }
             $0.preferencesClient.loadWorkdays = { [2, 3, 4, 5, 6] }
             $0.preferencesClient.loadShowAISearch = { true }
+            $0.preferencesClient.loadDisplayOptions = { .default }
             $0.eventKitClient = EventKitClient(
                 requestAccess: {
                     effects.withValue { $0 += 1 }; Issue.record("Contrast fixture must not request access"); return false

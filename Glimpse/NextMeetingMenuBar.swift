@@ -24,6 +24,8 @@ struct MenuBarMeetingSegment: Equatable {
 
     /// Settings preview when no meeting is live, so the toggle shows what it adds.
     static let previewSample = MenuBarMeetingSegment(text: "Standup in 12m", isImminent: false)
+    /// The preview sample with leave-by on: a located event reads "leave by".
+    static let leaveByPreviewSample = MenuBarMeetingSegment(text: "Dentist · leave by 8:40", isImminent: false)
 }
 
 /// Bridges `NextMeetingFeature` to the AppKit status item.
@@ -75,6 +77,14 @@ final class NextMeetingMenuBarController {
     func setEnabled(_ enabled: Bool) {
         store.send(.setEnabled(enabled))
     }
+
+    /// Applies the saved menu bar options: the segment toggle and the leave-by buffer.
+    func apply(_ options: MenuBarDisplayOptions) {
+        store.send(.setLeaveBy(minutes: options.activeLeaveByMinutes))
+        store.send(.setEnabled(options.showNextMeeting))
+    }
+
+    var leaveByMinutes: Int? { store.leaveByMinutes }
 
     /// Re-read today's events (wake, midnight, clock change, panel closed).
     func refresh() {

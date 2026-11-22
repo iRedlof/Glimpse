@@ -9,6 +9,10 @@ public struct MenuBarDisplayOptions: Equatable, Sendable, Codable {
     public var showFilledBackground: Bool
     /// Opt-in: append today's next meeting ("Standup in 12m") to the item.
     public var showNextMeeting: Bool
+    /// Opt-in: "Dentist · leave by 8:40" in the menu bar and a "Leave by" agenda chip.
+    public var showLeaveBy: Bool
+    /// Minutes before a located event's start to leave; one of `LeaveBy.bufferChoices`.
+    public var leaveByMinutes: Int
 
     public static let `default` = MenuBarDisplayOptions(
         showIcon: true,
@@ -17,7 +21,9 @@ public struct MenuBarDisplayOptions: Equatable, Sendable, Codable {
         showDate: true,
         showYear: false,
         showFilledBackground: false,
-        showNextMeeting: false
+        showNextMeeting: false,
+        showLeaveBy: false,
+        leaveByMinutes: LeaveBy.defaultBufferMinutes
     )
 
     public init(
@@ -27,7 +33,9 @@ public struct MenuBarDisplayOptions: Equatable, Sendable, Codable {
         showDate: Bool = true,
         showYear: Bool = false,
         showFilledBackground: Bool = false,
-        showNextMeeting: Bool = false
+        showNextMeeting: Bool = false,
+        showLeaveBy: Bool = false,
+        leaveByMinutes: Int = LeaveBy.defaultBufferMinutes
     ) {
         self.showIcon = showIcon
         self.showDayOfWeek = showDayOfWeek
@@ -36,10 +44,16 @@ public struct MenuBarDisplayOptions: Equatable, Sendable, Codable {
         self.showYear = showYear
         self.showFilledBackground = showFilledBackground
         self.showNextMeeting = showNextMeeting
+        self.showLeaveBy = showLeaveBy
+        self.leaveByMinutes = LeaveBy.validatedBuffer(leaveByMinutes)
     }
+
+    /// The buffer when leave-by is on, else nil.
+    public var activeLeaveByMinutes: Int? { showLeaveBy ? leaveByMinutes : nil }
 
     private enum CodingKeys: String, CodingKey {
         case showIcon, showDayOfWeek, showMonth, showDate, showYear, showFilledBackground, showNextMeeting
+        case showLeaveBy, leaveByMinutes
     }
 
     /// Missing keys (older encodings) fall back to the defaults.
@@ -56,7 +70,9 @@ public struct MenuBarDisplayOptions: Equatable, Sendable, Codable {
             showDate: try value(.showDate, fallback.showDate),
             showYear: try value(.showYear, fallback.showYear),
             showFilledBackground: try value(.showFilledBackground, fallback.showFilledBackground),
-            showNextMeeting: try value(.showNextMeeting, fallback.showNextMeeting)
+            showNextMeeting: try value(.showNextMeeting, fallback.showNextMeeting),
+            showLeaveBy: try value(.showLeaveBy, fallback.showLeaveBy),
+            leaveByMinutes: try container.decodeIfPresent(Int.self, forKey: .leaveByMinutes) ?? fallback.leaveByMinutes
         )
     }
 }

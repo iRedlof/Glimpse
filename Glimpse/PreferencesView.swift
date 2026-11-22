@@ -49,7 +49,8 @@ struct PreferencesView: View {
     /// What the menu bar appends when the toggle is on: the live meeting, else a sample.
     private var previewMeeting: MenuBarMeetingSegment? {
         guard store.displayOptions.showNextMeeting else { return nil }
-        return nextMeeting.segment ?? .previewSample
+        return nextMeeting.segment
+            ?? (store.displayOptions.showLeaveBy ? .leaveByPreviewSample : .previewSample)
     }
 
     // Called right after `store.send` returns. PreferencesFeature saves to
@@ -146,16 +147,51 @@ struct PreferencesView: View {
                     }
                 }
             }
-            classicRow("Meetings") {
-                Toggle("Show next meeting in the menu bar", isOn: displayBinding(
-                    keyPath: \.showNextMeeting,
-                    action: { .setShowNextMeeting($0) }
-                ))
-                .toggleStyle(.checkbox)
-                .accessibilityLabel("Show next meeting in menu bar")
-                .help(Self.nextMeetingHelp)
-            }
+            // One line: next meeting lives in "Menu bar shows", so leave-by adds no row height.
+            classicRow("Meetings") { leaveByRow }
         }
+    }
+
+    static let leaveByHelp =
+        "For events with a place: “Dentist · leave by 8:40” in the menu bar and a Leave by chip in the agenda. Leave-by is the start time minus this buffer, amber 5 minutes before."
+    static let leaveByBufferHelp = "Minutes before an event’s start to leave"
+
+    /// "Show leave-by time" and its buffer on one line, so the page still fits its minimum
+    /// height. The buffer is disabled while leave-by is off. Both reach the menu bar and agenda.
+    private var leaveByRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: AppDesign.Settings.rowSpacing) {
+            Toggle("Show leave-by time", isOn: Binding(
+                get: { store.displayOptions.showLeaveBy },
+                set: { newValue in
+                    store.send(.setShowLeaveBy(newValue))
+                    notifyLeaveByChanged()
+                }
+            ))
+            .toggleStyle(.checkbox)
+            .accessibilityLabel("Show leave-by time")
+            .help(Self.leaveByHelp)
+
+            Picker("Leave-by buffer", selection: Binding(
+                get: { store.displayOptions.leaveByMinutes },
+                set: { minutes in
+                    store.send(.setLeaveByMinutes(minutes))
+                    notifyLeaveByChanged()
+                }
+            )) {
+                ForEach(LeaveBy.bufferChoices, id: \.self) { minutes in
+                    Text("\(minutes) min").tag(minutes)
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
+            .disabled(!store.displayOptions.showLeaveBy)
+            .help(Self.leaveByBufferHelp)
+        }
+    }
+
+    private func notifyLeaveByChanged() {
+        notifyMenuBarChanged()
+        notifyCalendarChanged()
     }
 
     static let nextMeetingHelp =
@@ -218,8 +254,21 @@ struct PreferencesView: View {
                 .contentShape(Rectangle())
                 .accessibilityLabel(accessibilityName)
             }
+            nextMeetingToggle
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Part of "Menu bar shows": the segment is appended after the date text.
+    private var nextMeetingToggle: some View {
+        Toggle(isOn: displayBinding(keyPath: \.showNextMeeting, action: { .setShowNextMeeting($0) })) {
+            Text("Next meeting")
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .toggleStyle(.checkbox)
+        .contentShape(Rectangle())
+        .accessibilityLabel("Show next meeting in menu bar")
+        .help(Self.nextMeetingHelp)
     }
 
     // MARK: - Calendar
