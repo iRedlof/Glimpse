@@ -114,7 +114,7 @@ final class CalendarStatusItem {
         }
 
         nextMeeting.onChange = { [weak self] in self?.updateMenuBarDisplay() }
-        nextMeeting.setEnabled(preferencesClient.loadDisplayOptions().showNextMeeting)
+        nextMeeting.apply(preferencesClient.loadDisplayOptions())
         updateMenuBarDisplay()
         scheduleMidnightRefresh()
         registerGlobalHotkey()
@@ -131,7 +131,7 @@ final class CalendarStatusItem {
         ) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                self.nextMeeting.setEnabled(self.preferencesClient.loadDisplayOptions().showNextMeeting)
+                self.nextMeeting.apply(self.preferencesClient.loadDisplayOptions())
                 self.updateMenuBarDisplay()
             }
         }

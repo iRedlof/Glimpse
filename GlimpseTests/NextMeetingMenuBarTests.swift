@@ -15,8 +15,10 @@ struct NextMeetingMenuBarTests {
     private static let imminent = MenuBarMeetingSegment(text: "Standup in 4m", isImminent: true)
     private static let inMeeting = MenuBarMeetingSegment(text: "Standup ends 10:30", isImminent: false)
 
-    private func options(filled: Bool = false, icon: Bool = true, nextMeeting: Bool = true) -> MenuBarDisplayOptions {
-        MenuBarDisplayOptions(showIcon: icon, showDayOfWeek: true, showMonth: true, showDate: true,
+    private func options(
+        filled: Bool = false, icon: Bool = true, nextMeeting: Bool = true, dayOfWeek: Bool = true, month: Bool = true
+    ) -> MenuBarDisplayOptions {
+        MenuBarDisplayOptions(showIcon: icon, showDayOfWeek: dayOfWeek, showMonth: month, showDate: true,
                               showYear: false, showFilledBackground: filled, showNextMeeting: nextMeeting)
     }
 
@@ -218,6 +220,131 @@ struct NextMeetingMenuBarTests {
         #expect(hosting.fittingSize.width > 0)
     }
 
+    // MARK: - Leave-by
+
+    private static let leaveBy = MenuBarMeetingSegment(text: "Dentist · leave by 8:40", isImminent: false)
+    private static let leaveByAmber = MenuBarMeetingSegment(text: "Dentist · leave by 8:40", isImminent: true)
+
+    private static func leaveByFixture() -> (Calendar, CalendarEvent, Date) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Los_Angeles") ?? .gmt
+        let nine = calendar.date(from: DateComponents(year: 2026, month: 11, day: 21, hour: 9)) ?? .distantPast
+        let dentist = CalendarEvent(id: "dentist", title: "Dentist", startDate: nine,
+                                    endDate: nine.addingTimeInterval(3_600), isAllDay: false, location: "412 Oak St")
+        return (calendar, dentist, nine)
+    }
+
+    @Test
+    func leaveBySegmentReadsLeaveByAndTurnsAmberFiveMinutesBefore() throws {
+        let (calendar, dentist, nine) = Self.leaveByFixture()
+        let locale = Locale(identifier: "en_US")
+        func segment(minutesBeforeStart: Double) throws -> MenuBarMeetingSegment {
+            let meeting = try #require(NextMeetingSelector.select(
+                [dentist], now: nine.addingTimeInterval(-minutesBeforeStart * 60), calendar: calendar, leaveByMinutes: 20
+            ))
+            return MenuBarMeetingSegment(meeting, calendar: calendar, locale: locale)
+        }
+        #expect(try segment(minutesBeforeStart: 35) == Self.leaveBy)
+        #expect(try segment(minutesBeforeStart: 24) == Self.leaveByAmber)
+        #expect(try segment(minutesBeforeStart: 12) == MenuBarMeetingSegment(text: "Dentist in 12m", isImminent: false))
+        // The amber leave-by pill is the same amber as the imminent countdown.
+        let image = MenuBarItemRenderer.render(options: options(), dateString: "Sat", meeting: Self.leaveByAmber, isDark: true)
+        let fill = try pixel(in: image, xFraction: 0.5, yFraction: 0.12)
+        #expect(abs(fill.redComponent - AppDesign.Colors.accentAmberNS.redComponent) < 0.05)
+        #expect(abs(fill.greenComponent - AppDesign.Colors.accentAmberNS.greenComponent) < 0.05)
+    }
+
+    @Test
+    func controllerAppliesTheLeaveByBufferBeforeEnabling() {
+        let store = Store(initialState: NextMeetingFeature.State()) {
+            NextMeetingFeature()
+        } withDependencies: {
+            $0.eventKitClient.authorizationStatus = { .denied }
+        }
+        let controller = NextMeetingMenuBarController(store: store, notificationCenter: NotificationCenter())
+        controller.apply(MenuBarDisplayOptions(showNextMeeting: true, showLeaveBy: true, leaveByMinutes: 45))
+        #expect(controller.isEnabled)
+        #expect(controller.leaveByMinutes == 45)
+        controller.apply(MenuBarDisplayOptions(showNextMeeting: true, showLeaveBy: false, leaveByMinutes: 45))
+        #expect(controller.leaveByMinutes == nil)
+        controller.apply(.default)
+        #expect(!controller.isEnabled)
+    }
+
+    @Test
+    func agendaRowSpeaksThePlaceAndTheChip() {
+        let (_, dentist, nine) = Self.leaveByFixture()
+        let row = CalendarAgendaEventRow(event: dentist, owner: .agendaEvent0, open: {},
+                                         badge: .leaveBy(nine.addingTimeInterval(-1_200)))
+        #expect(row.subtitle == "\(dentist.startDate.formatted(CalendarAgendaEventRow.startTimeStyle)) · 412 Oak St")
+        #expect(row.accessibilityText.hasPrefix("Dentist, \(dentist.timeString), 412 Oak St, Leave by "))
+        let plain = CalendarAgendaEventRow(event: CalendarEvent(
+            id: "s", title: "Standup", startDate: nine, endDate: nine.addingTimeInterval(900), isAllDay: false
+        ), owner: .agendaEvent1, open: {})
+        #expect(plain.subtitle == plain.event.timeString)
+        #expect(plain.accessibilityText == "Standup, \(plain.event.timeString)")
+        let trip = CalendarAgendaEventRow(event: CalendarEvent(
+            id: "t", title: "Tahoe trip", startDate: nine, endDate: nine.addingTimeInterval(86_400 * 4),
+            isAllDay: false, location: "South Lake Tahoe"
+        ), owner: .agendaEvent2, open: {}, badge: .away(days: 5))
+        #expect(trip.subtitle == "5 days · South Lake Tahoe")
+        #expect(trip.accessibilityText.hasSuffix("South Lake Tahoe, Away 5 days"))
+    }
+
+    @Test
+    func writesNativeRendersOfLeaveBy() throws {
+        let states: [(String, MenuBarMeetingSegment)] = [
+            ("upcoming", Self.leaveBy), ("amber", Self.leaveByAmber),
+            ("after", MenuBarMeetingSegment(text: "Dentist in 12m", isImminent: false)),
+        ]
+        for dark in [false, true] {
+            for (name, meeting) in states {
+                let image = MenuBarItemRenderer.render(
+                    options: options(icon: true, dayOfWeek: false, month: false), dateString: "",
+                    meeting: meeting, isDark: dark, day: 21
+                )
+                try save(try menuBarStrip(image, dark: dark),
+                         name: "leave-by-menubar-\(dark ? "dark" : "light")-\(name)")
+            }
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func writesNativeRendersOfTheLeaveByAndTripChips(dark: Bool) throws {
+        // 9:00 AM local, as in the mock.
+        let start = Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 21, hour: 9)) ?? .now
+        let dentist = CalendarEvent(id: "dentist", title: "Dentist", startDate: start,
+                                    endDate: start.addingTimeInterval(3_600), isAllDay: false, location: "412 Oak St")
+        let lunch = CalendarEvent(id: "lunch", title: "Lunch with Sam", startDate: start.addingTimeInterval(12_600),
+                                  endDate: start.addingTimeInterval(16_200), isAllDay: false)
+        let trip = CalendarEvent(id: "tahoe", title: "Tahoe trip", startDate: start.addingTimeInterval(86_400 * 2),
+                                 endDate: start.addingTimeInterval(86_400 * 6), isAllDay: false,
+                                 location: "South Lake Tahoe")
+        let rows = VStack(spacing: 0) {
+            CalendarAgendaEventRow(event: dentist, owner: .agendaEvent0, open: {},
+                                   badge: .leaveBy(start.addingTimeInterval(-1_200)))
+            CalendarAgendaEventRow(event: lunch, owner: .agendaEvent1, open: {})
+            CalendarAgendaEventRow(event: trip, owner: .agendaEvent2, open: {}, badge: .away(days: 5))
+        }
+        let data = try render(rows, dark: dark)
+        try save(data, name: "leave-by-agenda-\(dark ? "dark" : "light")")
+        #expect(!data.isEmpty)
+    }
+
+    private func render(_ content: some View, dark: Bool) throws -> Data {
+        let root = content
+            .frame(width: 284)
+            .padding(AppDesign.Spacing.xs)
+            .background(AppDesign.Colors.calendarSurface)
+        let hosting = NSHostingView(rootView: root)
+        hosting.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
+        hosting.layoutSubtreeIfNeeded()
+        let bitmap = try #require(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
+        hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+        return try #require(bitmap.representation(using: .png, properties: [:]))
+    }
+
     // MARK: - Helpers
 
     private func waitUntil(_ predicate: @MainActor () -> Bool) async throws {
@@ -275,6 +402,11 @@ struct NextMeetingMenuBarTests {
     }
 
     private func save(_ data: Data, name: String) throws {
+        // The sandboxed test host can't write outside its container; with this opt-in the
+        // PNG also goes to the test log as base64, for collection outside the sandbox.
+        if ProcessInfo.processInfo.environment["GLIMPSE_RENDER_LOG"] == "1" {
+            print("GLIMPSE_RENDER \(name).png \(data.base64EncodedString())")
+        }
         // Native artifacts go to /tmp (see gotchas): never straight to a removable volume.
         let base = ProcessInfo.processInfo.environment["GLIMPSE_NEXT_MEETING_ARTIFACT_DIR"]
             .map { URL(fileURLWithPath: $0, isDirectory: true) }

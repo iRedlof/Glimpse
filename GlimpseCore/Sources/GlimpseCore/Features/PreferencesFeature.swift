@@ -47,6 +47,9 @@ public struct PreferencesFeature: Sendable {
         case setShowYear(Bool)
         case setShowFilledBackground(Bool)
         case setShowNextMeeting(Bool)
+        case setShowLeaveBy(Bool)
+        /// Validated against `LeaveBy.bufferChoices`; anything else saves the default.
+        case setLeaveByMinutes(Int)
         case setLaunchAtLogin(Bool)
         case refreshLaunchAtLogin
         case launchAtLoginSucceeded(LaunchAtLoginClient.Status)
@@ -139,6 +142,16 @@ public struct PreferencesFeature: Sendable {
 
             case let .setShowNextMeeting(value):
                 state.displayOptions.showNextMeeting = value
+                preferencesClient.saveDisplayOptions(state.displayOptions)
+                return .send(.delegate(.displayOptionsChanged(state.displayOptions)))
+
+            case let .setShowLeaveBy(value):
+                state.displayOptions.showLeaveBy = value
+                preferencesClient.saveDisplayOptions(state.displayOptions)
+                return .send(.delegate(.displayOptionsChanged(state.displayOptions)))
+
+            case let .setLeaveByMinutes(minutes):
+                state.displayOptions.leaveByMinutes = LeaveBy.validatedBuffer(minutes)
                 preferencesClient.saveDisplayOptions(state.displayOptions)
                 return .send(.delegate(.displayOptionsChanged(state.displayOptions)))
 

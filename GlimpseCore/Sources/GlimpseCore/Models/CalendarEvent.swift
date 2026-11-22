@@ -17,6 +17,9 @@ public struct CalendarEvent: Equatable, Identifiable, Sendable {
     public let isDeclined: Bool
     /// A strict video-call link found on the event (URL, location or notes), if any.
     public let meetingLink: MeetingLink?
+    /// A physical place (whitespace collapsed), or nil for none or a virtual/URL location.
+    /// Drives leave-by and trips; never sent anywhere.
+    public let location: String?
 
     public init(
         id: String,
@@ -28,7 +31,8 @@ public struct CalendarEvent: Equatable, Identifiable, Sendable {
         itemIdentifier: String? = nil,
         isRecurring: Bool = false,
         isDeclined: Bool = false,
-        meetingLink: MeetingLink? = nil
+        meetingLink: MeetingLink? = nil,
+        location: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -40,6 +44,31 @@ public struct CalendarEvent: Equatable, Identifiable, Sendable {
         self.isRecurring = isRecurring
         self.isDeclined = isDeclined
         self.meetingLink = meetingLink
+        self.location = Self.physicalLocation(location)
+    }
+
+    /// Location strings calendar apps fill in for calls, not places.
+    static let virtualPlaceholders: Set<String> = [
+        "zoom", "zoom meeting", "microsoft teams meeting", "microsoft teams", "teams",
+        "google meet", "facetime", "webex", "online", "virtual", "phone", "phone call",
+    ]
+
+    /// A placeholder, also when prefixed "Join" / "Join the" ("Join Zoom Meeting").
+    static func isVirtualPlaceholder(_ lowered: String) -> Bool {
+        let unprefixed = ["join the ", "join "].first { lowered.hasPrefix($0) }
+            .map { String(lowered.dropFirst($0.count)) } ?? lowered
+        return virtualPlaceholders.contains(unprefixed)
+    }
+
+    /// Trimmed, whitespace-collapsed place; nil when empty, a URL, or a call placeholder.
+    public static func physicalLocation(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let collapsed = raw.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).joined(separator: " ")
+        let lowered = collapsed.lowercased()
+        guard !collapsed.isEmpty, !lowered.contains("://"), !lowered.contains("www."),
+              !isVirtualPlaceholder(lowered)
+        else { return nil }
+        return collapsed
     }
 
     /// Locale-aware short time ("9:05 AM" or "09:05"). `Date.FormatStyle` is a thread-safe

@@ -335,7 +335,47 @@ struct PreferencesAccessibilityTests {
         #expect(toggle.help == PreferencesView.nextMeetingHelp)
         let preview = try #require(host.elements().first { $0.label == "Menu bar preview" })
         #expect((preview.value as? String)?.contains("Standup in 12m") == true)
+        let leaveBy = try host.control(named: "Show leave-by time")
+        #expect(leaveBy.role == .checkBox)
+        #expect(leaveBy.help == PreferencesView.leaveByHelp)
         #expect(!scroll.hasHorizontalScroller)
+    }
+
+    /// Leave-by is one compact line: the checkbox and a trailing buffer menu that is
+    /// disabled while leave-by is off, so the page keeps its minimum height.
+    @Test(arguments: [AppDesign.Settings.minimumContentSize.width, AppDesign.Settings.contentSize.width],
+          [false, true])
+    func leaveByRowKeepsCheckboxAndBufferOnOneLine(width: CGFloat, leaveByOn: Bool) async throws {
+        var state = PreferencesFeature.State()
+        state.showAISearch = true
+        state.displayOptions.showLeaveBy = leaveByOn
+        let fixture = PreferencesAccessibilityFixture(state: state)
+        let host = fixture.documentHost(width: width, height: AppDesign.Settings.minimumContentSize.height)
+        defer { host.close(); fixture.close() }
+        try await host.settle()
+        try host.loadAccessibilityWindowTree()
+        try await host.settle()
+        let scroll = try #require(accessibilityScrollView(in: host.hosting))
+        let document = try #require(scroll.documentView)
+        #expect(document.frame.height <= scroll.contentView.bounds.height + AppDesign.Settings.layoutTolerance,
+                "Document \(document.frame.height) exceeds minimum clip \(scroll.contentView.bounds.height)")
+        #expect(!scroll.hasHorizontalScroller)
+        let toggle = try host.control(named: "Show leave-by time")
+        let buffer = try host.control(named: "Leave-by buffer")
+        #expect(toggle.role == .checkBox)
+        #expect((toggle.value as? NSNumber)?.boolValue == leaveByOn)
+        #expect(buffer.role == .popUpButton)
+        #expect(buffer.enabled == leaveByOn)
+        #expect(buffer.help == PreferencesView.leaveByBufferHelp)
+        #expect((buffer.value as? String) == "\(LeaveBy.defaultBufferMinutes) min")
+        #expect(abs(buffer.frame.midY - toggle.frame.midY) <= AppDesign.Settings.layoutTolerance + 4,
+                "Buffer \(buffer.frame) must share the leave-by line \(toggle.frame)")
+        #expect(buffer.frame.minX > toggle.frame.maxX)
+        // The next meeting joins the "Menu bar shows" choices instead of taking its own line.
+        let nextMeeting = try host.control(named: "Show next meeting in menu bar")
+        let year = try host.control(named: "Show year in menu bar")
+        #expect(nextMeeting.role == .checkBox)
+        #expect(abs(nextMeeting.frame.midY - year.frame.midY) <= AppDesign.Settings.layoutTolerance)
     }
 
     @Test(arguments: [CGFloat(600), AppDesign.Settings.minimumContentSize.width], [false, true])
@@ -370,13 +410,14 @@ struct PreferencesAccessibilityTests {
         let nativeCheckboxes: Set<String> = [
             "Launch at login", "Global shortcut", "Show icon in menu bar", "Show day of week in menu bar",
             "Show month in menu bar", "Show date in menu bar", "Show year in menu bar",
-            "Filled background", "Show next meeting in menu bar", "Enable AI date search",
+            "Filled background", "Show next meeting in menu bar", "Show leave-by time", "Enable AI date search",
             "Check for updates automatically"
         ]
         let names = ["Launch at login", "Set and enable shortcut", "Global shortcut",
                      "Show icon in menu bar", "Show day of week in menu bar",
                      "Show month in menu bar", "Show date in menu bar", "Show year in menu bar",
-                     "Filled background", "Show next meeting in menu bar", "Week starts on"] +
+                     "Show next meeting in menu bar", "Filled background", "Show leave-by time",
+                     "Leave-by buffer", "Week starts on"] +
             Calendar.current.weekdaySymbols.map { "\($0) workday" } +
             ["Enable AI date search"] + (showAI ? ["AI provider"] : []) +
             ["Check for updates automatically", "Check for updates now",

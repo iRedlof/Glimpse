@@ -131,6 +131,7 @@ private final class DateAccessibilityFixture {
             $0.preferencesClient.loadStartOfWeekday = { 1 }
             $0.preferencesClient.loadWorkdays = { [2, 3, 4, 5, 6] }
             $0.preferencesClient.loadShowAISearch = { false }
+            $0.preferencesClient.loadDisplayOptions = { .default }
             $0.eventKitClient = EventKitClient(
                 requestAccess: {
                     Issue.record("Date fixture must not request calendar access")

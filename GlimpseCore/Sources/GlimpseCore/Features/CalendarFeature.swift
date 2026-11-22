@@ -26,6 +26,10 @@ public struct CalendarFeature: Sendable {
         /// The agenda's next/current meeting today when it has a meeting link: its row
         /// shows Join and ⌘J opens it. Nil for other days and link-less meetings.
         public var joinableEventID: String?
+        /// Leave-by buffer for agenda chips, or nil when "Show leave-by time" is off.
+        public var leaveByMinutes: Int?
+        /// When the agenda's events last loaded: leave-by chips hide for events started by then.
+        public var agendaNow: Date?
         public var calendarAuthorizationStatus: EKAuthorizationStatus = .notDetermined
         public var isRequestingCalendarAccess = false
         public var calendarAccessError: String?
@@ -41,6 +45,13 @@ public struct CalendarFeature: Sendable {
         public var aiAnswer: DateAnswer?
 
         public var calendarAccessGranted: Bool { calendarAuthorizationStatus == .fullAccess }
+
+        /// The agenda row's chip: "Away 5 days" for trips, "Leave by 8:40" for located events.
+        public func agendaBadge(for event: CalendarEvent) -> AgendaBadge? {
+            // Without a load time, leave-by can't tell started events apart: trips only.
+            AgendaBadge.badge(for: event, leaveByMinutes: agendaNow == nil ? nil : leaveByMinutes,
+                              now: agendaNow ?? .distantPast, calendar: calendar)
+        }
 
         /// The agenda event Join (and ⌘J) opens, if any.
         public var joinableEvent: CalendarEvent? {
@@ -140,6 +151,7 @@ public struct CalendarFeature: Sendable {
                 state.startOfWeekday = preferencesClient.loadStartOfWeekday()
                 state.workdays = preferencesClient.loadWorkdays()
                 state.showAISearch = preferencesClient.loadShowAISearch()
+                state.leaveByMinutes = preferencesClient.loadDisplayOptions().activeLeaveByMinutes
                 recomputeDays(&state)
                 return loadEvents(&state)
 
@@ -311,6 +323,8 @@ public struct CalendarFeature: Sendable {
                 if state.events != events { state.eventOpenError = nil }
                 state.events = events
                 state.eventsError = nil
+                // Only leave-by chips depend on the time, so link- and place-less agendas never read it.
+                if state.leaveByMinutes != nil { state.agendaNow = date.now }
                 return refreshJoinableMeeting(&state)
 
             case let .eventsFailed(requestedDate, requestID, message):
@@ -329,6 +343,8 @@ public struct CalendarFeature: Sendable {
                 state.startOfWeekday = preferencesClient.loadStartOfWeekday()
                 state.workdays = preferencesClient.loadWorkdays()
                 state.showAISearch = preferencesClient.loadShowAISearch()
+                state.leaveByMinutes = preferencesClient.loadDisplayOptions().activeLeaveByMinutes
+                if state.leaveByMinutes != nil { state.agendaNow = date.now }
                 recomputeDays(&state)
                 return .none
 
@@ -385,6 +401,7 @@ public struct CalendarFeature: Sendable {
                 state.startOfWeekday = preferencesClient.loadStartOfWeekday()
                 state.workdays = preferencesClient.loadWorkdays()
                 state.showAISearch = preferencesClient.loadShowAISearch()
+                state.leaveByMinutes = preferencesClient.loadDisplayOptions().activeLeaveByMinutes
                 state.eventOpenError = nil
                 recomputeDays(&state)
                 clearAIResults(&state)

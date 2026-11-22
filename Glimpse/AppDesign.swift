@@ -99,6 +99,10 @@ enum AppDesign {
         static let joinHorizontalPadding: CGFloat = 8
         static let joinVerticalPadding: CGFloat = 3
         static let joinPressedOpacity: Double = 0.8
+        /// "Leave by 8:40" / "Away 5 days" chips: Join-sized, so a row never grows taller.
+        static let chipHorizontalPadding: CGFloat = 7
+        static let chipVerticalPadding: CGFloat = 3
+        static let tripChipFillOpacity: Double = 0.1
     }
 
     enum Footer {
@@ -201,6 +205,10 @@ enum AppDesign {
         static let accentRedNS = NSColor(red: 0.91, green: 0.25, blue: 0.25, alpha: 1.0)
         /// Next meeting within five minutes: the whole menu bar pill turns amber.
         static let accentAmberNS = NSColor(red: 1.0, green: 0.698, blue: 0.141, alpha: 1.0)
+        /// The same amber for SwiftUI ("Leave by" agenda chip).
+        static let accentAmber = Color(nsColor: accentAmberNS)
+        /// Text on amber in both appearances (matches the amber menu bar pill's content).
+        static let onAmberText = Color(nsColor: NSColor(white: 0.1, alpha: 1.0))
 
         /// Bounds opaque calendar fills for white labels using the current resolved hue.
         static func calendarSolidFill(_ color: Color, in environment: EnvironmentValues) -> Color {

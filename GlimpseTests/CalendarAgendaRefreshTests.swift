@@ -647,6 +647,7 @@ private final class AgendaRefreshFixture {
             $0.preferencesClient.loadStartOfWeekday = { 1 }
             $0.preferencesClient.loadWorkdays = { [2, 3, 4, 5, 6] }
             $0.preferencesClient.loadShowAISearch = { showAI }
+            $0.preferencesClient.loadDisplayOptions = { .default }
             $0.eventKitClient = EventKitClient(
                 requestAccess: {
                     permissionRequests.withValue { $0 += 1 }

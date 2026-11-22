@@ -857,6 +857,7 @@ struct CalendarPopoverView: View {
                     CalendarAgendaEventRow(
                         event: event, owner: owner, open: { openEventInCalendar(event) },
                         join: event.id == store.joinableEventID ? { joinMeeting(event) } : nil,
+                        badge: store.state.agendaBadge(for: event),
                         keyboardContext: keyboardContext, keyboardObservation: keyboardObservation,
                         controlFocus: $controlFocus
                     )

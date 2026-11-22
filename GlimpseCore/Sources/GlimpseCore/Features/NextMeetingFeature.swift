@@ -18,12 +18,16 @@ public struct NextMeetingFeature: Sendable {
         public var eventsDay: Date?
         public var requestID: UUID?
         public var meeting: NextMeeting?
+        /// Leave-by buffer in minutes, or nil when "Show leave-by time" is off.
+        public var leaveByMinutes: Int?
 
         public init() {}
     }
 
     public enum Action: Sendable {
         case setEnabled(Bool)
+        /// The leave-by buffer changed (nil: off). Recomputes from the cached events.
+        case setLeaveBy(minutes: Int?)
         /// Re-read today's events (calendar changed, wake, day or clock change).
         case refresh
         /// A minute boundary passed: recompute from the cached events.
@@ -49,6 +53,13 @@ public struct NextMeetingFeature: Sendable {
                 guard enabled != state.isEnabled else { return .none }
                 state.isEnabled = enabled
                 return enabled ? fetch(&state) : clear(&state)
+
+            case let .setLeaveBy(minutes):
+                let minutes = minutes.map(LeaveBy.validatedBuffer)
+                guard minutes != state.leaveByMinutes else { return .none }
+                state.leaveByMinutes = minutes
+                guard state.isEnabled, state.eventsDay != nil else { return .none }
+                return recompute(&state, now: date.now)
 
             case .refresh:
                 guard state.isEnabled else { return .none }
@@ -112,7 +123,9 @@ public struct NextMeetingFeature: Sendable {
     }
 
     private func recompute(_ state: inout State, now: Date) -> Effect<Action> {
-        let meeting = NextMeetingSelector.select(state.events, now: now, calendar: calendar)
+        let meeting = NextMeetingSelector.select(
+            state.events, now: now, calendar: calendar, leaveByMinutes: state.leaveByMinutes
+        )
         if state.meeting != meeting { state.meeting = meeting }
         // Nothing left today: stop ticking. Midnight and calendar changes send `.refresh`.
         guard meeting != nil else { return .cancel(id: CancelID.tick) }

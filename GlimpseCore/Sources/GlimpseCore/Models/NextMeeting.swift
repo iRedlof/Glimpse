@@ -7,6 +7,9 @@ public struct NextMeeting: Equatable, Sendable {
         case upcoming(minutesUntil: Int)
         /// Started and not yet ended.
         case inProgress
+        /// Has a place and leave-by is on: leave at `at`, `minutesUntil` whole minutes
+        /// from now (rounded up). Becomes `.upcoming` once `at` passes.
+        case leaveBy(at: Date, minutesUntil: Int)
     }
 
     public let event: CalendarEvent
@@ -17,10 +20,15 @@ public struct NextMeeting: Equatable, Sendable {
         self.phase = phase
     }
 
-    /// Starts within `NextMeetingSelector.imminentMinutes`: the menu bar turns amber.
+    /// Starts (or must be left for) within `NextMeetingSelector.imminentMinutes`:
+    /// the menu bar turns amber.
     public var isImminent: Bool {
-        guard case let .upcoming(minutes) = phase else { return false }
-        return minutes <= NextMeetingSelector.imminentMinutes
+        switch phase {
+        case let .upcoming(minutes), let .leaveBy(_, minutes):
+            return minutes <= NextMeetingSelector.imminentMinutes
+        case .inProgress:
+            return false
+        }
     }
 }
 
@@ -31,6 +39,8 @@ public struct NextMeeting: Equatable, Sendable {
 ///   timed events of a day or longer never do.
 /// - "Today" is `calendar`'s day containing `now` (so DST and time-zone changes
 ///   follow the calendar); an event counts if it overlaps today and has not ended.
+/// - With leave-by on (`leaveByMinutes`), the soonest upcoming meeting with a place reads
+///   "leave by" until start − buffer, amber in the 5 minutes before; then the countdown.
 /// - A meeting starting within the imminent window wins, even over one in progress,
 ///   because that is the one to switch to. Otherwise the meeting in progress that
 ///   started most recently, otherwise the soonest upcoming one.
@@ -57,7 +67,7 @@ public enum NextMeetingSelector {
     }
 
     public static func select(
-        _ events: [CalendarEvent], now: Date, calendar: Calendar
+        _ events: [CalendarEvent], now: Date, calendar: Calendar, leaveByMinutes: Int? = nil
     ) -> NextMeeting? {
         let eligible = candidates(events, now: now, calendar: calendar)
         let upcoming = eligible
@@ -67,8 +77,13 @@ public enum NextMeetingSelector {
             .filter { $0.startDate <= now }
             .min { ($1.startDate, $0.endDate, $0.id) < ($0.startDate, $1.endDate, $1.id) }
 
-        let next = upcoming.map {
-            NextMeeting(event: $0, phase: .upcoming(minutesUntil: minutesUntil($0.startDate, from: now)))
+        let next = upcoming.map { event in
+            if let leaveAt = LeaveBy.leaveTime(for: event, bufferMinutes: leaveByMinutes), leaveAt > now {
+                return NextMeeting(event: event, phase: .leaveBy(
+                    at: leaveAt, minutesUntil: minutesUntil(leaveAt, from: now)
+                ))
+            }
+            return NextMeeting(event: event, phase: .upcoming(minutesUntil: minutesUntil(event.startDate, from: now)))
         }
         if let next, next.isImminent { return next }
         if let current { return NextMeeting(event: current, phase: .inProgress) }
@@ -88,13 +103,18 @@ public enum NextMeetingSelector {
     }
 
     /// The next instant `select` can change its event or phase kind: an imminent
-    /// window opening, a start, or an end. Nil when nothing is left today.
+    /// window opening, a leave-by window or instant, a start, or an end. Nil when
+    /// nothing is left today.
     public static func nextTransition(
-        _ events: [CalendarEvent], now: Date, calendar: Calendar
+        _ events: [CalendarEvent], now: Date, calendar: Calendar, leaveByMinutes: Int? = nil
     ) -> Date? {
         let imminentWindow = TimeInterval(imminentMinutes) * secondsPerMinute
         return candidates(events, now: now, calendar: calendar)
-            .flatMap { [$0.startDate.addingTimeInterval(-imminentWindow), $0.startDate, $0.endDate] }
+            .flatMap { event -> [Date] in
+                let leave = LeaveBy.leaveTime(for: event, bufferMinutes: leaveByMinutes)
+                    .map { [$0.addingTimeInterval(-imminentWindow), $0] } ?? []
+                return leave + [event.startDate.addingTimeInterval(-imminentWindow), event.startDate, event.endDate]
+            }
             .filter { $0 > now }
             .min()
     }
@@ -106,7 +126,8 @@ public enum NextMeetingText {
     public static let maximumTitleLength = 20
     static let fallbackTitle = "Meeting"
 
-    /// "Standup in 12m", "Planning in 1h 5m", "Standup ends 10:30 AM".
+    /// "Standup in 12m", "Planning in 1h 5m", "Standup ends 10:30 AM",
+    /// "Dentist · leave by 8:40".
     public static func menuBarText(
         for meeting: NextMeeting, calendar: Calendar, locale: Locale
     ) -> String {
@@ -116,6 +137,8 @@ public enum NextMeetingText {
             return "\(title) \(countdown(minutes: minutes))"
         case .inProgress:
             return "\(title) ends \(endTime(meeting.event.endDate, calendar: calendar, locale: locale))"
+        case let .leaveBy(leaveAt, _):
+            return "\(title) · leave by \(LeaveBy.clockText(leaveAt, calendar: calendar, locale: locale))"
         }
     }
 

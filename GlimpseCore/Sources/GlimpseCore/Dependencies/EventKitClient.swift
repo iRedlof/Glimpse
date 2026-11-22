@@ -54,7 +54,8 @@ public struct EventKitClient: Sendable {
             itemIdentifier: event.calendarItemIdentifier,
             isRecurring: event.hasRecurrenceRules,
             isDeclined: isDeclined(currentUserStatus: event.attendees?.first(where: \.isCurrentUser)?.participantStatus),
-            meetingLink: MeetingLinkExtractor.link(url: event.url, location: event.location, notes: event.notes)
+            meetingLink: MeetingLinkExtractor.link(url: event.url, location: event.location, notes: event.notes),
+            location: event.location
         )
     }
 
