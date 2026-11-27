@@ -1,23 +1,23 @@
 {
-  "version": "1.5.10",
-  "build": "47",
-  "scope": "Leave-by: opt-in \"Dentist · leave by 8:40\" in the menu bar (start minus a 10-60 min buffer, amber 5 minutes before), Leave by and Away N days agenda chips for located events and trips, Settings toggle, buffer picker and Hearth footnote. Local only, no network.",
-  "checks": {
-    "product": {
-      "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-21-leave-by.md"
-    },
-    "ux": {
-      "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-21-leave-by.md"
-    },
-    "code": {
-      "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-21-leave-by.md"
-    },
-    "qa": {
-      "status": "passed",
-      "evidence": "docs/superpowers/reviews/2026-11-21-leave-by.md"
+    "version": "1.5.11",
+    "build": "48",
+    "scope": "Performance batch: consolidate 5 duplicate Date.FormatStyle instances into one shared TimeFormatter (output-identical); NextMeetingFeature.refresh reuses same-day cached events on cheap triggers (panel close / wake / clock change) instead of refetching EventKit; a dedicated .calendarChanged action always fetches on EKEventStoreChanged so same-day calendar edits are never stale. Local only, no network.",
+    "checks": {
+        "product": {
+            "status": "passed",
+            "evidence": "docs/superpowers/reviews/2026-11-27-perf-1.5.11.md"
+        },
+        "ux": {
+            "status": "passed",
+            "evidence": "docs/superpowers/reviews/2026-11-27-perf-1.5.11.md"
+        },
+        "code": {
+            "status": "passed",
+            "evidence": "docs/superpowers/reviews/2026-11-27-perf-1.5.11.md"
+        },
+        "qa": {
+            "status": "passed",
+            "evidence": "docs/superpowers/reviews/2026-11-27-perf-1.5.11.md"
+        }
     }
-  }
 }
