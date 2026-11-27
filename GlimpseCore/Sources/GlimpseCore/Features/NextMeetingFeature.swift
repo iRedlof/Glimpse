@@ -63,7 +63,14 @@ public struct NextMeetingFeature: Sendable {
 
             case .refresh:
                 guard state.isEnabled else { return .none }
-                return fetch(&state)
+                // Skip fetch if same day, full access, and have cached events (stale-while-
+                // revalidate), but still recompute from cache against current time.
+                let now = date.now
+                let today = calendar.startOfDay(for: now)
+                let canReuseCache = state.eventsDay == today
+                    && eventKitClient.authorizationStatus() == .fullAccess
+                    && !state.events.isEmpty
+                return canReuseCache ? recompute(&state, now: now) : fetch(&state)
 
             case .tick:
                 guard state.isEnabled else { return .none }

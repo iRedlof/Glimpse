@@ -188,4 +188,106 @@ struct NextMeetingFeatureTests {
         await store.send(.setEnabled(false))
         #expect(fetches.value.isEmpty)
     }
+
+    @Test
+    func refreshSameDayWithCachedEventsRecomputesWithoutFetch() async {
+        let now = LockIsolated(at(9, 50))
+        let clock = TestClock()
+        let fetches = LockIsolated<[Date]>([])
+        let standup = standup
+        let store = makeStore(now: now, clock: clock, fetches: fetches) { [standup] }
+        await store.send(.setEnabled(true)) { $0.isEnabled = true; $0.requestID = UUID(0) }
+        await store.receive(\.eventsLoaded) {
+            $0.requestID = nil
+            $0.eventsDay = day
+            $0.events = [standup]
+            $0.meeting = NextMeeting(event: standup, phase: .upcoming(minutesUntil: 10))
+        }
+        // Time advances: meeting is now imminent.
+        now.setValue(at(9, 57))
+        await store.send(.refresh) {
+            // Meeting recomputed from cache (10 min → 3 min), but no new fetch.
+            $0.meeting = NextMeeting(event: standup, phase: .upcoming(minutesUntil: 3))
+        }
+        // Only the initial enable fetch, no second fetch on .refresh.
+        #expect(fetches.value == [day])
+        // Disable to cancel the pending tick effect started by refresh.
+        await store.send(.setEnabled(false)) {
+            $0.isEnabled = false
+            $0.events = []
+            $0.eventsDay = nil
+            $0.meeting = nil
+        }
+    }
+
+    @Test
+    func refreshAfterMidnightCrossingFetchesNewDay() async {
+        let now = LockIsolated(at(23, 58))
+        let fetches = LockIsolated<[Date]>([])
+        let late = MeetingFixtures.event("Late", at(23, 0), at(23, 59, 30))
+        let store = makeStore(now: now, clock: TestClock(), fetches: fetches) { [late] }
+        await store.send(.setEnabled(true)) { $0.isEnabled = true; $0.requestID = UUID(0) }
+        await store.receive(\.eventsLoaded) {
+            $0.requestID = nil
+            $0.eventsDay = day
+            $0.events = [late]
+            $0.meeting = NextMeeting(event: late, phase: .inProgress)
+        }
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: day) ?? day
+        now.setValue(tomorrow.addingTimeInterval(60))
+        // Crossing midnight: must fetch the new day.
+        await store.send(.refresh) { $0.requestID = UUID(1) }
+        await store.receive(\.eventsLoaded) {
+            $0.requestID = nil
+            $0.eventsDay = tomorrow
+            $0.meeting = nil
+        }
+        #expect(fetches.value == [day, tomorrow])
+    }
+
+    @Test
+    func refreshWithEmptyEventsFetches() async {
+        let now = LockIsolated(at(9))
+        let fetches = LockIsolated<[Date]>([])
+        let store = makeStore(now: now, clock: TestClock(), fetches: fetches) { [] }
+        await store.send(.setEnabled(true)) { $0.isEnabled = true; $0.requestID = UUID(0) }
+        await store.receive(\.eventsLoaded) {
+            $0.requestID = nil
+            $0.eventsDay = day
+            $0.events = []
+        }
+        // Even on the same day, empty events trigger a fresh fetch (might have changed).
+        await store.send(.refresh) { $0.requestID = UUID(1) }
+        await store.receive(\.eventsLoaded) {
+            $0.requestID = nil
+            $0.eventsDay = day
+            $0.events = []
+        }
+        #expect(fetches.value == [day, day])
+    }
+
+    @Test
+    func refreshWithoutAccessFetchesInsteadOfReusing() async {
+        let now = LockIsolated(at(9, 50))
+        let status = LockIsolated(EKAuthorizationStatus.fullAccess)
+        let fetches = LockIsolated<[Date]>([])
+        let standup = standup
+        let store = makeStore(now: now, clock: TestClock(), status: status, fetches: fetches) { [standup] }
+        await store.send(.setEnabled(true)) { $0.isEnabled = true; $0.requestID = UUID(0) }
+        await store.receive(\.eventsLoaded) {
+            $0.requestID = nil
+            $0.eventsDay = day
+            $0.events = [standup]
+            $0.meeting = NextMeeting(event: standup, phase: .upcoming(minutesUntil: 10))
+        }
+        status.setValue(.notDetermined)
+        // Auth changed: must call fetch to discover the status change and clear.
+        await store.send(.refresh) {
+            $0.events = []
+            $0.eventsDay = nil
+            $0.meeting = nil
+        }
+        // The initial fetch, then the refresh attempt (which immediately clears).
+        #expect(fetches.value == [day])
+    }
 }
