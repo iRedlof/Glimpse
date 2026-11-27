@@ -221,6 +221,39 @@ struct NextMeetingFeatureTests {
     }
 
     @Test
+    func calendarChangedSameDayWithCachedEventsAlwaysFetches() async {
+        let now = LockIsolated(at(9, 50))
+        let clock = TestClock()
+        let fetches = LockIsolated<[Date]>([])
+        let standup = standup
+        let store = makeStore(now: now, clock: clock, fetches: fetches) { [standup] }
+        await store.send(.setEnabled(true)) { $0.isEnabled = true; $0.requestID = UUID(0) }
+        await store.receive(\.eventsLoaded) {
+            $0.requestID = nil
+            $0.eventsDay = day
+            $0.events = [standup]
+            $0.meeting = NextMeeting(event: standup, phase: .upcoming(minutesUntil: 10))
+        }
+        // Calendar changed on the same day: must fetch even with cached events.
+        await store.send(.calendarChanged) { $0.requestID = UUID(1) }
+        await store.receive(\.eventsLoaded) {
+            $0.requestID = nil
+            $0.eventsDay = day
+            $0.events = [standup]
+            $0.meeting = NextMeeting(event: standup, phase: .upcoming(minutesUntil: 10))
+        }
+        // Initial enable fetch + calendar change fetch = 2 fetches.
+        #expect(fetches.value == [day, day])
+        // Disable to cancel the pending tick effect.
+        await store.send(.setEnabled(false)) {
+            $0.isEnabled = false
+            $0.events = []
+            $0.eventsDay = nil
+            $0.meeting = nil
+        }
+    }
+
+    @Test
     func refreshAfterMidnightCrossingFetchesNewDay() async {
         let now = LockIsolated(at(23, 58))
         let fetches = LockIsolated<[Date]>([])

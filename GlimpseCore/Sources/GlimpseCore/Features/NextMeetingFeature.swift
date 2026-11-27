@@ -28,8 +28,11 @@ public struct NextMeetingFeature: Sendable {
         case setEnabled(Bool)
         /// The leave-by buffer changed (nil: off). Recomputes from the cached events.
         case setLeaveBy(minutes: Int?)
-        /// Re-read today's events (calendar changed, wake, day or clock change).
+        /// Re-read today's events (wake, day or clock change). Uses stale-while-revalidate
+        /// (reuses same-day cache) so the cheap triggers don't cost a fetch.
         case refresh
+        /// Calendar data changed: always fetch (bypass same-day cache).
+        case calendarChanged
         /// A minute boundary passed: recompute from the cached events.
         case tick
         case eventsLoaded(day: Date, requestID: UUID, events: [CalendarEvent])
@@ -71,6 +74,11 @@ public struct NextMeetingFeature: Sendable {
                     && eventKitClient.authorizationStatus() == .fullAccess
                     && !state.events.isEmpty
                 return canReuseCache ? recompute(&state, now: now) : fetch(&state)
+
+            case .calendarChanged:
+                guard state.isEnabled else { return .none }
+                // Calendar data changed: always fetch, even if same day with cached events.
+                return fetch(&state)
 
             case .tick:
                 guard state.isEnabled else { return .none }
