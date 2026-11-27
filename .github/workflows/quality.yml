@@ -1,8 +1,11 @@
 name: Quality
 
 on:
-  push:
-    branches-ignore: [main]
+  # PR-only (plus workflow_call from release.yml). Previously also triggered on
+  # `push: branches-ignore: [main]`, which double-fired on every PR-branch push
+  # (push + pull_request), posting duplicate required-check contexts on the same
+  # commit — one "skipped" — and wedging branch protection. PRs still get full CI
+  # via pull_request; release.yml still runs it via workflow_call.
   pull_request:
     types: [opened, synchronize, reopened, edited]
   workflow_call:

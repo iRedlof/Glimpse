@@ -61,7 +61,10 @@ final class NextMeetingMenuBarController {
         notificationCenter.publisher(for: .EKEventStoreChanged)
             .debounce(for: Self.changeDebounce, scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
-                MainActor.assumeIsolated { self?.refresh() }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    store.send(.calendarChanged)
+                }
             }
             .store(in: &cancellables)
         notificationCenter.publisher(for: .NSSystemTimeZoneDidChange)

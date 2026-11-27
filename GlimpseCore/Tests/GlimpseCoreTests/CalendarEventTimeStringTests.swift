@@ -15,7 +15,7 @@ struct CalendarEventTimeStringTests {
     }
 
     private func style(_ identifier: String) -> Date.FormatStyle {
-        var style = CalendarEvent.timeStyle.locale(Locale(identifier: identifier))
+        var style = TimeFormatter.shortTime.locale(Locale(identifier: identifier))
         style.timeZone = utc
         return style
     }
@@ -41,6 +41,6 @@ struct CalendarEventTimeStringTests {
     @Test
     func defaultTimeStringUsesTheSharedStyle() {
         let event = event()
-        #expect(event.timeString == event.timeString(style: CalendarEvent.timeStyle))
+        #expect(event.timeString == event.timeString(style: TimeFormatter.shortTime))
     }
 }

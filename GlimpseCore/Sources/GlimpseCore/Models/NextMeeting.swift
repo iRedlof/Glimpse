@@ -167,7 +167,7 @@ public enum NextMeetingText {
     }
 
     static func endTime(_ date: Date, calendar: Calendar, locale: Locale) -> String {
-        var style = Date.FormatStyle(date: .omitted, time: .shortened)
+        var style = TimeFormatter.shortTime
         style.calendar = calendar
         style.timeZone = calendar.timeZone
         style.locale = locale

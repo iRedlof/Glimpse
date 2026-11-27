@@ -276,7 +276,7 @@ struct NextMeetingMenuBarTests {
         let (_, dentist, nine) = Self.leaveByFixture()
         let row = CalendarAgendaEventRow(event: dentist, owner: .agendaEvent0, open: {},
                                          badge: .leaveBy(nine.addingTimeInterval(-1_200)))
-        #expect(row.subtitle == "\(dentist.startDate.formatted(CalendarAgendaEventRow.startTimeStyle)) · 412 Oak St")
+        #expect(row.subtitle == "\(dentist.startDate.formatted(TimeFormatter.shortTime)) · 412 Oak St")
         #expect(row.accessibilityText.hasPrefix("Dentist, \(dentist.timeString), 412 Oak St, Leave by "))
         let plain = CalendarAgendaEventRow(event: CalendarEvent(
             id: "s", title: "Standup", startDate: nine, endDate: nine.addingTimeInterval(900), isAllDay: false

@@ -39,17 +39,12 @@ public enum LeaveBy {
     /// Compact clock time without the day period ("8:40", "20:05"): leave-by is always
     /// within the next hour or so, and the menu bar item stays short.
     public static func clockText(_ date: Date, calendar: Calendar, locale: Locale) -> String {
-        var style = Date.FormatStyle(date: .omitted, time: .omitted)
-            .hour(.defaultDigits(amPM: .omitted)).minute(.twoDigits)
-        style.calendar = calendar
-        style.timeZone = calendar.timeZone
-        style.locale = locale
-        return date.formatted(style)
+        date.formatted(TimeFormatter.clockOnly(calendar: calendar, locale: locale))
     }
 
     /// Full clock time for VoiceOver ("8:40 AM").
     public static func spokenClockText(_ date: Date, calendar: Calendar, locale: Locale) -> String {
-        var style = Date.FormatStyle(date: .omitted, time: .shortened)
+        var style = TimeFormatter.shortTime
         style.calendar = calendar
         style.timeZone = calendar.timeZone
         style.locale = locale

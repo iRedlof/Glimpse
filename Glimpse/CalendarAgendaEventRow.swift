@@ -87,15 +87,12 @@ struct CalendarAgendaEventRow: View {
 }
 
 extension CalendarAgendaEventRow {
-    /// Thread-safe, auto-updating start time style ("9:00 AM"), shared by every row.
-    static let startTimeStyle = Date.FormatStyle(date: .omitted, time: .shortened)
-
     /// "9:00 AM · 412 Oak St" for a located event, "5 days · South Lake Tahoe" for a trip,
     /// else the event's time range. The place keeps the line short enough to stay readable.
     var subtitle: String {
         guard let location = event.location else { return event.timeString }
         if case let .away(days) = badge { return "\(days) days · \(location)" }
-        let time = event.isAllDay ? event.timeString : event.startDate.formatted(Self.startTimeStyle)
+        let time = event.isAllDay ? event.timeString : event.startDate.formatted(TimeFormatter.shortTime)
         return "\(time) · \(location)"
     }
 
